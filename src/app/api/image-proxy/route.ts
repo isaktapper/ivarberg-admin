@@ -1,38 +1,43 @@
 import { NextRequest, NextResponse } from 'next/server'
 
 /**
- * Image proxy API route
- * Fetches images from external URLs and serves them to bypass CORS restrictions
+ * Image Proxy API Route
+ * 
+ * Proxar bilder via servern för att kringgå CORS-problem
+ * 
+ * Användning: /api/image-proxy?url=https://example.com/image.jpg
  */
 export async function GET(request: NextRequest) {
-  const searchParams = request.nextUrl.searchParams
-  const imageUrl = searchParams.get('url')
-
-  if (!imageUrl) {
-    return NextResponse.json({ error: 'Missing url parameter' }, { status: 400 })
-  }
-
-  // Validate that the URL is safe (prevent SSRF attacks)
   try {
-    const url = new URL(imageUrl)
-    // Only allow http/https protocols
-    if (!['http:', 'https:'].includes(url.protocol)) {
-      return NextResponse.json({ error: 'Invalid protocol' }, { status: 400 })
+    const { searchParams } = new URL(request.url)
+    const imageUrl = searchParams.get('url')
+
+    if (!imageUrl) {
+      return NextResponse.json(
+        { error: 'URL parameter is required' },
+        { status: 400 }
+      )
     }
-  } catch {
-    return NextResponse.json({ error: 'Invalid URL' }, { status: 400 })
-  }
 
-  try {
-    // Fetch the image from the external URL
+    // Validate URL
+    try {
+      new URL(imageUrl)
+    } catch {
+      return NextResponse.json(
+        { error: 'Invalid URL format' },
+        { status: 400 }
+      )
+    }
+
+    // Fetch the image from the original source
     const response = await fetch(imageUrl, {
       headers: {
-        'User-Agent': 'Mozilla/5.0 (compatible; ImageProxy/1.0)',
-        'Referer': imageUrl, // Some sites require referer
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
       },
     })
 
     if (!response.ok) {
+      console.error(`Failed to fetch image: ${imageUrl} - Status: ${response.status}`)
       return NextResponse.json(
         { error: `Failed to fetch image: ${response.statusText}` },
         { status: response.status }
@@ -45,22 +50,22 @@ export async function GET(request: NextRequest) {
 
     // Return the image with appropriate headers
     return new NextResponse(imageBuffer, {
+      status: 200,
       headers: {
         'Content-Type': contentType,
-        'Cache-Control': 'public, max-age=31536000, immutable', // Cache for 1 year
-        'Access-Control-Allow-Origin': '*', // Allow CORS
+        'Cache-Control': 'public, max-age=31536000, immutable',
+        'Access-Control-Allow-Origin': '*',
       },
     })
+
   } catch (error) {
-    console.error('Error proxying image:', error)
+    console.error('Image proxy error:', error)
     return NextResponse.json(
-      { error: 'Failed to proxy image' },
+      { 
+        error: 'Failed to proxy image',
+        details: error instanceof Error ? error.message : 'Unknown error'
+      },
       { status: 500 }
     )
   }
 }
-
-
-
-
-

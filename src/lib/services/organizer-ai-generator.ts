@@ -5,10 +5,12 @@ const openai = new OpenAI({
 })
 
 export interface AIGeneratedContent {
+  title: string
   description: string
+  content: string
   seo_title: string
   seo_description: string
-  tags: string[]
+  seo_keywords: string
   slug: string
 }
 
@@ -16,45 +18,42 @@ export async function generateOrganizerContent(
   title: string,
   metaDescription: string,
   content: string,
+  markdown: string | undefined,
   contactInfo: any,
   socialLinks: any
 ): Promise<AIGeneratedContent> {
   try {
     console.log('🤖 Generating AI content...')
 
+    // Use markdown if available (cleaner), otherwise use content
+    const contentToAnalyze = markdown || content
+
     const prompt = `
-Du är en expert på SEO och marknadsföring för lokala arrangörer i Varberg, Sverige. 
+Du är en expert på att skriva SEO-optimerat innehåll för evenemangssidor i Varberg, Sverige.
 
-Baserat på följande information från en arrangörs webbplats, generera innehåll för en SEO-optimerad arrangörssida:
+Baserat på följande information från en arrangörs webbplats, skapa innehåll för en arrangörssida:
 
-TITEL: ${title}
-META BESKRIVNING: ${metaDescription}
-INNEHÅLL: ${content.substring(0, 2000)}...
-KONTAKTINFO: ${JSON.stringify(contactInfo)}
-SOCIALA MEDIER: ${JSON.stringify(socialLinks)}
+# Webbplatsinnehåll (Markdown):
+${contentToAnalyze.substring(0, 3000)}...
 
-VIKTIGT: Använd endast den rena, inspirerande texten från INNEHÅLL. Ignorera navigation, kontaktuppgifter, priser, öppettider och tekniska detaljer. Fokusera på det som beskriver arrangörens unika erbjudande och atmosfär.
+# Metadata:
+Titel: ${title}
+Beskrivning: ${metaDescription}
+${contactInfo?.email || contactInfo?.phone ? `Kontakt: ${JSON.stringify(contactInfo)}` : ''}
 
-Generera följande på svenska:
+Skapa följande i JSON-format:
 
-1. BESKRIVNING (2-3 meningar): Skriv en inspirerande, professionell beskrivning som lockar besökare. Fokusera på deras unika erbjudande, atmosfär och vad som gör dem speciella. Använd känslosam språk som skapar lust att besöka dem. Undvik kontaktuppgifter, priser, öppettider och tekniska detaljer.
-
-2. SEO-TITEL (max 60 tecken): En SEO-optimerad titel som inkluderar relevanta nyckelord för Varberg och evenemang.
-
-3. SEO-BESKRIVNING (max 160 tecken): En SEO-optimerad beskrivning som lockar besökare och inkluderar relevanta nyckelord.
-
-4. NYCKELORD (3-5 st): Relevanta nyckelord separerade med komma, fokus på Varberg, evenemang, kultur, etc.
-
-5. SLUG (URL-vänlig): Använd ENDAST arrangörens namn som slug. T.ex. "Strömma Farmlodge" blir "stromma-farmlodge". Kort och enkelt.
-
-Svara ENDAST med giltig JSON i följande format (ingen markdown, ingen extra text):
 {
-  "description": "Beskrivning här...",
-  "seo_title": "SEO-titel här...",
-  "seo_description": "SEO-beskrivning här...",
-  "tags": ["nyckelord1", "nyckelord2", "nyckelord3"],
-  "slug": "url-slug-har"
+  "title": "Kort, engagerande titel (max 60 tecken)",
+  "description": "Inspirerande beskrivning om arrangören som får folk att vilja besöka deras evenemang. 2-3 meningar. Fokusera på vad de erbjuder och varför de är speciella.",
+  "content": "Längre, detaljerat innehåll i markdown-format (3-5 paragrafer). Inkludera:\n- Vad arrangören erbjuder\n- Historia/bakgrund (om relevant)\n- Typer av evenemang\n- Unika selling points\n- Varför besökare ska följa dem",
+  "seo_title": "SEO-optimerad titel (max 60 tecken, inkludera 'Varberg' om relevant)",
+  "seo_description": "SEO-beskrivning (max 160 tecken, inkludera call-to-action)",
+  "seo_keywords": "5-7 relevanta nyckelord, kommaseparerade (inkludera 'Varberg', 'evenemang', bransch-specifika termer)",
+  "slug": "url-vanlig-slug-fran-namnet"
 }
+
+Skriv på svenska. Var professionell men tillgänglig. Fokusera på SEO-värde.
 `
 
     const response = await openai.chat.completions.create({
@@ -70,7 +69,7 @@ Svara ENDAST med giltig JSON i följande format (ingen markdown, ingen extra tex
         }
       ],
       temperature: 0.7,
-      max_tokens: 1000
+      max_tokens: 1500
     })
 
     const aiResponse = response.choices[0]?.message?.content
@@ -97,7 +96,7 @@ Svara ENDAST med giltig JSON i följande format (ingen markdown, ingen extra tex
     }
 
     // Validate required fields
-    if (!aiData.description || !aiData.seo_title || !aiData.slug) {
+    if (!aiData.title || !aiData.description || !aiData.seo_title || !aiData.slug) {
       throw new Error('AI response missing required fields')
     }
 
@@ -110,7 +109,7 @@ Svara ENDAST med giltig JSON i följande format (ingen markdown, ingen extra tex
     
     // If slug is too long or complex, create a simple one from the title
     if (aiData.slug.length > 30 || aiData.slug.split('-').length > 4) {
-      const simpleSlug = crawledData.title
+      const simpleSlug = title
         .toLowerCase()
         .replace(/[^a-z0-9\s]/g, '')
         .replace(/\s+/g, '-')
@@ -123,6 +122,10 @@ Svara ENDAST med giltig JSON i följande format (ingen markdown, ingen extra tex
     }
 
     console.log('✅ AI content generated successfully')
+    console.log(`   - Title: ${aiData.title}`)
+    console.log(`   - Description length: ${aiData.description.length} chars`)
+    console.log(`   - Content length: ${aiData.content.length} chars`)
+    console.log(`   - Slug: ${aiData.slug}`)
 
     return aiData
 

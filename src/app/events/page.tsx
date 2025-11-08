@@ -23,7 +23,7 @@ import {
   ChevronUp
 } from 'lucide-react'
 import Link from 'next/link'
-import { formatDate } from '@/lib/utils'
+import { formatDate, getFrontendUrl } from '@/lib/utils'
 
 export default function EventsPage() {
   const [events, setEvents] = useState<Event[]>([])
@@ -1092,7 +1092,7 @@ export default function EventsPage() {
                               <Star className={`w-4 h-4 ${event.featured ? 'fill-current' : ''}`} />
                             </button>
                             <a
-                              href={`${process.env.NEXT_PUBLIC_FRONTEND_URL || 'https://ivarberg.nu/'}/event/${event.event_id}`}
+                              href={`${getFrontendUrl()}/event/${event.event_id}`}
                               target="_blank"
                               rel="noopener noreferrer"
                               className="text-blue-600 hover:bg-blue-50 p-1 rounded"

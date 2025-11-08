@@ -18,3 +18,12 @@ export function formatDate(date: string) {
 export function generateEventId() {
   return `event_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
 }
+
+/**
+ * Get the public frontend URL
+ * Always returns https://ivarberg.nu (without trailing slash)
+ */
+export function getFrontendUrl(): string {
+  // Force the correct URL - ignore env variable if it's wrong
+  return 'https://ivarberg.nu'
+}

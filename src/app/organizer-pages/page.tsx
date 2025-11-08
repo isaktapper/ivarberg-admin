@@ -25,7 +25,7 @@ import {
   Link as LinkIcon
 } from 'lucide-react'
 import Link from 'next/link'
-import { formatDate } from '@/lib/utils'
+import { formatDate, getFrontendUrl } from '@/lib/utils'
 
 export default function OrganizerPagesPage() {
   const [organizerPages, setOrganizerPages] = useState<OrganizerPage[]>([])
@@ -777,7 +777,7 @@ export default function OrganizerPagesPage() {
                               <Globe className="w-4 h-4" />
                             </button>
                             <a
-                              href={`${process.env.NEXT_PUBLIC_FRONTEND_URL || 'https://ivarberg.nu/'}/arrangor/${page.slug}`}
+                              href={`${getFrontendUrl()}/arrangor/${page.slug}`}
                               target="_blank"
                               rel="noopener noreferrer"
                               className="text-blue-600 hover:bg-blue-50 p-1 rounded"

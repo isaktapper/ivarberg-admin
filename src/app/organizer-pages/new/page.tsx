@@ -25,6 +25,17 @@ import {
   Star
 } from 'lucide-react'
 import Link from 'next/link'
+import { getFrontendUrl } from '@/lib/utils'
+
+// Helper function to proxy images to avoid CORS issues
+function getProxiedImageUrl(url: string): string {
+  if (!url) return ''
+  // Only proxy external images (not localhost or relative URLs)
+  if (url.startsWith('http://') || url.startsWith('https://')) {
+    return `/api/image-proxy?url=${encodeURIComponent(url)}`
+  }
+  return url
+}
 
 export default function NewOrganizerPage() {
   const router = useRouter()
@@ -308,7 +319,7 @@ export default function NewOrganizerPage() {
                   </div>
                   {errors.slug && <p className="mt-1 text-sm text-red-600">{errors.slug}</p>}
                   <p className="mt-1 text-sm text-gray-500">
-                    URL: {process.env.NEXT_PUBLIC_FRONTEND_URL || 'https://ivarberg.nu'}/arrangor/{formData.slug || 'slug'}
+                    URL: {getFrontendUrl()}/arrangor/{formData.slug || 'slug'}
                   </p>
                 </div>
 
@@ -393,7 +404,7 @@ export default function NewOrganizerPage() {
                   {formData.hero_image_url && (
                     <div className="mt-2 relative group">
                       <img
-                        src={formData.hero_image_url}
+                        src={getProxiedImageUrl(formData.hero_image_url)}
                         alt="Hero preview"
                         className="h-32 w-full object-cover rounded-md bg-gray-100"
                         onError={(e) => {
@@ -450,9 +461,9 @@ export default function NewOrganizerPage() {
                             onDragOver={handleDragOver}
                             onDrop={(e) => handleDrop(e, index)}
                           >
-                            <div className="h-24 w-full bg-gray-100 rounded-md flex items-center justify-center relative overflow-hidden">
+                            <div className="h-24 w-full bg-gray-100 rounded-md relative overflow-hidden">
                               <img
-                                src={url}
+                                src={getProxiedImageUrl(url)}
                                 alt={`Gallery ${index + 1}`}
                                 className="h-full w-full object-cover"
                                 onError={(e) => {
@@ -475,29 +486,31 @@ export default function NewOrganizerPage() {
                                   console.log('Image loaded successfully:', url)
                                 }}
                               />
-                            </div>
-                            <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-30 transition-all duration-200 rounded-md flex items-center justify-center">
-                              <div className="opacity-0 group-hover:opacity-100 transition-opacity flex space-x-1">
-                                <button
-                                  onClick={() => moveImageToHero(index)}
-                                  className="bg-blue-600 text-white rounded-full p-1 hover:bg-blue-700"
-                                  title="Välj som hero-bild"
-                                >
-                                  <Star className="w-3 h-3" />
-                                </button>
-                                <button
-                                  onClick={() => removeGalleryImage(index)}
-                                  className="bg-red-600 text-white rounded-full p-1 hover:bg-red-700"
-                                  title="Ta bort bild"
-                                >
-                                  <X className="w-3 h-3" />
-                                </button>
+                              {/* Action overlay - only visible on hover */}
+                              <div className="absolute inset-0 hidden group-hover:flex items-center justify-center bg-black bg-opacity-30 transition-all duration-200">
+                                <div className="flex space-x-1">
+                                  <button
+                                    onClick={() => moveImageToHero(index)}
+                                    className="bg-blue-600 text-white rounded-full p-1 hover:bg-blue-700"
+                                    title="Välj som hero-bild"
+                                  >
+                                    <Star className="w-3 h-3" />
+                                  </button>
+                                  <button
+                                    onClick={() => removeGalleryImage(index)}
+                                    className="bg-red-600 text-white rounded-full p-1 hover:bg-red-700"
+                                    title="Ta bort bild"
+                                  >
+                                    <X className="w-3 h-3" />
+                                  </button>
+                                </div>
                               </div>
-                            </div>
-                            <div className="absolute top-1 left-1">
-                              <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-gray-800 text-white">
-                                {index + 1}
-                              </span>
+                              {/* Image number badge */}
+                              <div className="absolute top-1 left-1 z-10">
+                                <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-gray-800 bg-opacity-75 text-white">
+                                  {index + 1}
+                                </span>
+                              </div>
                             </div>
                           </div>
                         ))}

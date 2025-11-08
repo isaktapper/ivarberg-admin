@@ -26,7 +26,17 @@ import {
   Star
 } from 'lucide-react'
 import Link from 'next/link'
-import { formatDate } from '@/lib/utils'
+import { formatDate, getFrontendUrl } from '@/lib/utils'
+
+// Helper function to proxy images to avoid CORS issues
+function getProxiedImageUrl(url: string): string {
+  if (!url) return ''
+  // Only proxy external images (not localhost or relative URLs)
+  if (url.startsWith('http://') || url.startsWith('https://')) {
+    return `/api/image-proxy?url=${encodeURIComponent(url)}`
+  }
+  return url
+}
 
 export default function EditOrganizerPage() {
   const router = useRouter()
@@ -366,7 +376,7 @@ export default function EditOrganizerPage() {
           
           <div className="flex items-center space-x-3">
             <a
-              href={`${process.env.NEXT_PUBLIC_FRONTEND_URL || 'https://ivarberg.nu'}/arrangor/${page.slug}`}
+              href={`${getFrontendUrl()}/arrangor/${page.slug}`}
               target="_blank"
               rel="noopener noreferrer"
               className="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
@@ -437,7 +447,7 @@ export default function EditOrganizerPage() {
                   </div>
                   {errors.slug && <p className="mt-1 text-sm text-red-600">{errors.slug}</p>}
                   <p className="mt-1 text-sm text-gray-500">
-                    URL: {process.env.NEXT_PUBLIC_FRONTEND_URL || 'https://ivarberg.nu'}/arrangor/{formData.slug || 'slug'}
+                    URL: {getFrontendUrl()}/arrangor/{formData.slug || 'slug'}
                   </p>
                 </div>
 
@@ -522,7 +532,7 @@ export default function EditOrganizerPage() {
                   {formData.hero_image_url && (
                     <div className="mt-2 relative group">
                       <img
-                        src={formData.hero_image_url}
+                        src={getProxiedImageUrl(formData.hero_image_url)}
                         alt="Hero preview"
                         className="h-32 w-full object-cover rounded-md bg-gray-100"
                         onError={(e) => {
@@ -587,60 +597,64 @@ export default function EditOrganizerPage() {
                             onDragOver={handleDragOver}
                             onDrop={(e) => handleDrop(e, index)}
                           >
-                            <div className="h-32 w-full bg-white border-2 border-gray-200 rounded-md flex items-center justify-center relative overflow-hidden">
+                            <div className="h-32 w-full bg-gray-100 border-2 border-gray-200 rounded-md relative overflow-hidden">
                               <img
-                                src={url}
+                                src={getProxiedImageUrl(url)}
                                 alt={`Gallery ${index + 1}`}
-                                className="h-full w-full object-contain"
-                                loading="lazy"
+                                className="h-full w-full object-cover"
                                 onError={(e) => {
                                   console.error('❌ Image failed to load:', url)
-                                  const parent = e.currentTarget.parentElement
+                                  const target = e.currentTarget as HTMLImageElement
+                                  const parent = target.parentElement
                                   if (parent && !parent.querySelector('.error-placeholder')) {
-                                    e.currentTarget.style.display = 'none'
+                                    target.style.display = 'none'
                                     const errorDiv = document.createElement('div')
                                     errorDiv.className = 'error-placeholder flex flex-col items-center justify-center h-full text-gray-400 p-2'
                                     errorDiv.innerHTML = `
-                                      <svg class="w-6 h-6 mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
+                                      <svg class="w-8 h-8 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
                                       </svg>
-                                      <span class="text-xs text-center">Kunde ej ladda</span>
+                                      <span class="text-xs text-center font-medium">Kunde ej ladda bild</span>
+                                      <span class="text-xs text-center text-gray-500 mt-1 break-all px-2">${url.substring(0, 50)}...</span>
                                     `
                                     parent.appendChild(errorDiv)
                                   }
                                 }}
                                 onLoad={(e) => {
                                   console.log('✅ Image loaded:', url)
-                                  // Check if image has actual content
-                                  const img = e.currentTarget
+                                  const img = e.currentTarget as HTMLImageElement
                                   if (img.naturalWidth === 0 || img.naturalHeight === 0) {
                                     console.warn('⚠️ Image loaded but has no dimensions:', url)
+                                  } else {
+                                    console.log(`   Dimensions: ${img.naturalWidth}x${img.naturalHeight}`)
                                   }
                                 }}
                               />
-                            </div>
-                            <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-30 transition-all duration-200 rounded-md flex items-center justify-center">
-                              <div className="opacity-0 group-hover:opacity-100 transition-opacity flex space-x-1">
-                                <button
-                                  onClick={() => moveImageToHero(index)}
-                                  className="bg-blue-600 text-white rounded-full p-1 hover:bg-blue-700"
-                                  title="Välj som hero-bild"
-                                >
-                                  <Star className="w-3 h-3" />
-                                </button>
-                                <button
-                                  onClick={() => removeGalleryImage(index)}
-                                  className="bg-red-600 text-white rounded-full p-1 hover:bg-red-700"
-                                  title="Ta bort bild"
-                                >
-                                  <X className="w-3 h-3" />
-                                </button>
+                              {/* Image number badge */}
+                              <div className="absolute top-1 left-1 z-10">
+                                <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-gray-800 bg-opacity-75 text-white">
+                                  {index + 1}
+                                </span>
                               </div>
-                            </div>
-                            <div className="absolute top-1 left-1">
-                              <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-gray-800 text-white">
-                                {index + 1}
-                              </span>
+                              {/* Action overlay - only visible on hover */}
+                              <div className="absolute inset-0 hidden group-hover:flex items-center justify-center bg-black bg-opacity-30 transition-all duration-200">
+                                <div className="flex space-x-1">
+                                  <button
+                                    onClick={() => moveImageToHero(index)}
+                                    className="bg-blue-600 text-white rounded-full p-1 hover:bg-blue-700"
+                                    title="Välj som hero-bild"
+                                  >
+                                    <Star className="w-3 h-3" />
+                                  </button>
+                                  <button
+                                    onClick={() => removeGalleryImage(index)}
+                                    className="bg-red-600 text-white rounded-full p-1 hover:bg-red-700"
+                                    title="Ta bort bild"
+                                  >
+                                    <X className="w-3 h-3" />
+                                  </button>
+                                </div>
+                              </div>
                             </div>
                           </div>
                         ))}

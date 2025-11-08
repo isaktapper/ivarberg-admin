@@ -27,8 +27,8 @@ export async function POST(request: NextRequest) {
 
     console.log(`🚀 Starting import for URL: ${url}`)
 
-    // Step 1: Crawl the URL
-    console.log('📡 Step 1: Crawling URL...')
+    // Step 1: Crawl the URL with Firecrawl
+    console.log('📡 Step 1: Crawling URL with Firecrawl...')
     const crawledData = await extractMetadataAndContent(url)
 
     // Step 2: Generate AI content
@@ -37,6 +37,7 @@ export async function POST(request: NextRequest) {
       crawledData.title,
       crawledData.metaDescription,
       crawledData.content,
+      crawledData.markdown,
       crawledData.contactInfo,
       crawledData.socialLinks
     )
@@ -78,16 +79,16 @@ export async function POST(request: NextRequest) {
     const insertData = {
       slug: aiContent.slug,
       name: crawledData.title,
-      title: aiContent.seo_title,
+      title: aiContent.title,
       description: aiContent.description,
-      content: crawledData.content,
+      content: aiContent.content,
       hero_image_url: imageClassification.heroImage,
       gallery_images: imageClassification.galleryImages,
       contact_info: crawledData.contactInfo,
       social_links: crawledData.socialLinks,
       seo_title: aiContent.seo_title,
       seo_description: aiContent.seo_description,
-      seo_keywords: aiContent.tags.join(', '),
+      seo_keywords: aiContent.seo_keywords,
       is_published: false
     }
     
@@ -135,10 +136,50 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error('❌ Import error:', error)
     
+    // Handle Firecrawl-specific errors
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+    
+    // Rate limit error
+    if (errorMessage.toLowerCase().includes('rate limit') || errorMessage.includes('429')) {
+      return NextResponse.json(
+        { 
+          error: 'Rate limit reached',
+          details: 'Firecrawl API rate limit reached. Try again in a few minutes.',
+          type: 'rate_limit'
+        },
+        { status: 429 }
+      )
+    }
+    
+    // API key error
+    if (errorMessage.toLowerCase().includes('api key') || errorMessage.includes('401') || errorMessage.includes('unauthorized')) {
+      return NextResponse.json(
+        { 
+          error: 'API authentication failed',
+          details: 'Firecrawl API key is missing or invalid. Check your environment variables.',
+          type: 'auth_error'
+        },
+        { status: 401 }
+      )
+    }
+    
+    // Firecrawl scraping error
+    if (errorMessage.includes('Failed to scrape')) {
+      return NextResponse.json(
+        { 
+          error: 'Failed to scrape website',
+          details: 'Could not extract content from the website. The site may be blocking scrapers or has an unusual structure.',
+          type: 'scrape_error'
+        },
+        { status: 422 }
+      )
+    }
+    
+    // Generic error
     return NextResponse.json(
       { 
         error: 'Import failed', 
-        details: error instanceof Error ? error.message : 'Unknown error',
+        details: errorMessage,
         type: 'import_error'
       },
       { status: 500 }
