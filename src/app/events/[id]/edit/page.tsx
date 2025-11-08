@@ -53,7 +53,9 @@ export default function EditEventPage() {
         price: event.price || '',
         image_url: event.image_url || '',
         organizer_event_url: event.organizer_event_url || '',
+        // Support både gamla och nya kategori-systemet
         category: event.category,
+        categories: event.categories || (event.category ? [event.category] : []),
         organizer_id: event.organizer_id || undefined,
         featured: event.featured,
         status: event.status,
@@ -114,15 +116,22 @@ export default function EditEventPage() {
         price: data.price || null,
         image_url: data.image_url || null,
         organizer_event_url: data.organizer_event_url || null,
-        category: data.category,
+        // Uppdatera både gamla och nya kategori-systemet
+        category: data.categories?.[0] || data.category, // Behåll första kategorin som huvudkategori för bakåtkompatibilitet
+        categories: data.categories || (data.category ? [data.category] : ['Okategoriserad']), // Säkerställ att vi alltid har en array
         organizer_id: data.organizer_id || null,
         featured: data.featured,
+        is_featured: data.featured, // Uppdatera båda kolumnerna för säkerhets skull
         status: data.status,
         max_participants: data.max_participants || null,
         tags: data.tags,
         updated_at: new Date().toISOString(),
       }
 
+      // Debug: logga vad som skickas
+      console.log('Updating event with data:', JSON.stringify(updateData, null, 2))
+      console.log('Event ID:', event.id)
+      
       const { error } = await supabase
         .from('events')
         .update(updateData)
@@ -133,7 +142,26 @@ export default function EditEventPage() {
       router.push(`/events/${event.id}`)
     } catch (error) {
       console.error('Error updating event:', error)
-      alert('Fel vid uppdatering av event: ' + (error instanceof Error ? error.message : 'Okänt fel'))
+      
+      // Bättre felhantering för Supabase-fel
+      let errorMessage = 'Okänt fel'
+      if (error && typeof error === 'object') {
+        if ('message' in error) {
+          errorMessage = String(error.message)
+        } else if ('details' in error) {
+          errorMessage = String(error.details)
+        } else if ('hint' in error) {
+          errorMessage = String(error.hint)
+        } else {
+          errorMessage = JSON.stringify(error, null, 2)
+        }
+      }
+      
+      console.error('Full error details:', JSON.stringify(error, null, 2))
+      console.error('Error type:', typeof error)
+      console.error('Error keys:', Object.keys(error || {}))
+      
+      alert(`Fel vid uppdatering av event:\n\n${errorMessage}`)
     } finally {
       setLoading(false)
     }
@@ -348,25 +376,87 @@ export default function EditEventPage() {
                   )}
                 </div>
 
-                {/* Category */}
+                {/* Categories - Multi-select with main category selection */}
                 <div>
-                  <label htmlFor="category" className="block text-sm font-medium text-gray-700">
-                    Kategori *
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Kategorier * (1-3 kategorier)
                   </label>
-                  <select
-                    {...register('category')}
-                    className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                  >
-                    <option value="">Välj kategori</option>
-                    {eventCategories.map((category) => (
-                      <option key={category} value={category}>
-                        {category}
-                      </option>
-                    ))}
-                  </select>
-                  {errors.category && (
-                    <p className="mt-2 text-sm text-red-600">{errors.category.message}</p>
+                  
+                  {/* Selected categories with main category selection */}
+                  {watch('categories') && watch('categories').length > 0 && (
+                    <div className="mb-3 p-3 bg-gray-50 rounded-lg">
+                      <label className="block text-xs font-medium text-gray-600 mb-2">
+                        Välj huvudkategori (första i listan):
+                      </label>
+                      <div className="space-y-1">
+                        {watch('categories').map((category, index) => (
+                          <label key={category} className="flex items-center">
+                            <input
+                              type="radio"
+                              name="mainCategory"
+                              value={category}
+                              checked={index === 0}
+                              onChange={() => {
+                                const currentCategories = watch('categories') || [];
+                                const newCategories = [category, ...currentCategories.filter(cat => cat !== category)];
+                                setValue('categories', newCategories);
+                              }}
+                              className="h-3 w-3 text-blue-600 focus:ring-blue-500 border-gray-300"
+                            />
+                            <span className="ml-2 text-sm text-gray-700">
+                              {category}
+                              {index === 0 && <span className="ml-1 text-xs text-blue-600 font-medium">(huvud)</span>}
+                            </span>
+                          </label>
+                        ))}
+                      </div>
+                    </div>
                   )}
+                  
+                  {/* Category selection */}
+                  <div className="space-y-2">
+                    {eventCategories.map((category) => {
+                      const currentCategories = watch('categories') || [];
+                      const isSelected = currentCategories.includes(category);
+                      const isDisabled = !isSelected && currentCategories.length >= 3;
+                      
+                      return (
+                        <label key={category} className={`flex items-center ${isDisabled ? 'opacity-50' : ''}`}>
+                          <input
+                            type="checkbox"
+                            value={category}
+                            {...register('categories')}
+                            className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                            onChange={(e) => {
+                              const currentCategories = watch('categories') || [];
+                              if (e.target.checked) {
+                                // Lägg till kategori om den inte redan finns och vi inte har 3 redan
+                                if (!currentCategories.includes(category) && currentCategories.length < 3) {
+                                  setValue('categories', [...currentCategories, category]);
+                                }
+                              } else {
+                                // Ta bort kategori
+                                setValue('categories', currentCategories.filter(cat => cat !== category));
+                              }
+                            }}
+                            checked={isSelected}
+                            disabled={isDisabled}
+                          />
+                          <span className="ml-2 text-sm text-gray-700">{category}</span>
+                          {isDisabled && (
+                            <span className="ml-2 text-xs text-gray-500">(max 3)</span>
+                          )}
+                        </label>
+                      );
+                    })}
+                  </div>
+                  
+                  {errors.categories && (
+                    <p className="mt-2 text-sm text-red-600">{errors.categories.message}</p>
+                  )}
+                  <p className="mt-1 text-xs text-gray-500">
+                    Välj 1-3 kategorier. Den första kategorin blir huvudkategori.
+                  </p>
                 </div>
 
                 {/* Status */}

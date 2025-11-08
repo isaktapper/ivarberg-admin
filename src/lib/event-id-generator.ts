@@ -16,16 +16,35 @@ export async function generateUniqueEventId(
   );
 
   // Generera slug från eventnamnet
-  const slug = eventName
+  let slug = eventName
     .toLowerCase()
     .replace(/[åä]/g, 'a')
     .replace(/ö/g, 'o')
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-|-$/g, '')
     .substring(0, 80); // Max 80 tecken
+
+  // Ta bort vanliga prefix som inte ska vara med i slug
+  // Detta förhindrar att "visit-varberg-halland-genom-tiderna-20" blir slug
+  // istället för bara "halland-genom-tiderna-20"
+  const unwantedPrefixes = [
+    'visit-varberg-',
+    'visit-varberg',
+    'varberg-',
+    'evenemang-',
+    'event-',
+    'kalender-'
+  ];
+  
+  for (const prefix of unwantedPrefixes) {
+    if (slug.startsWith(prefix)) {
+      slug = slug.substring(prefix.length);
+      break;
+    }
+  }
   
   // Använd endast eventnamnet som bas (utan source-prefix)
-  let baseEventId = slug;
+  const baseEventId = slug;
   
   // Kolla om detta event_id redan finns
   let counter = 1;
@@ -35,12 +54,6 @@ export async function generateUniqueEventId(
     // Om ID redan finns, lägg till suffix
     finalEventId = `${baseEventId}-${counter}`;
     counter++;
-    
-    // Säkerhetsspärr: om counter blir för hög, lägg till source
-    if (counter > 10) {
-      const sourceSlug = source.toLowerCase().replace(/\s+/g, '-');
-      finalEventId = `${sourceSlug}-${baseEventId}-${counter}`;
-    }
   }
   
   return finalEventId;

@@ -18,6 +18,11 @@ export abstract class BaseScraper {
     this.turndownService.remove(['script', 'style', 'iframe']);
   }
   
+  // Public getter för att komma åt config från externa scripts
+  public getConfig(): ScraperConfig {
+    return this.config;
+  }
+  
   abstract scrape(): Promise<ScrapedEvent[]>;
   
   protected async fetchHTML(url: string): Promise<string> {
@@ -49,17 +54,35 @@ export abstract class BaseScraper {
     
     try {
       // Rensa bort extra whitespace och tomma taggar
-      const cleaned = html
+      let cleaned = html
         .replace(/\s+/g, ' ')
         .replace(/<p>\s*<\/p>/g, '')
         .replace(/<br\s*\/?>\s*<br\s*\/?>/g, '\n\n')
         .trim();
+
+      // Ta bort base64-bilder och konstiga länkar
+      cleaned = cleaned
+        .replace(/\[!\[\]\(data:image\/[^)]+\)\]\([^)]+\)/g, '') // Ta bort [![](data:image/...)](link)
+        .replace(/\[!\[\]\([^)]*\)\]\([^)]+\)/g, '') // Ta bort andra [![](...)](link) format
+        .replace(/!\[\]\(data:image\/[^)]+\)/g, '') // Ta bort tomma base64-bilder
+        .replace(/!\[\]\([^)]*\)/g, '') // Ta bort andra tomma bilder
+        .trim();
+
+      // Hantera "Läs mer" länkar - konvertera till länkad text
+      cleaned = cleaned
+        .replace(/Läs mer\s*<a[^>]+href="([^"]+)"[^>]*>/gi, '[Läs mer]($1)')
+        .replace(/Läs mer\s*<a[^>]+href='([^']+)'[^>]*>/gi, "[Läs mer]($1)")
+        .replace(/<a[^>]+href="([^"]+)"[^>]*>\s*Läs mer\s*<\/a>/gi, '[Läs mer]($1)')
+        .replace(/<a[^>]+href='([^']+)'[^>]*>\s*Läs mer\s*<\/a>/gi, "[Läs mer]($1)");
       
       const markdown = this.turndownService.turndown(cleaned);
       
-      // Post-processing: Ta bort överflödiga newlines
+      // Post-processing: Ta bort överflödiga newlines och rensa upp
       return markdown
         .replace(/\n{3,}/g, '\n\n')
+        .replace(/^\s*\[!\[\]\([^)]*\)\]\([^)]*\)\s*$/gm, '') // Ta bort kvarvarande bilder på egna rader
+        .replace(/^\s*!\[\]\([^)]*\)\s*$/gm, '') // Ta bort tomma bilder på egna rader
+        .replace(/\n\s*\n\s*\n/g, '\n\n') // Ta bort för många tomma rader
         .trim();
     } catch (error) {
       console.error('Fel vid konvertering till Markdown:', error);

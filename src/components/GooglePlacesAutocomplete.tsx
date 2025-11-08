@@ -6,6 +6,7 @@ interface GooglePlacesAutocompleteProps {
   value: string
   onChange: (value: string) => void
   onVenueNameChange?: (venueName: string) => void // Callback för platsnamn
+  onPlaceSelected?: (address: string) => void // Callback när en plats väljs från dropdown
   placeholder?: string
   className?: string
   name?: string
@@ -15,6 +16,7 @@ export default function GooglePlacesAutocomplete({
   value,
   onChange,
   onVenueNameChange,
+  onPlaceSelected,
   placeholder = "Ange plats...",
   className = "",
   name
@@ -49,6 +51,11 @@ export default function GooglePlacesAutocomplete({
             // Skicka även platsnamnet om det finns
             if (onVenueNameChange && place.name) {
               onVenueNameChange(place.name)
+            }
+            
+            // Anropa callback när plats är vald (för att spara direkt)
+            if (onPlaceSelected) {
+              onPlaceSelected(place.formatted_address)
             }
           }
         })

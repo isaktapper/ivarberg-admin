@@ -1,0 +1,83 @@
+name: Daily Event Scraper
+
+on:
+  schedule:
+    # Kör kl 06:00 svensk tid (05:00 UTC under vintertid, 04:00 UTC under sommartid)
+    - cron: '0 5 * * *'
+  workflow_dispatch:  # Tillåter manuell körning från GitHub Actions UI
+    inputs:
+      debug:
+        description: 'Enable debug logging'
+        required: false
+        default: 'false'
+
+jobs:
+  scrape-events:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run event scrapers
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: npx tsx scripts/run-scrapers.ts
+
+      - name: Upload logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: scraper-logs-${{ github.run_number }}
+          path: |
+            *.log
+          retention-days: 7
+          if-no-files-found: ignore
+
+  notify-on-failure:
+    needs: scrape-events
+    if: failure()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Create issue on failure
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const title = '🚨 Daily Scraper Failed';
+            const body = `The daily event scraper failed on ${new Date().toISOString()}.
+            
+            **Run:** ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+            
+            Please check the logs and investigate.`;
+            
+            // Check if issue already exists
+            const issues = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              labels: 'scraper-failure'
+            });
+            
+            // Only create if no open issue exists
+            if (issues.data.length === 0) {
+              await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title: title,
+                body: body,
+                labels: ['scraper-failure', 'automated']
+              });
+            }
+

@@ -17,7 +17,8 @@ import {
   TrendingUp,
   Download,
   ExternalLink,
-  Eye
+  Eye,
+  Square
 } from 'lucide-react'
 
 interface ScraperInfo {
@@ -39,6 +40,7 @@ export default function ScrapersPage() {
   const [showScraperSelection, setShowScraperSelection] = useState(false)
   const [selectedLogId, setSelectedLogId] = useState<number | null>(null)
   const [selectedLogName, setSelectedLogName] = useState<string>('')
+  const [cancelling, setCancelling] = useState(false)
 
   useEffect(() => {
     fetchData()
@@ -58,6 +60,7 @@ export default function ScrapersPage() {
       subscription.unsubscribe()
     }
   }, [])
+
 
   useEffect(() => {
     fetchLogs()
@@ -142,6 +145,7 @@ export default function ScrapersPage() {
     }
   }
 
+
   const toggleScraperSelection = (scraperName: string) => {
     setSelectedScrapers(prev => {
       const newSet = new Set(prev)
@@ -203,6 +207,45 @@ export default function ScrapersPage() {
     }
   }
 
+  const cancelRunningProcesses = async () => {
+    if (!running) {
+      alert('Inga pågående scraping processer att avbryta')
+      return
+    }
+
+    if (!confirm('Är du säker på att du vill avbryta den pågående scraping processen?')) {
+      return
+    }
+
+    setCancelling(true)
+    setRunning(false) // Stoppa UI omedelbart
+    
+    try {
+      const response = await fetch('/api/scrape/cancel', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      })
+
+      const result = await response.json()
+      
+      if (response.ok) {
+        alert(`Avbröt ${result.cancelledCount} scraping process(er)`)
+        await fetchData() // Refresh all data
+      } else {
+        const errorDetails = result.details ? `\n\nDetaljer: ${result.details}` : ''
+        const errorHint = result.hint ? `\n\nTips: ${result.hint}` : ''
+        throw new Error(`${result.error || 'Unknown error'}${errorDetails}${errorHint}`)
+      }
+    } catch (error) {
+      console.error('Error cancelling processes:', error)
+      alert('Fel vid avbrytning: ' + (error instanceof Error ? error.message : 'Unknown error'))
+    } finally {
+      setCancelling(false)
+    }
+  }
+
   const getStatusIcon = (status: string) => {
     switch (status) {
       case 'running':
@@ -213,6 +256,8 @@ export default function ScrapersPage() {
         return <XCircle className="w-4 h-4 text-red-600" />
       case 'partial':
         return <AlertTriangle className="w-4 h-4 text-yellow-600" />
+      case 'cancelled':
+        return <Square className="w-4 h-4 text-gray-600" />
       default:
         return null
     }
@@ -228,6 +273,8 @@ export default function ScrapersPage() {
         return 'bg-red-100 text-red-800'
       case 'partial':
         return 'bg-yellow-100 text-yellow-800'
+      case 'cancelled':
+        return 'bg-gray-100 text-gray-800'
       default:
         return 'bg-gray-100 text-gray-800'
     }
@@ -294,81 +341,105 @@ export default function ScrapersPage() {
               Hantera och övervaka event-scrapers
             </p>
           </div>
-          <div className="relative">
-            <button
-              onClick={() => setShowScraperSelection(!showScraperSelection)}
-              disabled={running}
-              className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
-            >
-              {running ? (
-                <>
-                  <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
-                  Kör scraping...
-                </>
-              ) : (
-                <>
-                  <Play className="w-4 h-4 mr-2" />
-                  Kör scraping nu
-                  {selectedScrapers.size > 0 && (
-                    <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-800">
-                      {selectedScrapers.size}
-                    </span>
-                  )}
-                </>
-              )}
-            </button>
+          <div className="flex gap-3">
+            {/* Cancel button */}
+            {running && (
+              <button
+                onClick={cancelRunningProcesses}
+                disabled={cancelling}
+                className="inline-flex items-center px-4 py-2 border border-red-300 text-sm font-medium rounded-md shadow-sm text-red-700 bg-red-50 hover:bg-red-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 disabled:opacity-50"
+              >
+                {cancelling ? (
+                  <>
+                    <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                    Avbryter...
+                  </>
+                ) : (
+                  <>
+                    <Square className="w-4 h-4 mr-2" />
+                    Avbryt pågående
+                  </>
+                )}
+              </button>
+            )}
+            
+            {/* Run button */}
+            <div className="relative">
+              <button
+                onClick={() => setShowScraperSelection(!showScraperSelection)}
+                disabled={running}
+                className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
+              >
+                {running ? (
+                  <>
+                    <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                    Kör scraping...
+                  </>
+                ) : (
+                  <>
+                    <Play className="w-4 h-4 mr-2" />
+                    Kör scraping nu
+                    {selectedScrapers.size > 0 && (
+                      <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-800">
+                        {selectedScrapers.size}
+                      </span>
+                    )}
+                  </>
+                )}
+              </button>
 
-            {/* Dropdown för scraper-val */}
-            {showScraperSelection && !running && (
-              <div className="scraper-selection-dropdown absolute right-0 mt-2 w-80 bg-white rounded-lg shadow-xl border border-gray-200 z-10">
-                <div className="p-4">
-                  <div className="flex items-center justify-between mb-3">
-                    <h3 className="text-sm font-semibold text-gray-900">Välj scrapers</h3>
-                    <button
-                      onClick={toggleAllScrapers}
-                      className="text-xs text-blue-600 hover:text-blue-800 font-medium"
-                    >
-                      {selectedScrapers.size === scrapers.length ? 'Avmarkera alla' : 'Markera alla'}
-                    </button>
-                  </div>
-                  
-                  <div className="space-y-2 max-h-60 overflow-y-auto">
-                    {scrapers.map((scraper) => (
-                      <label
-                        key={scraper.name}
-                        className="flex items-start p-2 hover:bg-gray-50 rounded cursor-pointer"
+              {/* Dropdown för scraper-val */}
+              {showScraperSelection && !running && (
+                <div className="scraper-selection-dropdown absolute right-0 mt-2 w-80 bg-white rounded-lg shadow-xl border border-gray-200 z-10">
+                  <div className="p-4">
+                    <div className="flex items-center justify-between mb-3">
+                      <h3 className="text-sm font-semibold text-gray-900">Välj scrapers</h3>
+                      <button
+                        onClick={toggleAllScrapers}
+                        className="text-xs text-blue-600 hover:text-blue-800 font-medium"
                       >
-                        <input
-                          type="checkbox"
-                          checked={selectedScrapers.has(scraper.name)}
-                          onChange={() => toggleScraperSelection(scraper.name)}
-                          className="mt-1 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                        />
-                        <div className="ml-3 flex-1">
-                          <div className="text-sm font-medium text-gray-900">{scraper.name}</div>
-                          <div className="text-xs text-gray-500 truncate">{scraper.url}</div>
-                        </div>
-                      </label>
-                    ))}
-                  </div>
+                        {selectedScrapers.size === scrapers.length ? 'Avmarkera alla' : 'Markera alla'}
+                      </button>
+                    </div>
+                    
+                    <div className="space-y-2 max-h-60 overflow-y-auto">
+                      {scrapers.map((scraper) => (
+                        <label
+                          key={scraper.name}
+                          className="flex items-start p-2 hover:bg-gray-50 rounded cursor-pointer"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={selectedScrapers.has(scraper.name)}
+                            onChange={() => toggleScraperSelection(scraper.name)}
+                            className="mt-1 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                          />
+                          <div className="ml-3 flex-1">
+                            <div className="text-sm font-medium text-gray-900">{scraper.name}</div>
+                            <div className="text-xs text-gray-500 truncate">{scraper.url}</div>
+                          </div>
+                        </label>
+                      ))}
+                    </div>
 
-                  <div className="mt-4 pt-3 border-t border-gray-200 flex gap-2">
-                    <button
-                      onClick={() => setShowScraperSelection(false)}
-                      className="flex-1 px-3 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50"
-                    >
-                      Avbryt
-                    </button>
-                    <button
-                      onClick={runScraper}
-                      className="flex-1 px-3 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700"
-                    >
-                      Kör {selectedScrapers.size > 0 ? `(${selectedScrapers.size})` : 'alla'}
-                    </button>
+                    <div className="mt-4 pt-3 border-t border-gray-200 flex gap-2">
+                      <button
+                        onClick={() => setShowScraperSelection(false)}
+                        className="flex-1 px-3 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50"
+                      >
+                        Avbryt
+                      </button>
+                      <button
+                        onClick={runScraper}
+                        className="flex-1 px-3 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700"
+                      >
+                        Kör {selectedScrapers.size > 0 ? `(${selectedScrapers.size})` : 'alla'}
+                      </button>
+                    </div>
                   </div>
                 </div>
-              </div>
-            )}
+              )}
+            </div>
           </div>
         </div>
 

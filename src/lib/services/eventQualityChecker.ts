@@ -26,8 +26,11 @@ export class EventQualityChecker {
       date_time: string;
       venue_name?: string;
       image_url?: string | null;
+      categories?: string[];
     },
-    organizerId: number
+    organizerId: number,
+    source?: string, // Scrapernamn för att identifiera betrodda källor
+    organizerStatus?: 'active' | 'pending' | 'archived' // Status på organizern
   ): Promise<QualityAssessment> {
     
     let score = 100;
@@ -73,19 +76,44 @@ export class EventQualityChecker {
       issues.push('Plats saknas eller för kort');
     }
 
-    // 6. Innehållskontroll med OpenAI Moderation API
-    const contentCheck = await this.checkContentSafety(event.name, event.description || '');
-    if (!contentCheck.safe) {
-      score -= 50;
-      issues.push(...contentCheck.issues);
+    // 6. Innehållskontroll med OpenAI Moderation API (skippa för betrodda källor)
+    const isTrustedSource = source && ['Visit Varberg', 'Arena Varberg', 'Varbergs Teater'].includes(source);
+    let contentCheck = { safe: true, issues: [] as string[] };
+    
+    if (!isTrustedSource) {
+      contentCheck = await this.checkContentSafety(event.name, event.description || '');
+      if (!contentCheck.safe) {
+        score -= 50;
+        issues.push(...contentCheck.issues);
+      }
+    } else {
+      console.log(`  ✓ Skippar moderation för betrodd källa: ${source}`);
     }
 
-    // 7. Bestäm status
+    // 7. Kolla om eventet är okategoriserat
+    const isUncategorized = event.categories?.includes('Okategoriserad') || 
+                            event.categories?.length === 0 ||
+                            !event.categories;
+    
+    if (isUncategorized) {
+      score -= 30;
+      issues.push('Kunde inte kategoriseras automatiskt - behöver granskas');
+    }
+
+    // 8. Bestäm status
     const isTrusted = TRUSTED_ORGANIZERS.includes(organizerId);
     let status: 'published' | 'pending_approval' | 'draft';
     let autoPublished = false;
 
-    if (score >= 80 && isTrusted && contentCheck.safe) {
+    // Events från pending-organizers går alltid till draft
+    if (organizerStatus === 'pending') {
+      status = 'draft';
+      issues.push('Organizer har pending-status - måste granskas');
+    }
+    // Events med "Okategoriserad" går alltid till draft
+    else if (isUncategorized) {
+      status = 'draft';
+    } else if (score >= 80 && isTrusted && contentCheck.safe) {
       status = 'published';
       autoPublished = true;
     } else if (score >= 50) {
@@ -111,9 +139,7 @@ export class EventQualityChecker {
   ): Promise<{ safe: boolean; issues: string[] }> {
     
     try {
-      const response = await openai.moderations.create({
-        input: `${title}\n\n${description}`
-      });
+      const response = await this.makeModerationRequest(`${title}\n\n${description}`);
 
       const result = response.results[0];
       const issues: string[] = [];
@@ -149,6 +175,32 @@ export class EventQualityChecker {
       // Om API:et misslyckas, anta att det är säkert
       return { safe: true, issues: [] };
     }
+  }
+
+  /**
+   * Gör moderation request med retry-logik för 429-fel
+   */
+  private async makeModerationRequest(input: string, retries = 5): Promise<any> {
+    for (let i = 0; i < retries; i++) {
+      try {
+        const response = await openai.moderations.create({ input });
+        return response;
+      } catch (error: any) {
+        if (error.status === 429 && i < retries - 1) {
+          // 429 Too Many Requests - vänta längre och försök igen med exponential backoff
+          const waitTime = Math.pow(2, i) * 3000; // Exponential backoff: 3s, 6s, 12s, 24s, 48s
+          console.log(`  ⏳ Moderation rate limit (försök ${i + 1}/${retries}), väntar ${(waitTime/1000).toFixed(1)}s...`);
+          await new Promise(resolve => setTimeout(resolve, waitTime));
+        } else if (error.status === 429 && i === retries - 1) {
+          // Sista försöket - ge upp och anta att innehållet är säkert
+          console.error(`  ⚠️ Moderation rate limit exceeded, antar att innehållet är säkert`);
+          throw error;
+        } else {
+          throw error; // Rethrow om det inte är 429
+        }
+      }
+    }
+    throw new Error('Max retries exceeded');
   }
 }
 

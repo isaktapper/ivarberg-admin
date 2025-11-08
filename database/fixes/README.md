@@ -2,6 +2,17 @@
 
 Trigger-fixes, RLS policies och bugfixar.
 
+## ⚠️ AKUT: Category-fel vid import (2025-11-01)
+
+**Problem:** Event import misslyckas med fel om "category" kolumnen  
+**Lösning:** Kör dessa i ordning:
+1. `../migrations/REMOVE_OLD_CATEGORY_COLUMN.sql` - Ta bort gamla category kolumnen
+2. `FIX_AUDIT_TRIGGER_CATEGORIES.sql` - Uppdatera trigger att använda categories (plural)
+
+Se `../QUICK_FIX_CATEGORY_ERROR.md` för fullständiga instruktioner.
+
+---
+
 ## Rekommenderad fix (kör dessa i ordning)
 
 1. **COMPLETE_FIX.sql** ⭐

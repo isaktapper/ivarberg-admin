@@ -28,11 +28,16 @@ Lägg till följande i `.env.local`:
 # Supabase Service Role Key (för server-side operationer)
 SUPABASE_SERVICE_ROLE_KEY=your_service_role_key_here
 
+# OpenAI API Key (för AI-kategorisering)
+OPENAI_API_KEY=your_openai_api_key_here
+
 # Optional: För att skydda API:et
 SCRAPER_API_TOKEN=your_secret_token_here
 ```
 
-**Viktigt:** Service Role Key hittar du i Supabase Dashboard under Project Settings > API > service_role key.
+**Viktigt:** 
+- Service Role Key hittar du i Supabase Dashboard under Project Settings > API > service_role key
+- OpenAI API Key får du från https://platform.openai.com/api-keys
 
 ## Dependencies
 
@@ -192,7 +197,38 @@ Scrapern har inbyggd mapping för Arena Varbergs olika lokaler:
 - Okända venues får automatiskt "Arena Varberg" som fallback
 - Loggar om en okänd venue påträffas (för att kunna lägga till i mappingen)
 
-### 4. Event Import
+### 4. AI-kategorisering
+
+Efter scraping kategoriseras alla events automatiskt med OpenAI (GPT-4o-mini):
+
+**Smart kategorisering:**
+- Väljer **1-3 kategorier** per event (istället för bara 1)
+- Sorterar kategorier efter relevans (bäst först)
+- Returnerar confidence scores (0.0-1.0) för varje kategori
+- Cachar kategorisering för events med samma namn (snabbt för flera occasions)
+
+**Exempel:**
+```
+Event: "Barnteater - Pippi Långstrump"
+→ Kategorier: ["Barn & Familj", "Scen"]
+→ Scores: { "Barn & Familj": 0.95, "Scen": 0.78 }
+```
+
+**Tillgängliga kategorier:**
+- Scen (teater, konserter, standup, livemusik)
+- Nattliv (klubb, DJ, pub, afterwork)
+- Sport (matcher, träning, idrottsevenemang)
+- Utställningar (konstutställningar, galleri, kulturhus)
+- Föreläsningar (talks, presentationer, workshops)
+- Barn & Familj (barnteater, familjeaktiviteter)
+- Mat & Dryck (matfestival, vinprovning, middagar)
+- Jul (julmarknader, lucia, julkonserter)
+- Film & bio (biografföreställningar, filmvisningar)
+- Djur & Natur (naturvandringar, djurparker)
+- Guidade visningar (stadsvandringar, museibesök)
+- Okategoriserad (fallback om AI inte kan kategorisera)
+
+### 5. Event Import
 
 - Validerar att required fields finns (name, date_time, location)
 - Kontrollerar dubbletter baserat på name + date_time + location
@@ -201,10 +237,11 @@ Scrapern har inbyggd mapping för Arena Varbergs olika lokaler:
   - Event slug (från titel)
   - Timestamp
   - Random string
-- Skapar event med status 'draft'
-- Kategori sätts till `null` och måste uppdateras manuellt i adminpanelen
+- Kategoriserar event med AI (1-3 kategorier + confidence scores)
+- Bedömer kvalitet och bestämmer status (published/pending_approval/draft)
+- Sparar event till databasen
 
-### 4. Duplicate Detection
+### 6. Duplicate Detection
 
 Events räknas som dubbletter om följande matchar:
 - `name` (exakt match)
@@ -290,8 +327,9 @@ Sätt `enabled: false` i `SCRAPER_CONFIGS` för att tillfälligt inaktivera en s
 - **Timeout:** API route har `maxDuration = 300` (5 minuter)
 - **Rate limiting:** 500ms delay mellan varje event-sida för att inte överbelasta servern
 - **Image URLs:** Relativa URLs konverteras automatiskt till absoluta
-- **Category:** Sätts till default-kategori (t.ex. "Scen"), kan uppdateras manuellt
-- **Performance:** Tar längre tid än enkel kalenderscraping pga tvåstegsprocess, men ger mycket bättre data
+- **AI-kategorisering:** Använder OpenAI GPT-4o-mini, kräver `OPENAI_API_KEY` i .env
+- **Multi-kategorier:** Events får 1-3 kategorier automatiskt, sorterade efter relevans
+- **Performance:** AI-kategorisering lägger till ~500ms per unikt eventnamn (cached för flera occasions)
 
 ## Felsökning
 
@@ -383,14 +421,19 @@ jobs:
 ## Workflow
 
 1. **Scraping körs** (manuellt eller automatiskt)
-2. **Events importeras** med status 'draft'
-3. **Admin granskar** events i adminpanelen
-4. **Admin uppdaterar:**
-   - Kategori (required)
+2. **AI kategoriserar** alla events (1-3 kategorier per event)
+3. **Kvalitetsbedömning** avgör om event auto-publiceras eller behöver granskas
+4. **Events importeras** med status:
+   - `published` - Högkvalitativa events (auto-publicerade)
+   - `pending_approval` - Behöver granskning (saknar bild eller beskrivning)
+   - `draft` - Låg kvalitet (många saknade fält)
+5. **Admin granskar** events som behöver det
+6. **Admin kan justera:**
+   - Kategorier (om AI valde fel)
    - Pris (om inte scrapats)
    - Max participants (om relevant)
-   - Justerar beskrivning vid behov
-5. **Admin publicerar** genom att ändra status till 'published'
+   - Beskrivning
+7. **Admin publicerar** genom att ändra status till 'published'
 
 ## Support
 

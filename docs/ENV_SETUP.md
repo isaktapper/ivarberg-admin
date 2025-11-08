@@ -6,7 +6,7 @@
 
 ```env
 # Public Frontend URL (där användare ser events)
-NEXT_PUBLIC_FRONTEND_URL=https://ivarberg-events-hub-iwnp-f9z5pi08r-isaktappers-projects.vercel.app
+NEXT_PUBLIC_FRONTEND_URL=https://ivarberg.nu
 ```
 
 ## Komplett `.env.local` exempel
@@ -26,7 +26,7 @@ OPENAI_API_KEY=sk-...
 NEXT_PUBLIC_GOOGLE_MAPS_API_KEY=your-google-maps-api-key
 
 # Public Frontend URL (där användare ser events)
-NEXT_PUBLIC_FRONTEND_URL=https://ivarberg-events-hub-iwnp-f9z5pi08r-isaktappers-projects.vercel.app
+NEXT_PUBLIC_FRONTEND_URL=https://ivarberg.nu
 ```
 
 ## Efter du lagt till variabeln
@@ -46,7 +46,7 @@ NEXT_PUBLIC_FRONTEND_URL=https://ivarberg-events-hub-iwnp-f9z5pi08r-isaktappers-
 
 Ögat-ikonen länker nu till:
 ```
-https://ivarberg-events-hub-iwnp-f9z5pi08r-isaktappers-projects.vercel.app/events/{event_id}
+https://ivarberg.nu/events/{event_id}
 ```
 
 Istället för att visa event-detaljer i admin, öppnas det publika eventet i en ny flik! 🎉

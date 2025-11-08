@@ -9,7 +9,7 @@ import { organizerSchema, OrganizerFormData } from '@/lib/validations'
 import { Organizer } from '@/types/database'
 import ProtectedLayout from '@/components/ProtectedLayout'
 import GooglePlacesAutocomplete from '@/components/GooglePlacesAutocomplete'
-import { ArrowLeft, Save } from 'lucide-react'
+import { ArrowLeft, Save, AlertCircle } from 'lucide-react'
 import Link from 'next/link'
 
 export default function EditOrganizerPage() {
@@ -36,6 +36,10 @@ export default function EditOrganizerPage() {
     }
   }, [params.id])
 
+  const [selectedStatus, setSelectedStatus] = useState<'active' | 'pending' | 'archived'>('active')
+  const [showPublishModal, setShowPublishModal] = useState(false)
+  const [draftEventCount, setDraftEventCount] = useState(0)
+
   useEffect(() => {
     if (organizer) {
       // Reset form with organizer data
@@ -46,6 +50,7 @@ export default function EditOrganizerPage() {
         email: organizer.email || '',
         website: organizer.website || '',
       })
+      setSelectedStatus(organizer.status)
     }
   }, [organizer, reset])
 
@@ -69,6 +74,32 @@ export default function EditOrganizerPage() {
   const onSubmit = async (data: OrganizerFormData) => {
     if (!organizer) return
 
+    // Om status ändras från pending → active, kolla om det finns draft-events
+    if (organizer.status === 'pending' && selectedStatus === 'active') {
+      // Hämta antal draft-events för denna organizer
+      const { data: draftEvents, error } = await supabase
+        .from('events')
+        .select('id', { count: 'exact', head: true })
+        .eq('organizer_id', organizer.id)
+        .eq('status', 'draft')
+
+      if (!error && draftEvents) {
+        const count = (draftEvents as any).count || 0
+        if (count > 0) {
+          setDraftEventCount(count)
+          setShowPublishModal(true)
+          return // Vänta på användarens beslut i modalen
+        }
+      }
+    }
+
+    // Fortsätt med normal uppdatering
+    await saveOrganizer(data, false)
+  }
+
+  const saveOrganizer = async (data: OrganizerFormData, publishEvents: boolean) => {
+    if (!organizer) return
+
     setLoading(true)
     try {
       const updateData = {
@@ -77,6 +108,8 @@ export default function EditOrganizerPage() {
         phone: data.phone || null,
         email: data.email || null,
         website: data.website || null,
+        status: selectedStatus,
+        needs_review: selectedStatus === 'pending', // Endast pending behöver review
         updated_at: new Date().toISOString(),
       }
 
@@ -87,12 +120,27 @@ export default function EditOrganizerPage() {
 
       if (error) throw error
 
+      // Om användaren vill publicera events också
+      if (publishEvents && selectedStatus === 'active') {
+        const { error: eventsError } = await supabase
+          .from('events')
+          .update({ status: 'published' })
+          .eq('organizer_id', organizer.id)
+          .eq('status', 'draft')
+
+        if (eventsError) {
+          console.error('Error publishing events:', eventsError)
+          alert('Organizer uppdaterad, men kunde inte publicera alla events.')
+        }
+      }
+
       router.push(`/organizers/${organizer.id}`)
     } catch (error) {
       console.error('Error updating organizer:', error)
       alert('Fel vid uppdatering av organizer: ' + (error instanceof Error ? error.message : 'Okänt fel'))
     } finally {
       setLoading(false)
+      setShowPublishModal(false)
     }
   }
 
@@ -236,6 +284,28 @@ export default function EditOrganizerPage() {
                     <p className="mt-2 text-sm text-red-600">{errors.website.message}</p>
                   )}
                 </div>
+
+                {/* Status */}
+                <div className="sm:col-span-2">
+                  <label htmlFor="status" className="block text-sm font-medium text-gray-700">
+                    Status
+                  </label>
+                  <select
+                    id="status"
+                    value={selectedStatus}
+                    onChange={(e) => setSelectedStatus(e.target.value as 'active' | 'pending' | 'archived')}
+                    className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                  >
+                    <option value="pending">Pending - Behöver granskas</option>
+                    <option value="active">Aktiv - Publicerad</option>
+                    <option value="archived">Arkiverad</option>
+                  </select>
+                  <p className="mt-2 text-sm text-gray-500">
+                    {selectedStatus === 'pending' && '⚠️ Events från pending-organizers hamnar automatiskt i draft'}
+                    {selectedStatus === 'active' && '✓ Organizer är aktiv och kan publicera events'}
+                    {selectedStatus === 'archived' && '📦 Organizer är arkiverad'}
+                  </p>
+                </div>
               </div>
             </div>
           </div>
@@ -267,6 +337,68 @@ export default function EditOrganizerPage() {
             </button>
           </div>
         </form>
+
+        {/* Publish Events Modal */}
+        {showPublishModal && (
+          <div className="fixed z-10 inset-0 overflow-y-auto" aria-labelledby="modal-title" role="dialog" aria-modal="true">
+            <div className="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+              {/* Background overlay */}
+              <div 
+                className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" 
+                aria-hidden="true"
+                onClick={() => setShowPublishModal(false)}
+              ></div>
+
+              {/* Center modal */}
+              <span className="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">&#8203;</span>
+
+              <div className="inline-block align-bottom bg-white rounded-lg px-4 pt-5 pb-4 text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full sm:p-6">
+                <div>
+                  <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-blue-100">
+                    <AlertCircle className="h-6 w-6 text-blue-600" aria-hidden="true" />
+                  </div>
+                  <div className="mt-3 text-center sm:mt-5">
+                    <h3 className="text-lg leading-6 font-medium text-gray-900" id="modal-title">
+                      Publicera events också?
+                    </h3>
+                    <div className="mt-2">
+                      <p className="text-sm text-gray-500">
+                        Det finns <strong>{draftEventCount}</strong> events i draft-status kopplade till denna organizer.
+                      </p>
+                      <p className="text-sm text-gray-500 mt-2">
+                        Vill du publicera dessa events samtidigt som du aktiverar organizern?
+                      </p>
+                    </div>
+                  </div>
+                </div>
+                <div className="mt-5 sm:mt-6 sm:grid sm:grid-cols-2 sm:gap-3 sm:grid-flow-row-dense">
+                  <button
+                    type="button"
+                    disabled={loading}
+                    onClick={() => {
+                      const formData = watch()
+                      saveOrganizer(formData, true)
+                    }}
+                    className="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-blue-600 text-base font-medium text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 sm:col-start-2 sm:text-sm disabled:opacity-50"
+                  >
+                    Ja, publicera events
+                  </button>
+                  <button
+                    type="button"
+                    disabled={loading}
+                    onClick={() => {
+                      const formData = watch()
+                      saveOrganizer(formData, false)
+                    }}
+                    className="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 sm:mt-0 sm:col-start-1 sm:text-sm disabled:opacity-50"
+                  >
+                    Nej, behåll som draft
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </ProtectedLayout>
   )

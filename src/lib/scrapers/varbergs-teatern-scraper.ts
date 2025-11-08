@@ -259,7 +259,7 @@ export class VarbergsTeaternScraper extends BaseScraper {
         price: price || undefined,
         image_url: imageUrl || undefined,
         organizer_event_url: url,
-        category: 'Okategoriserad', // AI fyller i senare
+        // categories fylls i av AI senare
         tags: undefined
       };
 

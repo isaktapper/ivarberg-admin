@@ -3,6 +3,7 @@ import { ScraperConfig } from './types';
 import { ArenaVarbergScraper } from './arena-varberg-scraper';
 import { VarbergsTeaternScraper } from './varbergs-teatern-scraper';
 import { VisitVarbergScraper } from './visit-varberg-scraper';
+import { SocietenScraper } from './societen-scraper';
 
 export const SCRAPER_CONFIGS: ScraperConfig[] = [
   {
@@ -25,6 +26,13 @@ export const SCRAPER_CONFIGS: ScraperConfig[] = [
     enabled: true,
     organizerId: 7,
     defaultCategory: 'Okategoriserad' // Visit Varberg har blandade evenemang
+  },
+  {
+    name: 'Societén',
+    url: 'https://societen.se/kalender/',
+    enabled: true,
+    organizerId: 49,
+    defaultCategory: 'Nattliv' // Default kategori för Societén events
   }
 ];
 
@@ -39,6 +47,8 @@ export function getScrapers(): BaseScraper[] {
           return new VarbergsTeaternScraper(config);
         case 'Visit Varberg':
           return new VisitVarbergScraper(config);
+        case 'Societén':
+          return new SocietenScraper(config);
         default:
           throw new Error(`Unknown scraper: ${config.name}`);
       }

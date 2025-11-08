@@ -156,7 +156,7 @@ export class ArenaVarbergScraper extends BaseScraper {
       }
       
       // Pris - Nu kan vi faktiskt hämta detta!
-      let price = $('.mec-event-cost .mec-events-event-cost').text().trim() || undefined;
+      const price = $('.mec-event-cost .mec-events-event-cost').text().trim() || undefined;
       
       // Tags/labels
       const tags: string[] = [];
@@ -174,7 +174,7 @@ export class ArenaVarbergScraper extends BaseScraper {
         image_url,
         organizer_event_url: url,
         price,
-        category: 'Okategoriserad', // AI fyller i senare
+        // categories fylls i av AI senare
         tags: tags.length > 0 ? tags : undefined
       };
       

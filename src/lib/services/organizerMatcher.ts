@@ -11,13 +11,15 @@ interface OrganizerMetadata {
   phone?: string;
   email?: string;
   organizerName?: string;
+  organizerWebsite?: string;
 }
 
 interface OrganizerMatch {
   organizerId: number;
-  matchType: 'exact' | 'fuzzy' | 'venue' | 'contact' | 'default';
+  matchType: 'exact' | 'fuzzy' | 'venue' | 'contact' | 'auto_created' | 'default';
   confidence: number;
   matchedField?: string;
+  isNew?: boolean; // TRUE om arrangören just skapades
 }
 
 export class OrganizerMatcher {
@@ -91,7 +93,23 @@ export class OrganizerMatcher {
       }
     }
 
-    // 5. Fallback: Använd default organizer (t.ex. Visit Varberg)
+    // 5. Om vi har organizerName men ingen match: Skapa ny arrangör
+    if (metadata.organizerName) {
+      try {
+        const newOrganizerId = await this.createPendingOrganizer(metadata);
+        return {
+          organizerId: newOrganizerId,
+          matchType: 'auto_created',
+          confidence: 0.7,
+          isNew: true,
+        };
+      } catch (error) {
+        console.error('Failed to auto-create organizer:', error);
+        // Fallback till default om skapandet misslyckas
+      }
+    }
+
+    // 6. Fallback: Använd default organizer (t.ex. Visit Varberg)
     return {
       organizerId: defaultOrganizerId,
       matchType: 'default',
@@ -232,17 +250,64 @@ export class OrganizerMatcher {
   }
 
   /**
+   * Skapa en ny arrangör med pending-status (auto-created från scraper)
+   */
+  private async createPendingOrganizer(metadata: OrganizerMetadata): Promise<number> {
+    if (!metadata.organizerName) {
+      throw new Error('Cannot create organizer without name');
+    }
+
+    // Dubbelkolla att arrangören inte redan finns (race condition-säkerhet)
+    const existingMatch = await this.findByName(metadata.organizerName);
+    if (existingMatch) {
+      return existingMatch;
+    }
+
+    // Skapa arrangör med pending-status
+    const { data, error } = await this.supabase
+      .from('organizers')
+      .insert({
+        name: metadata.organizerName,
+        status: 'pending', // Flaggas för admin-review
+        venue_name: metadata.venueName,
+        email: metadata.email || null,
+        phone: metadata.phone || null,
+        website: metadata.organizerWebsite || null,
+        created_from_scraper: true,
+        needs_review: true,
+        scraper_source: 'Visit Varberg', // Hårdkodat för nu, kan göras dynamiskt senare
+      })
+      .select('id')
+      .single();
+
+    if (error) {
+      console.error('Failed to create pending organizer:', error);
+      throw error;
+    }
+
+    // Lägg till i cache
+    const normalized = metadata.organizerName.trim().toLowerCase();
+    this.organizerCache.set(normalized, data.id);
+
+    console.log(`  ✨ Auto-created organizer: "${metadata.organizerName}" (ID: ${data.id}, pending review)`);
+    
+    return data.id;
+  }
+
+  /**
    * Logga matchningen för debugging
    */
   logMatch(match: OrganizerMatch, eventName: string, metadata: OrganizerMetadata): void {
     const emoji = match.matchType === 'exact' ? '🎯' :
                   match.matchType === 'venue' ? '🏢' :
                   match.matchType === 'contact' ? '📞' :
-                  match.matchType === 'fuzzy' ? '🔍' : '📋';
+                  match.matchType === 'fuzzy' ? '🔍' :
+                  match.matchType === 'auto_created' ? '✨' : '📋';
 
     console.log(
       `  ${emoji} Organizer match for "${eventName}": ` +
-      `ID ${match.organizerId} (${match.matchType}, ${(match.confidence * 100).toFixed(0)}% confidence)`
+      `ID ${match.organizerId} (${match.matchType}, ${(match.confidence * 100).toFixed(0)}% confidence)` +
+      (match.isNew ? ' [NEW - Pending Review]' : '')
     );
 
     if (match.matchedField && metadata[match.matchedField as keyof OrganizerMetadata]) {

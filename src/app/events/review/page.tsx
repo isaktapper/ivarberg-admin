@@ -21,9 +21,9 @@ import { formatDate } from '@/lib/utils'
 import { useRouter } from 'next/navigation'
 
 const CATEGORIES: EventCategory[] = [
-  'Scen', 'Nattliv', 'Sport', 'Konst', 'Föreläsningar', 
+  'Scen', 'Nattliv', 'Sport', 'Utställningar', 'Konst', 'Föreläsningar', 
   'Barn & Familj', 'Mat & Dryck', 'Jul', 'Film & bio', 
-  'Djur & Natur', 'Guidade visningar', 'Okategoriserad'
+  'Djur & Natur', 'Guidade visningar', 'Marknader', 'Okategoriserad'
 ]
 
 export default function EventReviewPage() {
@@ -81,12 +81,14 @@ export default function EventReviewPage() {
     
     setProcessing(true)
     try {
+      const updateData = {
+        ...editedEvent,
+        updated_at: new Date().toISOString()
+      };
+
       const { error } = await supabase
         .from('events')
-        .update({
-          ...editedEvent,
-          updated_at: new Date().toISOString()
-        })
+        .update(updateData)
         .eq('id', currentEvent.id)
 
       if (error) {
@@ -365,12 +367,12 @@ export default function EventReviewPage() {
             </div>
           </div>
 
-          {/* Content Area - No scrolling needed */}
-          <div className="flex-1 overflow-hidden p-6">
-            <div className="flex gap-6 h-full">
+          {/* Content Area - Scrollable content */}
+          <div className="flex-1 overflow-y-auto p-6">
+            <div className="flex gap-6">
               {/* Image - Small left side with URL input */}
-              <div className="w-64 flex-shrink-0 space-y-2">
-                <div className="relative bg-gray-200 rounded-lg overflow-hidden h-64">
+              <div className="w-64 flex-shrink-0 space-y-2 sticky top-0">
+                <div className="relative bg-gray-200 rounded-lg overflow-hidden h-48">
                   {(getFieldValue('image_url') || currentEvent.image_url) ? (
                     <img
                       src={getFieldValue('image_url') || currentEvent.image_url}
@@ -405,7 +407,7 @@ export default function EventReviewPage() {
               </div>
 
               {/* Content - Takes most space - Editable */}
-              <div className="flex-1 space-y-3 overflow-y-auto pr-2">
+              <div className="flex-1 space-y-3 min-h-0">
                 {/* Title - Editable */}
                 <div>
                   <label className="text-xs font-medium text-gray-700 mb-0.5 block">Namn</label>
@@ -445,21 +447,36 @@ export default function EventReviewPage() {
                   </div>
                 </div>
 
-                {/* Category - Editable (Always shown) */}
+                {/* Categories - Multi-select (Always shown) */}
                 <div className="flex items-start space-x-2">
                   <Tag className="w-4 h-4 text-gray-400 mt-1 flex-shrink-0" />
                   <div className="flex-1">
-                    <label className="text-xs font-medium text-gray-700 mb-0.5 block">Kategori</label>
-                    <select
-                      value={getFieldValue('category') || ''}
-                      onChange={(e) => updateField('category', e.target.value)}
-                      className="w-full text-sm text-gray-900 border-b-2 border-transparent hover:border-gray-300 focus:border-blue-500 focus:outline-none px-1 py-0.5 transition-colors bg-transparent cursor-pointer"
-                    >
-                      <option value="">Välj kategori</option>
-                      {CATEGORIES.map(cat => (
-                        <option key={cat} value={cat}>{cat}</option>
+                    <label className="text-xs font-medium text-gray-700 mb-1 block">Kategorier (1-3)</label>
+                    <div className="space-y-1">
+                      {CATEGORIES.map(category => (
+                        <label key={category} className="flex items-center text-xs">
+                          <input
+                            type="checkbox"
+                            checked={getFieldValue('categories')?.includes(category) || false}
+                            onChange={(e) => {
+                              const currentCategories = getFieldValue('categories') || [];
+                              if (e.target.checked) {
+                                if (!currentCategories.includes(category)) {
+                                  updateField('categories', [...currentCategories, category]);
+                                }
+                              } else {
+                                updateField('categories', currentCategories.filter(cat => cat !== category));
+                              }
+                            }}
+                            className="h-3 w-3 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                          />
+                          <span className="ml-1 text-gray-700">{category}</span>
+                        </label>
                       ))}
-                    </select>
+                    </div>
+                    <p className="text-xs text-gray-500 mt-1">
+                      {getFieldValue('categories')?.length || 0}/3 kategorier valda
+                    </p>
                   </div>
                 </div>
 

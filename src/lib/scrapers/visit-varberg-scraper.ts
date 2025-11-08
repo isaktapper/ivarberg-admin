@@ -156,7 +156,8 @@ export class VisitVarbergScraper extends BaseScraper {
       venueName: eventData.venue?.trim(),
       phone: eventData.phone,
       email: eventData.email,
-      organizerName: eventData.organizer, // Kan vara undefined
+      organizerName: eventData.venue?.trim(), // Använd venue som arrangörnamn (Visit Varberg använder venue som arrangör)
+      organizerWebsite: eventData.website, // Arrangörens hemsida
     };
 
     // STEG 7: Skapa base event object (gemensam data)
@@ -168,7 +169,7 @@ export class VisitVarbergScraper extends BaseScraper {
       image_url,
       price,
       organizer_event_url: url,
-      category: null as any, // AI fyller i
+      // categories fylls i av AI senare
       // Lägg till metadata för senare användning
       metadata: organizerMetadata,
     };
@@ -223,12 +224,22 @@ export class VisitVarbergScraper extends BaseScraper {
           // "2025-03-21T23:00:00.000Z" (UTC) → "2025-03-22T00:00:00" (lokal)
           const localDateStr = utcDate.toLocaleDateString('sv-SE'); // "2025-03-22"
           date_time = `${localDateStr}T00:00:00`; // ISO format utan tidszon
-
-          // Alternativt: Behåll som ISO med svensk tidszon
-          // date_time = new Date(localDateStr).toISOString();
         } else {
-          // Specifik tid: Behåll ursprunglig UTC-tid
-          date_time = dateObj.startDate;
+          // Specifik tid: Konvertera UTC till svensk tid
+          // "2025-11-30T09:00:00.000Z" (UTC) → "2025-11-30T10:00:00" (svensk tid)
+          const swedishTime = utcDate.toLocaleString('sv-SE', { 
+            timeZone: 'Europe/Stockholm',
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit',
+            hour12: false
+          });
+          
+          // Konvertera "2025-11-30 10:00:00" till "2025-11-30T10:00:00"
+          date_time = swedishTime.replace(' ', 'T');
         }
 
         events.push({

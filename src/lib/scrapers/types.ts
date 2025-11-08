@@ -1,3 +1,5 @@
+export type EventCategory = 'Scen' | 'Nattliv' | 'Sport' | 'Utställningar' | 'Konst' | 'Föreläsningar' | 'Barn & Familj' | 'Mat & Dryck' | 'Jul' | 'Film & bio' | 'Djur & Natur' | 'Guidade visningar' | 'Marknader' | 'Okategoriserad';
+
 export interface ScrapedEvent {
   name: string;
   description?: string;
@@ -7,7 +9,8 @@ export interface ScrapedEvent {
   price?: string;
   image_url?: string;
   organizer_event_url?: string;
-  category?: 'Scen' | 'Nattliv' | 'Sport' | 'Konst' | 'Föreläsningar' | 'Barn & Familj' | 'Mat & Dryck' | null;
+  categories?: EventCategory[]; // 1-3 kategorier, fylls i av AI
+  category_scores?: Record<string, number>; // Confidence scores från AI
   max_participants?: number;
   tags?: string[];
   // Quality assessment fields
@@ -29,7 +32,6 @@ export interface ScraperConfig {
   url: string;
   enabled: boolean;
   organizerId: number;
-  defaultCategory?: 'Scen' | 'Nattliv' | 'Sport' | 'Konst' | 'Föreläsningar' | 'Barn & Familj' | 'Mat & Dryck';
 }
 
 export interface ScraperResult {

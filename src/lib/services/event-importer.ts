@@ -23,14 +23,37 @@ interface DuplicateLog {
 export class EventImporter {
   private supabase;
   private duplicateLogs: DuplicateLog[] = [];
-  private categoryCache: Map<string, string> = new Map(); // Cache för AI-kategorisering
+  private categoryCache: Map<string, { categories: string[], scores: Record<string, number> }> = new Map(); // Cache för AI-kategorisering
   private logId?: number; // För progress logging
+  private isCancelled: boolean = false; // För avbrytning
 
   constructor() {
     this.supabase = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.SUPABASE_SERVICE_ROLE_KEY! // Service role key för server-side
     );
+  }
+
+  /**
+   * Kontrollera om processen är avbruten
+   */
+  private async checkCancellation(): Promise<boolean> {
+    if (this.isCancelled) return true;
+    
+    if (this.logId) {
+      const { data: logData } = await this.supabase
+        .from('scraper_logs')
+        .select('status')
+        .eq('id', this.logId)
+        .single();
+      
+      if (logData && (logData.status === 'cancelled' || logData.status === 'failed')) {
+        this.isCancelled = true;
+        return true;
+      }
+    }
+    
+    return false;
   }
 
   async importEvents(
@@ -104,7 +127,7 @@ export class EventImporter {
         progressTotal: uniqueEvents.length,
       });
     }
-    const categorizedEvents = await this.categorizeAndAssessQuality(uniqueEvents, organizerId);
+    const categorizedEvents = await this.categorizeAndAssessQuality(uniqueEvents, organizerId, source);
     console.log(`✓ Kategorisering och kvalitetsbedömning klar: ${categorizedEvents.length} events`);
 
     // 3. Matcha arrangörer (för Visit Varberg m.fl. plattformar)
@@ -135,6 +158,12 @@ export class EventImporter {
 
     let importCount = 0;
     for (const eventData of eventsWithOrganizers) {
+      // Kontrollera avbrytning innan varje event
+      if (await this.checkCancellation()) {
+        console.log('🛑 Process avbruten - stoppar import');
+        throw new Error('Process cancelled by user');
+      }
+
       try {
         // Validera required fields
         if (!this.validateEvent(eventData.event)) {
@@ -217,8 +246,17 @@ export class EventImporter {
    * Kategorisera OCH bedöm kvalitet på events med AI
    * Använder caching för att undvika att kategorisera samma eventnamn flera gånger
    */
-  private async categorizeAndAssessQuality(events: ScrapedEvent[], organizerId: number): Promise<ScrapedEvent[]> {
+  private async categorizeAndAssessQuality(events: ScrapedEvent[], organizerId: number, source?: string): Promise<ScrapedEvent[]> {
     const processed: ScrapedEvent[] = [];
+    
+    // Hämta organizer status
+    const { data: organizerData } = await this.supabase
+      .from('organizers')
+      .select('status')
+      .eq('id', organizerId)
+      .single();
+    
+    const organizerStatus = organizerData?.status as 'active' | 'pending' | 'archived' | undefined;
     
     // Gruppera events med samma namn för smart kategorisering
     const eventsByName = new Map<string, ScrapedEvent[]>();
@@ -234,25 +272,37 @@ export class EventImporter {
     
     // Process varje grupp
     for (const [normalizedName, eventGroup] of eventsByName) {
+      // Kontrollera avbrytning innan varje grupp
+      if (await this.checkCancellation()) {
+        console.log('🛑 Process avbruten - stoppar AI-kategorisering');
+        throw new Error('Process cancelled by user');
+      }
+
       const firstEvent = eventGroup[0];
       
       // 1. AI-kategorisering (endast för första eventet i gruppen)
-      let category: string;
+      let categorizationResult: { categories: string[], scores: Record<string, number> };
       
       if (this.categoryCache.has(normalizedName)) {
-        category = this.categoryCache.get(normalizedName)!;
-        console.log(`  💾 Cached category for "${firstEvent.name}": ${category} (${eventGroup.length} occasions)`);
+        categorizationResult = this.categoryCache.get(normalizedName)!;
+        console.log(`  💾 Cached categories for "${firstEvent.name}": ${categorizationResult.categories.join(', ')} (${eventGroup.length} occasions)`);
       } else {
-        category = await aiCategorizer.categorize(
+        // Kontrollera avbrytning innan AI-anrop
+        if (await this.checkCancellation()) {
+          console.log('🛑 Process avbruten - stoppar AI-kategorisering');
+          throw new Error('Process cancelled by user');
+        }
+
+        categorizationResult = await aiCategorizer.categorize(
           firstEvent.name,
           firstEvent.description || '',
           firstEvent.venue_name || firstEvent.location
         );
-        this.categoryCache.set(normalizedName, category);
-        console.log(`  🤖 AI categorized "${firstEvent.name}": ${category} (${eventGroup.length} occasions)`);
+        this.categoryCache.set(normalizedName, categorizationResult);
+        console.log(`  🤖 AI categorized "${firstEvent.name}": ${categorizationResult.categories.join(', ')} (${eventGroup.length} occasions)`);
         
-        // Rate limiting endast vid nya AI-anrop
-        await new Promise(resolve => setTimeout(resolve, 500));
+        // Rate limiting endast vid nya AI-anrop - ökat till 2s för att undvika OpenAI rate limits
+        await new Promise(resolve => setTimeout(resolve, 2000));
       }
       
       // 2. Kvalitetsbedömning och processing för alla events i gruppen
@@ -263,9 +313,12 @@ export class EventImporter {
             description: event.description,
             date_time: event.date_time,
             venue_name: event.venue_name,
-            image_url: event.image_url
+            image_url: event.image_url,
+            categories: categorizationResult.categories
           },
-          organizerId
+          organizerId,
+          source, // Skicka med källa för att skippa moderation för betrodda källor
+          organizerStatus // Skicka med organizer status för att sätta draft om pending
         );
         
         // Logga endast första och sista i gruppen för att minska spam
@@ -276,18 +329,19 @@ export class EventImporter {
           const statusEmoji = quality.autoPublished ? '✅' : 
                              quality.status === 'pending_approval' ? '⏳' : '📝';
           console.log(`  ${statusEmoji} ${event.name.substring(0, 50)}... [${new Date(event.date_time).toLocaleDateString('sv-SE')}]`);
-          console.log(`     Kategori: ${category} | Status: ${quality.status} | Score: ${quality.score}/100`);
+          console.log(`     Kategorier: ${categorizationResult.categories.join(', ')} | Status: ${quality.status} | Score: ${quality.score}/100`);
           if (quality.issues.length > 0) {
             console.log(`     Problem: ${quality.issues.join(', ')}`);
           }
           if (eventGroup.length > 1) {
-            console.log(`     ... och ${eventGroup.length - 1} fler occasion(s) med samma kategori`);
+            console.log(`     ... och ${eventGroup.length - 1} fler occasion(s) med samma kategorier`);
           }
         }
         
         processed.push({
           ...event,
-          category: category as any,
+          categories: categorizationResult.categories as any[],
+          category_scores: categorizationResult.scores,
           status: quality.status,
           quality_score: quality.score,
           quality_issues: quality.issues.join('; '),
@@ -552,7 +606,8 @@ export class EventImporter {
       price: event.price,
       image_url: event.image_url,
       organizer_event_url: event.organizer_event_url,
-      category: event.category,
+      categories: event.categories || ['Okategoriserad'],
+      category_scores: event.category_scores,
       organizer_id: organizerId,
       status: status,
       quality_score: event.quality_score,

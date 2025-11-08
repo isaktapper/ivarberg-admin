@@ -16,7 +16,8 @@ import {
   ChevronRight,
   Download,
   BarChart3,
-  AlertCircle
+  AlertCircle,
+  Globe
 } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
@@ -25,10 +26,12 @@ const navigation = [
   { name: 'Dashboard', href: '/', icon: LayoutDashboard },
   { name: 'Events', href: '/events', icon: Calendar },
   { name: 'Granska Events', href: '/events/review', icon: CheckSquare, badge: true },
+  { name: 'Tips', href: '/admin/tips', icon: AlertCircle, badge: true },
   { name: 'Duplicates', href: '/events/duplicates', icon: AlertCircle },
   { name: 'Statistik', href: '/events/statistics', icon: BarChart3 },
   { name: 'Scrapers', href: '/scrapers', icon: Download },
   { name: 'Organizers', href: '/organizers', icon: Users },
+  { name: 'Arrangörssidor', href: '/organizer-pages', icon: Globe },
 ]
 
 export default function Navigation({ 
@@ -73,6 +76,7 @@ export default function Navigation({
       console.error('Error fetching pending count:', error)
     }
   }
+
 
   const handleSignOut = async () => {
     try {
@@ -120,7 +124,9 @@ export default function Navigation({
             const Icon = item.icon
             const isActive = pathname === item.href || 
               (item.href === '/events/review' && pathname?.startsWith('/events/review')) ||
-              (item.href === '/events/statistics' && pathname?.startsWith('/events/statistics'))
+              (item.href === '/events/statistics' && pathname?.startsWith('/events/statistics')) ||
+              (item.href === '/organizer-pages' && pathname?.startsWith('/organizer-pages')) ||
+              (item.href === '/admin/tips' && pathname?.startsWith('/admin/tips'))
             
             return (
               <Link
@@ -138,14 +144,14 @@ export default function Navigation({
                 {!sidebarCollapsed && (
                   <>
                     <span className="flex-1">{item.name}</span>
-                    {item.badge && pendingCount > 0 && (
+                    {item.badge && item.href === '/events/review' && pendingCount > 0 && (
                       <span className="inline-flex items-center justify-center px-2 py-0.5 text-xs font-bold leading-none text-white bg-red-500 rounded-full">
                         {pendingCount}
                       </span>
                     )}
                   </>
                 )}
-                {sidebarCollapsed && item.badge && pendingCount > 0 && (
+                {sidebarCollapsed && item.badge && item.href === '/events/review' && pendingCount > 0 && (
                   <span className="absolute top-1 right-1 inline-flex items-center justify-center w-4 h-4 text-xs font-bold leading-none text-white bg-red-500 rounded-full">
                     {pendingCount > 9 ? '9+' : pendingCount}
                   </span>
@@ -235,7 +241,9 @@ export default function Navigation({
                 const Icon = item.icon
                 const isActive = pathname === item.href || 
                   (item.href === '/events/review' && pathname?.startsWith('/events/review')) ||
-                  (item.href === '/events/statistics' && pathname?.startsWith('/events/statistics'))
+                  (item.href === '/events/statistics' && pathname?.startsWith('/events/statistics')) ||
+                  (item.href === '/organizer-pages' && pathname?.startsWith('/organizer-pages')) ||
+                  (item.href === '/event-tips' && pathname?.startsWith('/event-tips'))
                 
                 return (
                   <Link
@@ -253,7 +261,7 @@ export default function Navigation({
                       <Icon className="w-5 h-5 mr-3" />
                       {item.name}
                     </div>
-                    {item.badge && pendingCount > 0 && (
+                    {item.badge && item.href === '/events/review' && pendingCount > 0 && (
                       <span className="inline-flex items-center justify-center px-2 py-1 text-xs font-bold leading-none text-white bg-red-500 rounded-full">
                         {pendingCount}
                       </span>

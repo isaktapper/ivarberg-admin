@@ -107,6 +107,8 @@ export async function POST(request: NextRequest) {
         
       } catch (error) {
         const errorMsg = error instanceof Error ? error.message : String(error);
+        const isCancelled = errorMsg.includes('cancelled') || errorMsg.includes('Process cancelled by user');
+        
         const result = {
           source: scraper.config.name,
           success: false,
@@ -117,13 +119,14 @@ export async function POST(request: NextRequest) {
         };
         results.push(result);
         
-        // Uppdatera log entry med fel
+        // Uppdatera log entry med fel eller avbrytning
         if (logId) {
           const endTime = Date.now();
+          const status = isCancelled ? 'cancelled' : 'failed';
           await supabase
             .from('scraper_logs')
             .update({
-              status: 'failed',
+              status,
               completed_at: new Date().toISOString(),
               duration_ms: endTime - startTime,
               errors: [errorMsg]
