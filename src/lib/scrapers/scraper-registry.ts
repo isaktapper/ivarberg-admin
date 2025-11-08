@@ -37,7 +37,7 @@ export const SCRAPER_CONFIGS: ScraperConfig[] = [
 ];
 
 export function getScrapers(): BaseScraper[] {
-  return SCRAPER_CONFIGS
+  const scrapers = SCRAPER_CONFIGS
     .filter(config => config.enabled)
     .map(config => {
       switch (config.name) {
@@ -53,4 +53,15 @@ export function getScrapers(): BaseScraper[] {
           throw new Error(`Unknown scraper: ${config.name}`);
       }
     });
+  
+  // Sortera så att Visit Varberg alltid körs sist (aggregator-plattform)
+  // Detta undviker att hämta dubbletter från Visit Varberg när vi redan har originalkällan
+  return scrapers.sort((a, b) => {
+    const aConfig = a.getConfig();
+    const bConfig = b.getConfig();
+    
+    if (aConfig.name === 'Visit Varberg') return 1;  // Visit Varberg sist
+    if (bConfig.name === 'Visit Varberg') return -1; // Visit Varberg sist
+    return 0; // Behåll ordning för övriga
+  });
 }
