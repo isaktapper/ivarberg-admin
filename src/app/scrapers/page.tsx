@@ -18,7 +18,11 @@ import {
   Download,
   ExternalLink,
   Eye,
-  Square
+  Square,
+  ChevronDown,
+  ChevronUp,
+  Github,
+  User
 } from 'lucide-react'
 
 interface ScraperInfo {
@@ -41,6 +45,9 @@ export default function ScrapersPage() {
   const [selectedLogId, setSelectedLogId] = useState<number | null>(null)
   const [selectedLogName, setSelectedLogName] = useState<string>('')
   const [cancelling, setCancelling] = useState(false)
+  const [showConfirmationModal, setShowConfirmationModal] = useState(false)
+  const [confirmationText, setConfirmationText] = useState('')
+  const [historyCollapsed, setHistoryCollapsed] = useState(true)
 
   useEffect(() => {
     fetchData()
@@ -166,18 +173,20 @@ export default function ScrapersPage() {
     }
   }
 
+  const openConfirmationModal = () => {
+    setShowScraperSelection(false)
+    setShowConfirmationModal(true)
+    setConfirmationText('')
+  }
+
   const runScraper = async () => {
     const scrapersToRun = selectedScrapers.size > 0 
       ? Array.from(selectedScrapers)
       : scrapers.map(s => s.name)
 
-    const scraperNames = scrapersToRun.join(', ')
-    if (!confirm(`Är du säker på att du vill köra scraping nu?\n\nScrapers: ${scraperNames}`)) {
-      return
-    }
-
     setRunning(true)
-    setShowScraperSelection(false)
+    setShowConfirmationModal(false)
+    setConfirmationText('')
     try {
       const response = await fetch('/api/scrape', {
         method: 'POST',
@@ -320,6 +329,23 @@ export default function ScrapersPage() {
     return `${hours}h ${minutes}m`
   }
 
+  const getSourceBadge = (triggeredBy?: string) => {
+    if (triggeredBy?.includes('github')) {
+      return (
+        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-900 text-white">
+          <Github className="w-3 h-3 mr-1" />
+          GitHub Actions
+        </span>
+      )
+    }
+    return (
+      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+        <User className="w-3 h-3 mr-1" />
+        Manuell
+      </span>
+    )
+  }
+
   if (loading) {
     return (
       <ProtectedLayout>
@@ -430,7 +456,7 @@ export default function ScrapersPage() {
                         Avbryt
                       </button>
                       <button
-                        onClick={runScraper}
+                        onClick={openConfirmationModal}
                         className="flex-1 px-3 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700"
                       >
                         Kör {selectedScrapers.size > 0 ? `(${selectedScrapers.size})` : 'alla'}
@@ -443,73 +469,131 @@ export default function ScrapersPage() {
           </div>
         </div>
 
-        {/* Scrapers Overview */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {scrapers.map((scraper) => {
-            const schedule = schedules.find(s => s.scraper_name === scraper.name)
-            const lastLog = logs.find(l => l.scraper_name === scraper.name)
-            const timeUntil = getTimeUntilNext(schedule?.next_run_at)
+        {/* Scrapers Overview Table */}
+        <div className="bg-white shadow rounded-lg overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-gray-200">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Scraper
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Status
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Senaste körning
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Källa
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Resultat
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Nästa körning
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-200">
+                {scrapers.map((scraper) => {
+                  const schedule = schedules.find(s => s.scraper_name === scraper.name)
+                  const lastLog = logs.find(l => l.scraper_name === scraper.name)
+                  const timeUntil = getTimeUntilNext(schedule?.next_run_at)
 
-            return (
-              <div key={scraper.name} className="bg-white rounded-lg shadow p-3">
-                <div className="flex items-start justify-between mb-3">
-                  <div>
-                    <h3 className="text-base font-semibold text-gray-900">
-                      {scraper.name}
-                    </h3>
-                    <a
-                      href={scraper.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-xs text-blue-600 hover:text-blue-800 inline-flex items-center mt-1"
-                    >
-                      <ExternalLink className="w-3 h-3 mr-1" />
-                      {scraper.url}
-                    </a>
-                  </div>
-                  {scraper.enabled ? (
-                    <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800">
-                      Aktiv
-                    </span>
-                  ) : (
-                    <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-800">
-                      Inaktiv
-                    </span>
-                  )}
-                </div>
-
-                {/* Last run status */}
-                {lastLog && (
-                  <div className="mb-3 pb-3 border-b border-gray-200">
-                    <div className="flex items-center text-sm text-gray-600 mb-1">
-                      {getStatusIcon(lastLog.status)}
-                      <span className="ml-2">
-                        Senaste körning: {formatDateTime(lastLog.started_at)}
-                      </span>
-                    </div>
-                    <div className="text-xs text-gray-500 space-y-0.5">
-                      <div>Hittade: {lastLog.events_found}, Importerade: {lastLog.events_imported}</div>
-                      {lastLog.duration_ms && <div>Tid: {formatDuration(lastLog.duration_ms)}</div>}
-                    </div>
-                  </div>
-                )}
-
-                {/* Next scheduled run */}
-                {schedule && schedule.enabled && (
-                  <div className="flex items-center text-sm text-gray-600">
-                    <Clock className="w-4 h-4 mr-2 text-gray-400" />
-                    <span>
-                      Nästa: {timeUntil ? (
-                        <span className="font-medium text-gray-900">{timeUntil}</span>
-                      ) : (
-                        formatDateTime(schedule.next_run_at)
-                      )}
-                    </span>
-                  </div>
-                )}
-              </div>
-            )
-          })}
+                  return (
+                    <tr key={scraper.name} className="hover:bg-gray-50">
+                      <td className="px-6 py-4">
+                        <div className="flex flex-col">
+                          <div className="text-sm font-medium text-gray-900">
+                            {scraper.name}
+                          </div>
+                          <a
+                            href={scraper.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-xs text-blue-600 hover:text-blue-800 inline-flex items-center mt-1"
+                          >
+                            <ExternalLink className="w-3 h-3 mr-1" />
+                            {new URL(scraper.url).hostname}
+                          </a>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="flex items-center">
+                          {lastLog ? (
+                            <>
+                              {getStatusIcon(lastLog.status)}
+                              <span className={`ml-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(lastLog.status)}`}>
+                                {lastLog.status}
+                              </span>
+                            </>
+                          ) : (
+                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+                              Aldrig körd
+                            </span>
+                          )}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        {lastLog ? (
+                          <div className="text-sm text-gray-900">
+                            <div className="font-medium">{formatDateTime(lastLog.started_at)}</div>
+                            <div className="text-xs text-gray-500">
+                              {formatDuration(lastLog.duration_ms)}
+                            </div>
+                          </div>
+                        ) : (
+                          <span className="text-sm text-gray-500">-</span>
+                        )}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        {lastLog ? getSourceBadge(lastLog.triggered_by) : (
+                          <span className="text-sm text-gray-500">-</span>
+                        )}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        {lastLog ? (
+                          <div className="text-sm">
+                            <div className="flex items-center space-x-3 text-xs">
+                              <span className="text-green-600 font-medium">
+                                +{lastLog.events_imported}
+                              </span>
+                              <span className="text-gray-500">
+                                {lastLog.events_found} funna
+                              </span>
+                              {lastLog.duplicates_skipped > 0 && (
+                                <span className="text-yellow-600">
+                                  {lastLog.duplicates_skipped} dupl.
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        ) : (
+                          <span className="text-sm text-gray-500">-</span>
+                        )}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        {schedule && schedule.enabled ? (
+                          <div className="text-sm">
+                            <div className="flex items-center text-gray-900 font-medium">
+                              <Clock className="w-4 h-4 mr-1.5 text-blue-500" />
+                              {timeUntil || formatDateTime(schedule.next_run_at)}
+                            </div>
+                            <div className="text-xs text-gray-500 mt-0.5 ml-5">
+                              {formatDateTime(schedule.next_run_at)}
+                            </div>
+                          </div>
+                        ) : (
+                          <span className="text-sm text-gray-500">Inte schemalagd</span>
+                        )}
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
         </div>
 
         {/* Stats Summary */}
@@ -573,25 +657,41 @@ export default function ScrapersPage() {
 
         {/* Logs */}
         <div className="bg-white shadow rounded-lg">
-          <div className="px-6 py-4 border-b border-gray-200">
-            <div className="flex items-center justify-between">
-              <h2 className="text-lg font-medium text-gray-900">Körningshistorik</h2>
-              <select
-                className="px-3 py-1.5 text-sm border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-                value={selectedScraper}
-                onChange={(e) => setSelectedScraper(e.target.value)}
-              >
-                <option value="all">Alla scrapers</option>
-                {scrapers.map((scraper) => (
-                  <option key={scraper.name} value={scraper.name}>
-                    {scraper.name}
-                  </option>
-                ))}
-              </select>
+          <button
+            onClick={() => setHistoryCollapsed(!historyCollapsed)}
+            className="w-full px-6 py-4 flex items-center justify-between hover:bg-gray-50 transition-colors"
+          >
+            <div className="flex items-center space-x-2">
+              <h2 className="text-lg font-medium text-gray-900">Fullständig körningshistorik</h2>
+              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600">
+                {logs.length} körningar
+              </span>
             </div>
-          </div>
+            {historyCollapsed ? (
+              <ChevronDown className="w-5 h-5 text-gray-400" />
+            ) : (
+              <ChevronUp className="w-5 h-5 text-gray-400" />
+            )}
+          </button>
 
-          <div className="overflow-x-auto">
+          {!historyCollapsed && (
+            <>
+              <div className="px-6 py-3 border-t border-gray-200 bg-gray-50">
+                <select
+                  className="px-3 py-1.5 text-sm border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 bg-white"
+                  value={selectedScraper}
+                  onChange={(e) => setSelectedScraper(e.target.value)}
+                >
+                  <option value="all">Alla scrapers</option>
+                  {scrapers.map((scraper) => (
+                    <option key={scraper.name} value={scraper.name}>
+                      {scraper.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-gray-200">
               <thead className="bg-gray-50">
                 <tr>
@@ -721,9 +821,86 @@ export default function ScrapersPage() {
                 )}
               </tbody>
             </table>
-          </div>
+              </div>
+            </>
+          )}
         </div>
       </div>
+
+      {/* Confirmation Modal */}
+      {showConfirmationModal && (
+        <div className="fixed inset-0 backdrop-blur-sm flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4 shadow-xl">
+            <div className="flex items-start mb-4">
+              <div className="flex-shrink-0">
+                <AlertTriangle className="h-8 w-8 text-yellow-500" />
+              </div>
+              <div className="ml-3">
+                <h3 className="text-lg font-semibold text-gray-900">
+                  Varning: Manuell scraping
+                </h3>
+                <div className="mt-2 text-sm text-gray-600 space-y-2">
+                  <p className="font-medium text-red-600">
+                    Att köra scrapers manuellt kan orsaka problem!
+                  </p>
+                  <p>
+                    • Scrapers körs automatiskt varje dag kl 06:00
+                  </p>
+                  <p>
+                    • Manuell körning kan skapa dubbletter och konflikter
+                  </p>
+                  <p>
+                    • Kör endast om du vet vad du gör
+                  </p>
+                  <p className="mt-3 font-medium">
+                    Valda scrapers: {selectedScrapers.size > 0 
+                      ? Array.from(selectedScrapers).join(', ')
+                      : 'Alla scrapers'
+                    }
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-4">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Skriv <span className="font-bold text-red-600">"kör"</span> för att bekräfta:
+              </label>
+              <input
+                type="text"
+                value={confirmationText}
+                onChange={(e) => setConfirmationText(e.target.value)}
+                placeholder="Skriv: kör"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                autoFocus
+              />
+            </div>
+
+            <div className="mt-6 flex gap-3">
+              <button
+                onClick={() => {
+                  setShowConfirmationModal(false)
+                  setConfirmationText('')
+                }}
+                className="flex-1 px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50"
+              >
+                Avbryt
+              </button>
+              <button
+                onClick={runScraper}
+                disabled={confirmationText.toLowerCase() !== 'kör'}
+                className={`flex-1 px-4 py-2 text-sm font-medium rounded-md text-white ${
+                  confirmationText.toLowerCase() === 'kör'
+                    ? 'bg-red-600 hover:bg-red-700 cursor-pointer'
+                    : 'bg-gray-300 cursor-not-allowed'
+                }`}
+              >
+                Kör scraping
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Progress Modal */}
       {selectedLogId && (
