@@ -239,7 +239,19 @@ export default function Navigation({
             return (
               <div key={group.name} className="space-y-1">
                 <button
-                  onClick={() => toggleGroup(group.name)}
+                  onClick={() => {
+                    // Om sidebaren är collapsed, expandera den först
+                    if (sidebarCollapsed) {
+                      setSidebarCollapsed(false)
+                      onSidebarToggle?.(false)
+                      // Vänta lite så att animationen hinner köra innan vi öppnar gruppen
+                      setTimeout(() => {
+                        toggleGroup(group.name)
+                      }, 100)
+                    } else {
+                      toggleGroup(group.name)
+                    }
+                  }}
                   className={cn(
                     'w-full flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors',
                     hasActiveChild
