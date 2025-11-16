@@ -187,7 +187,7 @@ export default function Navigation({
               setSidebarCollapsed(newState)
               onSidebarToggle?.(newState)
             }}
-            className="p-1.5 rounded-md text-gray-600 hover:text-gray-900 hover:bg-gray-200"
+            className="p-1.5 rounded-md text-gray-600 hover:text-gray-900 hover:bg-gray-200/40"
           >
             {sidebarCollapsed ? (
               <PanelLeftOpen className="w-5 h-5" />
@@ -211,8 +211,8 @@ export default function Navigation({
                   className={cn(
                     'group flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors',
                     isActive
-                      ? 'bg-gray-200 text-gray-900'
-                      : 'text-gray-700 hover:bg-gray-200 hover:text-gray-900'
+                      ? 'bg-gray-200/60 text-gray-900'
+                      : 'text-gray-700 hover:bg-gray-200/40 hover:text-gray-900'
                   )}
                   title={sidebarCollapsed ? group.name : undefined}
                 >
@@ -255,8 +255,8 @@ export default function Navigation({
                   className={cn(
                     'w-full flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors',
                     hasActiveChild
-                      ? 'bg-gray-200 text-gray-900'
-                      : 'text-gray-700 hover:bg-gray-200 hover:text-gray-900'
+                      ? 'bg-gray-200/60 text-gray-900'
+                      : 'text-gray-700 hover:bg-gray-200/40 hover:text-gray-900'
                   )}
                   title={sidebarCollapsed ? group.name : undefined}
                 >
@@ -288,8 +288,8 @@ export default function Navigation({
                           className={cn(
                             'group relative flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors',
                             isActive
-                              ? 'bg-gray-200 text-gray-900'
-                              : 'text-gray-700 hover:bg-gray-200 hover:text-gray-900'
+                              ? 'bg-gray-200/60 text-gray-900'
+                              : 'text-gray-700 hover:bg-gray-200/40 hover:text-gray-900'
                           )}
                         >
                           <span className="flex-1">{item.name}</span>
@@ -328,7 +328,7 @@ export default function Navigation({
               </div>
               <button
                 onClick={handleSignOut}
-                className="w-full flex items-center px-3 py-2 text-sm font-medium text-gray-700 rounded-md hover:bg-gray-200 hover:text-gray-900"
+                className="w-full flex items-center px-3 py-2 text-sm font-medium text-gray-700 rounded-md hover:bg-gray-200/40 hover:text-gray-900"
               >
                 <LogOut className="w-5 h-5 mr-3" />
                 Logga ut
@@ -337,7 +337,7 @@ export default function Navigation({
           ) : (
             <button
               onClick={handleSignOut}
-              className="w-full flex items-center justify-center p-2 text-gray-700 rounded-md hover:bg-gray-200 hover:text-gray-900"
+              className="w-full flex items-center justify-center p-2 text-gray-700 rounded-md hover:bg-gray-200/40 hover:text-gray-900"
               title="Logga ut"
             >
               <LogOut className="w-5 h-5" />
@@ -356,7 +356,7 @@ export default function Navigation({
           />
           <button
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-            className="p-2 rounded-md text-gray-600 hover:text-gray-900 hover:bg-gray-200"
+            className="p-2 rounded-md text-gray-600 hover:text-gray-900 hover:bg-gray-200/40"
           >
             {mobileMenuOpen ? (
               <X className="h-6 w-6" />
@@ -380,7 +380,7 @@ export default function Navigation({
               />
               <button
                 onClick={() => setMobileMenuOpen(false)}
-                className="p-2 rounded-md text-gray-600 hover:text-gray-900 hover:bg-gray-200"
+                className="p-2 rounded-md text-gray-600 hover:text-gray-900 hover:bg-gray-200/40"
               >
                 <X className="h-6 w-6" />
               </button>
@@ -400,8 +400,8 @@ export default function Navigation({
                       className={cn(
                         'flex items-center px-3 py-3 text-base font-medium rounded-md',
                         isActive
-                          ? 'bg-gray-200 text-gray-900'
-                          : 'text-gray-700 hover:bg-gray-200 hover:text-gray-900'
+                          ? 'bg-gray-200/60 text-gray-900'
+                          : 'text-gray-700 hover:bg-gray-200/40 hover:text-gray-900'
                       )}
                       onClick={() => setMobileMenuOpen(false)}
                     >
@@ -430,8 +430,8 @@ export default function Navigation({
                       className={cn(
                         'w-full flex items-center justify-between px-3 py-3 text-base font-medium rounded-md',
                         hasActiveChild
-                          ? 'bg-gray-200 text-gray-900'
-                          : 'text-gray-700 hover:bg-gray-200 hover:text-gray-900'
+                          ? 'bg-gray-200/60 text-gray-900'
+                          : 'text-gray-700 hover:bg-gray-200/40 hover:text-gray-900'
                       )}
                     >
                       <div className="flex items-center">
@@ -460,8 +460,8 @@ export default function Navigation({
                               className={cn(
                                 'flex items-center justify-between px-3 py-2 text-sm font-medium rounded-md',
                                 isActive
-                                  ? 'bg-gray-200 text-gray-900'
-                                  : 'text-gray-700 hover:bg-gray-200 hover:text-gray-900'
+                                  ? 'bg-gray-200/60 text-gray-900'
+                                  : 'text-gray-700 hover:bg-gray-200/40 hover:text-gray-900'
                               )}
                               onClick={() => setMobileMenuOpen(false)}
                             >
@@ -502,7 +502,7 @@ export default function Navigation({
                   handleSignOut()
                   setMobileMenuOpen(false)
                 }}
-                className="w-full flex items-center px-3 py-3 text-base font-medium text-gray-700 rounded-md hover:bg-gray-200 hover:text-gray-900"
+                className="w-full flex items-center px-3 py-3 text-base font-medium text-gray-700 rounded-md hover:bg-gray-200/40 hover:text-gray-900"
               >
                 <LogOut className="w-5 h-5 mr-3" />
                 Logga ut
