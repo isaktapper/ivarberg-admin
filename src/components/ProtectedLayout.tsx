@@ -32,7 +32,7 @@ export default function ProtectedLayout({
       <main 
         className={cn(
           'pt-16 md:pt-0 transition-all duration-300',
-          sidebarCollapsed ? 'md:pl-20' : 'md:pl-64'
+          sidebarCollapsed ? 'md:pl-16' : 'md:pl-64'
         )}
       >
         <div className="py-6">

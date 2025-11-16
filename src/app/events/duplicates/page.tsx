@@ -406,7 +406,7 @@ export default function DuplicatesPage() {
             </div>
 
             {filteredDuplicates.map((dup) => (
-              <div key={dup.id} className="border rounded p-3 bg-white shadow-sm hover:shadow transition-shadow">
+              <div key={dup.id} className="border border-gray-200 rounded p-3 bg-white shadow-sm hover:shadow transition-shadow">
                 {/* Header - Kompakt */}
                 <div className="flex justify-between items-center mb-2">
                   <div className="flex gap-1.5">
@@ -501,7 +501,7 @@ export default function DuplicatesPage() {
             </div>
 
             {filteredPotentialDuplicates.map((dup, idx) => (
-              <div key={`${dup.event1.id}-${dup.event2.id}`} className="border rounded p-3 bg-white shadow-sm hover:shadow transition-shadow">
+              <div key={`${dup.event1.id}-${dup.event2.id}`} className="border border-gray-200 rounded p-3 bg-white shadow-sm hover:shadow transition-shadow">
                 {/* Header - Kompakt */}
                 <div className="flex justify-between items-center mb-2">
                   <div className="flex gap-1.5">

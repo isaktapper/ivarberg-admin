@@ -31,29 +31,48 @@ export async function generateOrganizerContent(
     const prompt = `
 Du är en expert på att skriva SEO-optimerat innehåll för evenemangssidor i Varberg, Sverige.
 
-Baserat på följande information från en arrangörs webbplats, skapa innehåll för en arrangörssida:
+VIKTIGT KONTEXT: 
+- Du skriver innehåll för ivarberg.se, en samlingssida för ALLA evenemang i Varberg
+- Vi skriver OM arrangörer i tredje person, inte SOM arrangören själva
+- Undvik "vi", "vår", "välkommen till oss", "hos oss", "Arrangören" - skriv istället objektivt OM arrangören
+- Använd ALLTID arrangörens faktiska namn: "${title}"
+- Använd fraser som: "${title} erbjuder", "${title} är känd för", "Besökare kan uppleva", "${title} presenterar"
+
+Baserat på följande information från en arrangörs webbplats, skapa innehåll för en arrangörssida på ivarberg.se:
+
+# Arrangörens namn: ${title}
 
 # Webbplatsinnehåll (Markdown):
 ${contentToAnalyze.substring(0, 3000)}...
 
 # Metadata:
-Titel: ${title}
 Beskrivning: ${metaDescription}
 ${contactInfo?.email || contactInfo?.phone ? `Kontakt: ${JSON.stringify(contactInfo)}` : ''}
 
 Skapa följande i JSON-format:
 
 {
-  "title": "Kort, engagerande titel (max 60 tecken)",
-  "description": "Inspirerande beskrivning om arrangören som får folk att vilja besöka deras evenemang. 2-3 meningar. Fokusera på vad de erbjuder och varför de är speciella.",
-  "content": "Längre, detaljerat innehåll i markdown-format (3-5 paragrafer). Inkludera:\n- Vad arrangören erbjuder\n- Historia/bakgrund (om relevant)\n- Typer av evenemang\n- Unika selling points\n- Varför besökare ska följa dem",
-  "seo_title": "SEO-optimerad titel (max 60 tecken, inkludera 'Varberg' om relevant)",
-  "seo_description": "SEO-beskrivning (max 160 tecken, inkludera call-to-action)",
-  "seo_keywords": "5-7 relevanta nyckelord, kommaseparerade (inkludera 'Varberg', 'evenemang', bransch-specifika termer)",
+  "title": "Kort, engagerande titel i tredje person (max 60 tecken). Ex: '${title} - Kulturupplevelser i Varberg'",
+  "description": "Objektiv beskrivning om arrangören som hjälper besökare förstå vad de erbjuder. 2-3 meningar. Skriv OM arrangören, inte SOM arrangören. Använd '${title}' istället för 'Arrangören'. Ex: '${title} är en etablerad kulturinstitution som erbjuder...'",
+  "content": "Längre, informativt innehåll i markdown-format (3-5 paragrafer) skrivet i tredje person. Inkludera:\n- Vad ${title} erbjuder och vilka typer av evenemang de arrangerar\n- Historia och bakgrund (om relevant)\n- Vad som gör dem unika\n- Praktisk information för besökare\n- Använd ALLTID '${title}' istället för 'vi/vår/Arrangören'. Ex: '${title} arrangerar...' istället för 'Vi arrangerar...' eller 'Arrangören arrangerar...'",
+  "seo_title": "SEO-optimerad titel (max 60 tecken). Format: '${title} - Evenemang i Varberg' eller liknande",
+  "seo_description": "SEO-beskrivning i tredje person (max 160 tecken). Ex: 'Upptäck kommande evenemang från ${title} på ivarberg.se. Se datum, biljetter och mer information.'",
+  "seo_keywords": "5-7 relevanta nyckelord, kommaseparerade. Inkludera ${title}, Varberg, evenemang, och bransch-specifika termer",
   "slug": "url-vanlig-slug-fran-namnet"
 }
 
-Skriv på svenska. Var professionell men tillgänglig. Fokusera på SEO-värde.
+EXEMPEL PÅ BRA TON (använd arrangörens namn):
+✅ "${title} erbjuder ett varierat program..."
+✅ "Besökare kan förvänta sig högkvalitativa föreställningar från ${title}..."
+✅ "${title} är känd för sina innovativa produktioner..."
+
+EXEMPEL PÅ DÅLIG TON (undvik dessa):
+❌ "Välkommen till vår teater..."
+❌ "Vi erbjuder ett varierat program..."
+❌ "Hos oss kan du uppleva..."
+❌ "Arrangören erbjuder..." (använd arrangörens namn istället)
+
+Skriv på svenska. Var professionell, objektiv och informativ. Fokusera på SEO-värde och användarnytta.
 `
 
     const response = await openai.chat.completions.create({
@@ -61,7 +80,7 @@ Skriv på svenska. Var professionell men tillgänglig. Fokusera på SEO-värde.
       messages: [
         {
           role: 'system',
-          content: 'Du är en expert på SEO och lokal marknadsföring i Sverige. Svara ALLTID med endast giltig JSON, ingen markdown, ingen extra text, inga förklaringar.'
+          content: 'Du är en expert på SEO och lokal marknadsföring i Sverige. Du skriver innehåll för ivarberg.se, en samlingssida för evenemang. Skriv ALLTID i tredje person om arrangörer, aldrig i första person. Undvik "vi/vår/oss" och generiska termer som "Arrangören". Använd arrangörens faktiska namn. Svara med endast giltig JSON, ingen markdown, ingen extra text, inga förklaringar.'
         },
         {
           role: 'user',

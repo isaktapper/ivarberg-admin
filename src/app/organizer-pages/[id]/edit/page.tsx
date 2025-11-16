@@ -3,8 +3,9 @@
 import { useState, useEffect } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
-import { OrganizerPage, ContactInfo, SocialLinks } from '@/types/database'
+import { OrganizerPage, ContactInfo, SocialLinks, Organizer } from '@/types/database'
 import ProtectedLayout from '@/components/ProtectedLayout'
+import OrganizerSearchableDropdown from '@/components/OrganizerSearchableDropdown'
 import { 
   Save, 
   Eye, 
@@ -47,6 +48,10 @@ export default function EditOrganizerPage() {
   const [saving, setSaving] = useState(false)
   const [page, setPage] = useState<OrganizerPage | null>(null)
   
+  // Organizer selection
+  const [organizers, setOrganizers] = useState<Organizer[]>([])
+  const [selectedOrganizerId, setSelectedOrganizerId] = useState<number | null>(null)
+  
   // Form data
   const [formData, setFormData] = useState({
     name: '',
@@ -84,6 +89,7 @@ export default function EditOrganizerPage() {
     if (pageId) {
       fetchPage()
     }
+    fetchOrganizers()
   }, [pageId])
 
   useEffect(() => {
@@ -97,6 +103,21 @@ export default function EditOrganizerPage() {
     }
   }, [])
 
+  const fetchOrganizers = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('organizers')
+        .select('*')
+        .eq('status', 'active')
+        .order('name')
+
+      if (error) throw error
+      setOrganizers(data || [])
+    } catch (error) {
+      console.error('Error fetching organizers:', error)
+    }
+  }
+
   const fetchPage = async () => {
     try {
       const { data, error } = await supabase
@@ -108,6 +129,7 @@ export default function EditOrganizerPage() {
       if (error) throw error
 
       setPage(data)
+      setSelectedOrganizerId(data.organizer_id || null)
       setFormData({
         name: data.name || '',
         slug: data.slug || '',
@@ -283,6 +305,7 @@ export default function EditOrganizerPage() {
         .from('organizer_pages')
         .update({
           ...formData,
+          organizer_id: selectedOrganizerId,
           is_published: publish,
           updated_at: new Date().toISOString()
         })
@@ -411,6 +434,22 @@ export default function EditOrganizerPage() {
               <h2 className="text-lg font-medium text-gray-900 mb-4">Grundläggande information</h2>
               
               <div className="space-y-4">
+                {/* Organizer Selection */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Koppla till arrangör (valfritt)
+                  </label>
+                  <OrganizerSearchableDropdown
+                    organizers={organizers}
+                    value={selectedOrganizerId}
+                    onChange={(id) => setSelectedOrganizerId(id)}
+                    placeholder="Ingen koppling - Sök eller välj arrangör..."
+                  />
+                  <p className="mt-1 text-sm text-gray-500">
+                    Välj en arrangör för att länka denna sida. Du kan lämna detta tomt.
+                  </p>
+                </div>
+
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     Namn <span className="text-red-500">*</span>

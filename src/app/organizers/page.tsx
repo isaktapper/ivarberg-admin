@@ -19,7 +19,8 @@ import {
   Users,
   AlertCircle,
   Sparkles,
-  GitMerge
+  GitMerge,
+  FileText
 } from 'lucide-react'
 import Link from 'next/link'
 
@@ -40,8 +41,8 @@ if (typeof document !== 'undefined') {
 }
 
 export default function OrganizersPage() {
-  const [organizers, setOrganizers] = useState<Organizer[]>([])
-  const [filteredOrganizers, setFilteredOrganizers] = useState<Organizer[]>([])
+  const [organizers, setOrganizers] = useState<(Organizer & { has_page?: boolean })[]>([])
+  const [filteredOrganizers, setFilteredOrganizers] = useState<(Organizer & { has_page?: boolean })[]>([])
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
   const [statusFilter, setStatusFilter] = useState<OrganizerStatus | 'all'>('all')
@@ -73,7 +74,23 @@ export default function OrganizersPage() {
         .order('name')
 
       if (error) throw error
-      setOrganizers(data || [])
+      
+      // Fetch organizer pages to check which organizers have pages
+      const { data: pages } = await supabase
+        .from('organizer_pages')
+        .select('organizer_id')
+      
+      const organizerIdsWithPages = new Set(
+        (pages || []).map(p => p.organizer_id).filter(Boolean)
+      )
+      
+      // Add has_page flag to each organizer
+      const organizersWithPageFlag = (data || []).map(org => ({
+        ...org,
+        has_page: organizerIdsWithPages.has(org.id)
+      }))
+      
+      setOrganizers(organizersWithPageFlag)
     } catch (error) {
       console.error('Error fetching organizers:', error)
     } finally {
@@ -239,21 +256,41 @@ export default function OrganizersPage() {
 
       if (updateError) throw updateError
 
-      // 3. Flytta organizer pages om de finns
-      const { count: pageCount } = await supabase
+      // 3. Hantera organizer pages med UNIQUE constraint
+      // Kolla om source organizer har en page
+      const { data: sourcePage } = await supabase
         .from('organizer_pages')
-        .select('*', { count: 'exact', head: true })
+        .select('*')
         .eq('organizer_id', organizerToMerge.id)
+        .maybeSingle()
 
-      if (pageCount && pageCount > 0) {
-        console.log(`Flyttar ${pageCount} organizer pages från organizer ${organizerToMerge.id} till ${targetOrganizerId}`)
-        
-        const { error: pagesUpdateError } = await supabase
-          .from('organizer_pages')
-          .update({ organizer_id: targetOrganizerId })
-          .eq('organizer_id', organizerToMerge.id)
+      // Kolla om target organizer redan har en page
+      const { data: targetPage } = await supabase
+        .from('organizer_pages')
+        .select('*')
+        .eq('organizer_id', targetOrganizerId)
+        .maybeSingle()
 
-        if (pagesUpdateError) throw pagesUpdateError
+      if (sourcePage) {
+        if (targetPage) {
+          // Target har redan en page, ta bort source's page
+          console.log(`Target organizer har redan en page. Tar bort source organizer's page (${sourcePage.id})`)
+          const { error: deletePageError } = await supabase
+            .from('organizer_pages')
+            .delete()
+            .eq('id', sourcePage.id)
+          
+          if (deletePageError) throw deletePageError
+        } else {
+          // Target har ingen page, flytta source's page till target
+          console.log(`Flyttar organizer page från organizer ${organizerToMerge.id} till ${targetOrganizerId}`)
+          const { error: pagesUpdateError } = await supabase
+            .from('organizer_pages')
+            .update({ organizer_id: targetOrganizerId })
+            .eq('id', sourcePage.id)
+
+          if (pagesUpdateError) throw pagesUpdateError
+        }
       }
 
       // 4. Ta bort den gamla organizern
@@ -444,6 +481,9 @@ export default function OrganizersPage() {
                             >
                               {organizer.name}
                             </div>
+                          )}
+                          {organizer.has_page && (
+                            <FileText className="w-4 h-4 text-blue-500 flex-shrink-0" title="Har arrangörssida" />
                           )}
                           {organizer.created_from_scraper && (
                             <Sparkles className="w-4 h-4 text-purple-500 flex-shrink-0" title="Auto-skapad från scraper" />

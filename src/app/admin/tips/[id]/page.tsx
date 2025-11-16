@@ -235,7 +235,7 @@ export default function AdminTipDetailPage() {
 
         {/* Actions */}
         {tip.status !== 'converted' && tip.status !== 'rejected' && (
-          <div className="bg-white p-6 rounded-lg border flex items-center justify-between">
+          <div className="bg-white p-6 rounded-lg border border-gray-200 flex items-center justify-between">
             <div>
               <h3 className="font-semibold text-gray-900 mb-1">Åtgärder</h3>
               <p className="text-sm text-gray-600">
@@ -264,7 +264,7 @@ export default function AdminTipDetailPage() {
         )}
 
         {/* Event Information */}
-        <div className="bg-white rounded-lg border overflow-hidden">
+        <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
           <div className="px-6 py-4 border-b border-gray-200">
             <h2 className="text-lg font-semibold text-gray-900">Event Information</h2>
           </div>
@@ -377,7 +377,7 @@ export default function AdminTipDetailPage() {
         </div>
 
         {/* Submitter Information */}
-        <div className="bg-white rounded-lg border overflow-hidden">
+        <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
           <div className="px-6 py-4 border-b border-gray-200">
             <h2 className="text-lg font-semibold text-gray-900">Inlämnare</h2>
           </div>

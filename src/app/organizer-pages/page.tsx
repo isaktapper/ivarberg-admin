@@ -46,6 +46,7 @@ export default function OrganizerPagesPage() {
   // Column visibility state
   const [visibleColumns, setVisibleColumns] = useState({
     name: true,
+    organizer: true,
     slug: true,
     status: true,
     events: true,
@@ -75,10 +76,13 @@ export default function OrganizerPagesPage() {
     try {
       console.log('🔍 Fetching organizer pages...')
       
-      // Först testa en enkel query utan relationer
+      // Fetch organizer pages with organizer data joined
       const { data, error } = await supabase
         .from('organizer_pages')
-        .select('*')
+        .select(`
+          *,
+          organizer:organizers(id, name)
+        `)
         .order('created_at', { ascending: false })
 
       console.log('📊 Supabase response:', { data, error })
@@ -93,17 +97,23 @@ export default function OrganizerPagesPage() {
         throw error
       }
       
-      // Lägg till event_count separat
+      // Lägg till event_count separat (endast om organizer_id finns)
       const pagesWithEventCount = await Promise.all(
         (data || []).map(async (page) => {
-          const { count } = await supabase
-            .from('events')
-            .select('*', { count: 'exact', head: true })
-            .eq('organizer_id', page.id) // Antag att det finns en relation
+          let eventCount = 0
+          
+          if (page.organizer_id) {
+            const { count } = await supabase
+              .from('events')
+              .select('*', { count: 'exact', head: true })
+              .eq('organizer_id', page.organizer_id)
+            
+            eventCount = count || 0
+          }
           
           return {
             ...page,
-            event_count: count || 0
+            event_count: eventCount
           }
         })
       )
@@ -512,6 +522,16 @@ export default function OrganizerPagesPage() {
               <label className="flex items-center">
                 <input
                   type="checkbox"
+                  checked={visibleColumns.organizer}
+                  onChange={() => toggleColumn('organizer')}
+                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                />
+                <span className="ml-2 text-sm text-gray-700">Arrangör</span>
+              </label>
+              
+              <label className="flex items-center">
+                <input
+                  type="checkbox"
                   checked={visibleColumns.slug}
                   onChange={() => toggleColumn('slug')}
                   className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
@@ -656,6 +676,11 @@ export default function OrganizerPagesPage() {
                         Namn
                       </th>
                     )}
+                    {visibleColumns.organizer && (
+                      <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase w-40">
+                        Arrangör
+                      </th>
+                    )}
                     {visibleColumns.slug && (
                       <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase w-40">
                         Slug
@@ -714,6 +739,22 @@ export default function OrganizerPagesPage() {
                           <div className="text-sm text-gray-500 truncate">
                             {page.title}
                           </div>
+                        </td>
+                      )}
+                      
+                      {/* Arrangör */}
+                      {visibleColumns.organizer && (
+                        <td className="px-3 py-2">
+                          {page.organizer ? (
+                            <Link
+                              href={`/organizers/${page.organizer.id}`}
+                              className="text-sm text-blue-600 hover:text-blue-800 truncate"
+                            >
+                              {page.organizer.name}
+                            </Link>
+                          ) : (
+                            <span className="text-sm text-gray-400 italic">Ingen koppling</span>
+                          )}
                         </td>
                       )}
                       

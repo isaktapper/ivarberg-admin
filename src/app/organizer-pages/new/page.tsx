@@ -1,10 +1,11 @@
 'use client'
 
-import { useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useState, useEffect, Suspense } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
-import { ContactInfo, SocialLinks } from '@/types/database'
+import { ContactInfo, SocialLinks, Organizer } from '@/types/database'
 import ProtectedLayout from '@/components/ProtectedLayout'
+import OrganizerSearchableDropdown from '@/components/OrganizerSearchableDropdown'
 import { 
   Save, 
   Eye, 
@@ -37,10 +38,15 @@ function getProxiedImageUrl(url: string): string {
   return url
 }
 
-export default function NewOrganizerPage() {
+function NewOrganizerPageContent() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
+  
+  // Organizer selection
+  const [organizers, setOrganizers] = useState<Organizer[]>([])
+  const [selectedOrganizerId, setSelectedOrganizerId] = useState<number | null>(null)
   
   // Form data
   const [formData, setFormData] = useState({
@@ -73,6 +79,81 @@ export default function NewOrganizerPage() {
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [newGalleryImage, setNewGalleryImage] = useState('')
   const [draggedImageIndex, setDraggedImageIndex] = useState<number | null>(null)
+
+  // Fetch organizers on mount
+  useEffect(() => {
+    fetchOrganizers()
+    
+    // Check if organizer_id is in URL params
+    const organizerIdParam = searchParams.get('organizer_id')
+    if (organizerIdParam) {
+      const organizerId = parseInt(organizerIdParam)
+      if (!isNaN(organizerId)) {
+        setSelectedOrganizerId(organizerId)
+        fetchOrganizerAndFillForm(organizerId)
+      }
+    }
+  }, [searchParams])
+
+  const fetchOrganizers = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('organizers')
+        .select('*')
+        .eq('status', 'active')
+        .order('name')
+
+      if (error) throw error
+      setOrganizers(data || [])
+    } catch (error) {
+      console.error('Error fetching organizers:', error)
+    }
+  }
+
+  const fetchOrganizerAndFillForm = async (organizerId: number) => {
+    try {
+      const { data, error } = await supabase
+        .from('organizers')
+        .select('*')
+        .eq('id', organizerId)
+        .single()
+
+      if (error) throw error
+      
+      if (data) {
+        // Auto-fill form with organizer data
+        setFormData(prev => ({
+          ...prev,
+          name: data.name,
+          slug: generateSlug(data.name),
+          title: data.name,
+          description: `Upptäck evenemang från ${data.name} i Varberg.`,
+          contact_info: {
+            email: data.email || '',
+            phone: data.phone || '',
+            website: data.website || '',
+            address: data.location || ''
+          },
+          seo_title: data.name,
+          seo_description: `Upptäck evenemang från ${data.name} i Varberg.`,
+          seo_keywords: `${data.name}, evenemang, varberg`
+        }))
+      }
+    } catch (error) {
+      console.error('Error fetching organizer:', error)
+    }
+  }
+
+  const handleOrganizerChange = (organizerId: string) => {
+    if (organizerId === '') {
+      setSelectedOrganizerId(null)
+      return
+    }
+    
+    const id = parseInt(organizerId)
+    setSelectedOrganizerId(id)
+    fetchOrganizerAndFillForm(id)
+  }
 
   // Auto-generate slug from name
   const generateSlug = (name: string) => {
@@ -214,6 +295,7 @@ export default function NewOrganizerPage() {
         .from('organizer_pages')
         .insert({
           ...formData,
+          organizer_id: selectedOrganizerId,
           is_published: publish
         })
         .select()
@@ -283,6 +365,28 @@ export default function NewOrganizerPage() {
               <h2 className="text-lg font-medium text-gray-900 mb-4">Grundläggande information</h2>
               
               <div className="space-y-4">
+                {/* Organizer Selection */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Koppla till arrangör (valfritt)
+                  </label>
+                  <OrganizerSearchableDropdown
+                    organizers={organizers}
+                    value={selectedOrganizerId}
+                    onChange={(id) => {
+                      if (id === null) {
+                        setSelectedOrganizerId(null)
+                      } else {
+                        handleOrganizerChange(id.toString())
+                      }
+                    }}
+                    placeholder="Ingen koppling - Sök eller välj arrangör..."
+                  />
+                  <p className="mt-1 text-sm text-gray-500">
+                    Välj en arrangör för att automatiskt fylla i grunddata. Du kan lämna detta tomt.
+                  </p>
+                </div>
+
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     Namn <span className="text-red-500">*</span>
@@ -767,5 +871,19 @@ export default function NewOrganizerPage() {
         </div>
       </div>
     </ProtectedLayout>
+  )
+}
+
+export default function NewOrganizerPage() {
+  return (
+    <Suspense fallback={
+      <ProtectedLayout>
+        <div className="flex items-center justify-center h-64">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+        </div>
+      </ProtectedLayout>
+    }>
+      <NewOrganizerPageContent />
+    </Suspense>
   )
 }

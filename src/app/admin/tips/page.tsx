@@ -100,7 +100,7 @@ export default function AdminTipsPage() {
         </div>
 
         {/* Filters */}
-        <div className="bg-white rounded-lg border p-4">
+        <div className="bg-white rounded-lg border border-gray-200 p-4">
           <div className="flex flex-col md:flex-row gap-4">
             {/* Search */}
             <div className="flex-1">
@@ -135,7 +135,7 @@ export default function AdminTipsPage() {
         </div>
 
         {/* Tips List */}
-        <div className="bg-white rounded-lg border overflow-hidden">
+        <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
           {loading ? (
             <div className="text-center py-12">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>

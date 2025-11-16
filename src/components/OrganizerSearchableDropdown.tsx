@@ -70,7 +70,7 @@ export default function OrganizerSearchableDropdown({
       >
         <span className="block truncate">
           {selectedOrganizer ? (
-            <span className="flex items-center gap-2">
+            <span className="flex items-center gap-2 text-gray-900 font-medium">
               {selectedOrganizer.name}
               {showStatus && selectedOrganizer.status === 'pending' && (
                 <span className="text-xs text-amber-600">(Pending)</span>
@@ -138,6 +138,7 @@ export default function OrganizerSearchableDropdown({
     </div>
   )
 }
+
 
 
 

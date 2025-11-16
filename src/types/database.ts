@@ -114,10 +114,12 @@ export interface OrganizerPage {
   seo_description?: string
   seo_keywords?: string
   is_published: boolean
+  organizer_id?: number // Foreign key till organizers (1-till-1 relation)
   created_at: string
   updated_at: string
   // Computed fields
   event_count?: number
+  organizer?: Organizer // Joined organizer data
 }
 
 export type ProgressStep =
@@ -191,8 +193,8 @@ export interface Database {
       }
       organizer_pages: {
         Row: OrganizerPage
-        Insert: Omit<OrganizerPage, 'id' | 'created_at' | 'updated_at' | 'event_count'>
-        Update: Partial<Omit<OrganizerPage, 'id' | 'created_at' | 'updated_at' | 'event_count'>>
+        Insert: Omit<OrganizerPage, 'id' | 'created_at' | 'updated_at' | 'event_count' | 'organizer'>
+        Update: Partial<Omit<OrganizerPage, 'id' | 'created_at' | 'updated_at' | 'event_count' | 'organizer'>>
       }
       event_tips: {
         Row: EventTip

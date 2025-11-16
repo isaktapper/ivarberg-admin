@@ -49,8 +49,23 @@ export default function ScrapersPage() {
   const [confirmationText, setConfirmationText] = useState('')
   const [historyCollapsed, setHistoryCollapsed] = useState(true)
 
+  const checkRunningProcesses = async () => {
+    try {
+      const response = await fetch('/api/scrape/cancel')
+      const data = await response.json()
+      if (data.runningCount > 0) {
+        setRunning(true)
+      } else {
+        setRunning(false)
+      }
+    } catch (error) {
+      console.error('Error checking running processes:', error)
+    }
+  }
+
   useEffect(() => {
     fetchData()
+    checkRunningProcesses()
     
     // Realtime subscription för logs
     const subscription = supabase
@@ -59,6 +74,7 @@ export default function ScrapersPage() {
         { event: '*', schema: 'public', table: 'scraper_logs' },
         () => {
           fetchLogs()
+          checkRunningProcesses()
         }
       )
       .subscribe()
@@ -147,11 +163,14 @@ export default function ScrapersPage() {
 
       if (error) throw error
       setLogs(data || [])
+      
+      // Kontrollera om det finns pågående scrapers i databasen
+      const hasRunningScrapers = (data || []).some(log => log.status === 'running')
+      setRunning(hasRunningScrapers)
     } catch (error) {
       console.error('Error fetching logs:', error)
     }
   }
-
 
   const toggleScraperSelection = (scraperName: string) => {
     setSelectedScrapers(prev => {
@@ -227,7 +246,6 @@ export default function ScrapersPage() {
     }
 
     setCancelling(true)
-    setRunning(false) // Stoppa UI omedelbart
     
     try {
       const response = await fetch('/api/scrape/cancel', {
@@ -242,6 +260,7 @@ export default function ScrapersPage() {
       if (response.ok) {
         alert(`Avbröt ${result.cancelledCount} scraping process(er)`)
         await fetchData() // Refresh all data
+        await checkRunningProcesses() // Uppdatera running state
       } else {
         const errorDetails = result.details ? `\n\nDetaljer: ${result.details}` : ''
         const errorHint = result.hint ? `\n\nTips: ${result.hint}` : ''
@@ -250,6 +269,8 @@ export default function ScrapersPage() {
     } catch (error) {
       console.error('Error cancelling processes:', error)
       alert('Fel vid avbrytning: ' + (error instanceof Error ? error.message : 'Unknown error'))
+      // Kontrollera igen om det fortfarande finns pågående processer
+      await checkRunningProcesses()
     } finally {
       setCancelling(false)
     }

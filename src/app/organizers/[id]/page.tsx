@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
-import { Organizer, Event } from '@/types/database'
+import { Organizer, Event, OrganizerPage } from '@/types/database'
 import ProtectedLayout from '@/components/ProtectedLayout'
 import { 
   ArrowLeft, 
@@ -14,7 +14,10 @@ import {
   MapPin, 
   Globe,
   Calendar,
-  Clock
+  Clock,
+  FileText,
+  Plus,
+  ExternalLink
 } from 'lucide-react'
 import Link from 'next/link'
 import { formatDate } from '@/lib/utils'
@@ -23,13 +26,16 @@ export default function OrganizerDetailPage() {
   const params = useParams()
   const router = useRouter()
   const [organizer, setOrganizer] = useState<Organizer | null>(null)
+  const [organizerPage, setOrganizerPage] = useState<OrganizerPage | null>(null)
   const [events, setEvents] = useState<Event[]>([])
   const [loading, setLoading] = useState(true)
+  const [creatingPage, setCreatingPage] = useState(false)
 
   useEffect(() => {
     if (params.id) {
       fetchOrganizer(parseInt(params.id as string))
       fetchOrganizerEvents(parseInt(params.id as string))
+      fetchOrganizerPage(parseInt(params.id as string))
     }
   }, [params.id])
 
@@ -62,6 +68,91 @@ export default function OrganizerDetailPage() {
       setEvents(data || [])
     } catch (error) {
       console.error('Error fetching organizer events:', error)
+    }
+  }
+
+  const fetchOrganizerPage = async (organizerId: number) => {
+    try {
+      const { data, error } = await supabase
+        .from('organizer_pages')
+        .select('*')
+        .eq('organizer_id', organizerId)
+        .maybeSingle()
+
+      if (error) throw error
+      setOrganizerPage(data)
+    } catch (error) {
+      console.error('Error fetching organizer page:', error)
+    }
+  }
+
+  const createOrganizerPage = async () => {
+    if (!organizer) return
+
+    // Kontrollera att organizern har en website
+    if (!organizer.website) {
+      alert('Arrangören måste ha en webbplats-URL för att kunna skapa en arrangörssida. Lägg till en webbplats först.')
+      router.push(`/organizers/${organizer.id}/edit`)
+      return
+    }
+
+    const confirmed = confirm(
+      `Vill du skapa en arrangörssida för "${organizer.name}"?\n\n` +
+      `Detta kommer att:\n` +
+      `- Scrapa webbplatsen: ${organizer.website}\n` +
+      `- Generera innehåll med AI\n` +
+      `- Klassificera bilder\n\n` +
+      `Detta kan ta 10-30 sekunder.`
+    )
+
+    if (!confirmed) return
+
+    setCreatingPage(true)
+    try {
+      const response = await fetch(`/api/organizers/${organizer.id}/create-page`, {
+        method: 'POST',
+      })
+
+      const result = await response.json()
+
+      if (!response.ok) {
+        if (response.status === 409 && result.pageId) {
+          // Page already exists, navigate to it
+          router.push(`/organizer-pages/${result.pageId}/edit`)
+          return
+        }
+        
+        // Hantera olika typer av fel
+        if (result.type === 'rate_limit') {
+          alert(`⏰ Rate limit nådd\n\n${result.details}`)
+        } else if (result.type === 'auth_error') {
+          alert(`🔑 Autentiseringsfel\n\n${result.details}`)
+        } else if (result.type === 'scrape_error') {
+          alert(`🚫 Scraping misslyckades\n\n${result.details}\n\nKontrollera att webbplatsen är tillgänglig och försök igen.`)
+        } else {
+          alert(`❌ ${result.error}\n\n${result.details || ''}`)
+        }
+        return
+      }
+
+      if (result.page) {
+        alert(
+          `✅ Arrangörssida skapad!\n\n` +
+          `${result.metadata.imagesFound} bilder hittades\n` +
+          `${result.metadata.galleryImagesCount} bilder i galleri\n\n` +
+          `Sidan har sparats som utkast.`
+        )
+        router.push(`/organizer-pages/${result.page.id}/edit`)
+      }
+    } catch (error) {
+      console.error('Error creating organizer page:', error)
+      alert(
+        `❌ Oväntat fel vid skapande av arrangörssida\n\n` +
+        `${error instanceof Error ? error.message : 'Okänt fel'}\n\n` +
+        `Kontrollera konsolen för mer information.`
+      )
+    } finally {
+      setCreatingPage(false)
     }
   }
 
@@ -281,6 +372,98 @@ export default function OrganizerDetailPage() {
                 </dd>
               </div>
             </dl>
+          </div>
+        </div>
+
+        {/* Organizer Page */}
+        <div className="bg-white shadow rounded-lg">
+          <div className="px-4 py-5 sm:px-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-lg leading-6 font-medium text-gray-900 flex items-center">
+                  <FileText className="w-5 h-5 mr-2" />
+                  Arrangörssida
+                </h3>
+                <p className="mt-1 text-sm text-gray-500">
+                  SEO-optimerad sida för denna arrangör
+                </p>
+              </div>
+              {!organizerPage && (
+                <button
+                  onClick={createOrganizerPage}
+                  disabled={creatingPage || !organizer.website}
+                  className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                  title={!organizer.website ? 'Arrangören måste ha en webbplats för att skapa en arrangörssida' : ''}
+                >
+                  <Plus className="w-4 h-4 mr-2" />
+                  {creatingPage ? 'Skapar (kan ta 10-30 sek)...' : 'Skapa arrangörssida'}
+                </button>
+              )}
+            </div>
+          </div>
+
+          <div className="border-t border-gray-200 px-4 py-5 sm:px-6">
+            {organizerPage ? (
+              <div className="space-y-4">
+                <div className="flex items-start justify-between">
+                  <div className="flex-1">
+                    <div className="flex items-center space-x-3">
+                      <h4 className="text-base font-medium text-gray-900">
+                        {organizerPage.name}
+                      </h4>
+                      <span
+                        className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                          organizerPage.is_published
+                            ? 'bg-green-100 text-green-800'
+                            : 'bg-gray-100 text-gray-800'
+                        }`}
+                      >
+                        {organizerPage.is_published ? 'Publicerad' : 'Utkast'}
+                      </span>
+                    </div>
+                    <p className="mt-1 text-sm text-gray-500">
+                      /{organizerPage.slug}
+                    </p>
+                    <p className="mt-2 text-sm text-gray-700">
+                      {organizerPage.description}
+                    </p>
+                  </div>
+                  <div className="flex items-center space-x-2 ml-4">
+                    <Link
+                      href={`/organizer-pages/${organizerPage.id}/edit`}
+                      className="inline-flex items-center px-3 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50"
+                    >
+                      <Edit className="w-4 h-4 mr-1" />
+                      Redigera
+                    </Link>
+                    {organizerPage.is_published && (
+                      <a
+                        href={`${process.env.NEXT_PUBLIC_FRONTEND_URL || 'https://ivarberg.se'}/arrangor/${organizerPage.slug}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center px-3 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50"
+                      >
+                        <ExternalLink className="w-4 h-4 mr-1" />
+                        Visa
+                      </a>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="text-center py-8">
+                <FileText className="mx-auto h-8 w-8 text-gray-400" />
+                <p className="mt-2 text-sm text-gray-500">
+                  Denna arrangör har ingen arrangörssida ännu
+                </p>
+                <p className="mt-1 text-xs text-gray-400">
+                  {organizer.website 
+                    ? 'Klicka på "Skapa arrangörssida" för att automatiskt scrapa webbplatsen och generera innehåll med AI'
+                    : 'Lägg till en webbplats på arrangören för att kunna skapa en arrangörssida'
+                  }
+                </p>
+              </div>
+            )}
           </div>
         </div>
 

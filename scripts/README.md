@@ -79,6 +79,132 @@ Se [GITHUB_ACTIONS_SETUP.md](../docs/GITHUB_ACTIONS_SETUP.md) för mer info.
 
 ---
 
+## Regenerate Page Content
+
+Script för att regenerera AI-innehåll för befintliga arrangörssidor med den förbättrade prompten (tredje person, använder arrangörens namn).
+
+### Användning
+
+**Via npm script:**
+```bash
+npm run regenerate-pages -- --ids=14,13,16,17,18
+```
+
+**Med dry-run (rekommenderas först):**
+```bash
+npm run regenerate-pages -- --ids=14,13,16,17,18 --dry-run
+```
+
+**Direkt med tsx:**
+```bash
+npx tsx --env-file=.env.local scripts/regenerate-page-content.ts --ids=14,13,16
+```
+
+### Vad gör scriptet?
+
+1. ✅ **Hämtar organizer page** från databasen
+2. ✅ **Kontrollerar organizer_id** - skippar pages utan organizer
+3. ✅ **Scrapar website** med Firecrawl (använder organizer.website)
+4. ✅ **Genererar nytt AI-innehåll** med förbättrad prompt
+5. ✅ **Uppdaterar endast textfält:**
+   - `title`
+   - `description`
+   - `content`
+   - `seo_title`
+   - `seo_description`
+   - `seo_keywords`
+6. ✅ **Behåller alla bilder:**
+   - `hero_image_url` (oförändrad)
+   - `gallery_images` (oförändrade)
+
+### Flaggor
+
+| Flagga | Beskrivning | Exempel |
+|--------|-------------|---------|
+| `--ids=N,N,N` | Page IDs att regenerera (obligatorisk) | `--ids=14,15,16` |
+| `--dry-run` | Kör utan att spara ändringar | `--dry-run` |
+
+### Exempel Output
+
+```
+🔄 Starting page content regeneration...
+📋 Page IDs to process: 18, 17, 16, 14, 13
+🧪 Dry run: NO
+
+============================================================
+📄 Processing page ID: 18
+============================================================
+📌 Page: Varbergs Teater (/varbergs-teater)
+👤 Organizer: Varbergs Teater
+🌐 Website: https://www.varbergsteater.se
+
+📡 Step 1: Scraping website with Firecrawl...
+✅ Scraped successfully (3421 chars)
+
+🤖 Step 2: Generating new AI content...
+✅ AI content generated successfully
+
+📝 Changes to apply:
+  Title: "Varbergs Teater" → "Varbergs Teater - Kulturupplevelser i Varberg"
+  Description: Välkommen till Varbergs Teater... → Varbergs Teater är en etablerad kulturinstitution...
+  Content length: 456 chars → 892 chars
+  SEO Title: "Varbergs Teater" → "Varbergs Teater - Evenemang i Varberg"
+  Images: KEEPING EXISTING (1 hero, 5 gallery)
+
+💾 Updating database...
+✅ Database updated successfully
+
+✨ Page 18 processed successfully!
+
+============================================================
+🏁 Regeneration complete!
+============================================================
+```
+
+### När ska man använda detta?
+
+- ✅ Efter uppdatering av AI-prompten
+- ✅ För att fixa "vi/vår/välkommen"-språk till tredje person
+- ✅ När arrangörens namn ska användas istället för generiska termer
+- ✅ För att få konsekvent språk över alla arrangörssidor
+
+### Environment Variables
+
+Kräver följande i `.env.local`:
+
+```env
+NEXT_PUBLIC_SUPABASE_URL=https://...
+SUPABASE_SERVICE_ROLE_KEY=...
+OPENAI_API_KEY=sk-...
+FIRECRAWL_API_KEY=fc-...
+```
+
+### Tidsuppskattning
+
+- ~10-30 sekunder per page (Firecrawl + OpenAI)
+- 5 pages ≈ 1-2 minuter
+
+### Säkerhet
+
+⚠️ **Viktigt:**
+- Kör alltid `--dry-run` först för att se ändringar
+- Bilder behålls alltid (hero + galleri)
+- Endast textinnehåll uppdateras
+- Scriptet loggar alla ändringar innan det sparar
+
+### Troubleshooting
+
+#### "Page has no organizer_id"
+Pages utan `organizer_id` kan inte regenereras eftersom vi behöver organizer.website för scraping.
+
+#### "Organizer has no website"
+Lägg till en website URL på organizern först.
+
+#### "Firecrawl rate limit"
+Vänta några minuter och försök igen. Free tier: 500 requests/månad.
+
+---
+
 ## Recategorize Events
 
 Script för att rekategorisera alla befintliga events med det nya multi-kategori systemet (1-3 kategorier per event).
