@@ -19,7 +19,9 @@ import {
   Download,
   BarChart3,
   AlertCircle,
-  Globe
+  Globe,
+  Mail,
+  Settings
 } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
@@ -58,6 +60,14 @@ const navigationGroups = [
     type: 'group' as const,
     items: [
       { name: 'Statistik', href: '/events/statistics', icon: BarChart3 },
+    ],
+  },
+  {
+    name: 'Övrigt',
+    icon: Settings,
+    type: 'group' as const,
+    items: [
+      { name: 'Email-notifikationer', href: '/admin/settings/notifications', icon: Mail },
     ],
   },
 ]
@@ -103,7 +113,8 @@ export default function Navigation({
             (item.href === '/events/review' && pathname?.startsWith('/events/review')) ||
             (item.href === '/events/statistics' && pathname?.startsWith('/events/statistics')) ||
             (item.href === '/organizer-pages' && pathname?.startsWith('/organizer-pages')) ||
-            (item.href === '/admin/tips' && pathname?.startsWith('/admin/tips'))
+            (item.href === '/admin/tips' && pathname?.startsWith('/admin/tips')) ||
+            (item.href === '/admin/settings/notifications' && pathname?.startsWith('/admin/settings/notifications'))
           return isActive
         })
         if (hasActiveChild) {
@@ -232,7 +243,8 @@ export default function Navigation({
                 (item.href === '/events/review' && pathname?.startsWith('/events/review')) ||
                 (item.href === '/events/statistics' && pathname?.startsWith('/events/statistics')) ||
                 (item.href === '/organizer-pages' && pathname?.startsWith('/organizer-pages')) ||
-                (item.href === '/admin/tips' && pathname?.startsWith('/admin/tips'))
+                (item.href === '/admin/tips' && pathname?.startsWith('/admin/tips')) ||
+                (item.href === '/admin/settings/notifications' && pathname?.startsWith('/admin/settings/notifications'))
               return isActive
             })
 
@@ -279,7 +291,8 @@ export default function Navigation({
                         (item.href === '/events/review' && pathname?.startsWith('/events/review')) ||
                         (item.href === '/events/statistics' && pathname?.startsWith('/events/statistics')) ||
                         (item.href === '/organizer-pages' && pathname?.startsWith('/organizer-pages')) ||
-                        (item.href === '/admin/tips' && pathname?.startsWith('/admin/tips'))
+                        (item.href === '/admin/tips' && pathname?.startsWith('/admin/tips')) ||
+                        (item.href === '/admin/settings/notifications' && pathname?.startsWith('/admin/settings/notifications'))
                       
                       return (
                         <Link
@@ -419,7 +432,8 @@ export default function Navigation({
                     (item.href === '/events/review' && pathname?.startsWith('/events/review')) ||
                     (item.href === '/events/statistics' && pathname?.startsWith('/events/statistics')) ||
                     (item.href === '/organizer-pages' && pathname?.startsWith('/organizer-pages')) ||
-                    (item.href === '/admin/tips' && pathname?.startsWith('/admin/tips'))
+                    (item.href === '/admin/tips' && pathname?.startsWith('/admin/tips')) ||
+                    (item.href === '/admin/settings/notifications' && pathname?.startsWith('/admin/settings/notifications'))
                   return isActive
                 })
 
@@ -451,7 +465,8 @@ export default function Navigation({
                             (item.href === '/events/review' && pathname?.startsWith('/events/review')) ||
                             (item.href === '/events/statistics' && pathname?.startsWith('/events/statistics')) ||
                             (item.href === '/organizer-pages' && pathname?.startsWith('/organizer-pages')) ||
-                            (item.href === '/admin/tips' && pathname?.startsWith('/admin/tips'))
+                            (item.href === '/admin/tips' && pathname?.startsWith('/admin/tips')) ||
+                            (item.href === '/admin/settings/notifications' && pathname?.startsWith('/admin/settings/notifications'))
                           
                           return (
                             <Link
