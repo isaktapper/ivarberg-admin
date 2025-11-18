@@ -2,7 +2,8 @@
 
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
-import { Button } from '@/components/ui/button';
+import ProtectedLayout from '@/components/ProtectedLayout';
+import { Mail, Plus, Trash2 } from 'lucide-react';
 
 interface EmailRecipient {
   id: number;
@@ -109,20 +110,26 @@ export default function NotificationsPage() {
 
   if (loading) {
     return (
-      <div className="p-8">
-        <div className="text-center">Laddar...</div>
-      </div>
+      <ProtectedLayout>
+        <div className="p-8">
+          <div className="text-center">Laddar...</div>
+        </div>
+      </ProtectedLayout>
     );
   }
 
   return (
-    <div className="p-8 max-w-4xl">
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold mb-2">📧 Email-notifikationer</h1>
-        <p className="text-gray-600">
-          Hantera vilka som ska få dagliga rapporter från event-scrapern
-        </p>
-      </div>
+    <ProtectedLayout>
+      <div className="p-8">
+        <div className="mb-8">
+          <h1 className="text-3xl font-bold mb-2 flex items-center gap-3">
+            <Mail className="w-8 h-8" />
+            Email-notifikationer
+          </h1>
+          <p className="text-gray-600">
+            Hantera vilka som ska få dagliga rapporter från event-scrapern
+          </p>
+        </div>
       
       {/* Error message */}
       {error && (
@@ -151,12 +158,13 @@ export default function NotificationsPage() {
             onKeyDown={(e) => e.key === 'Enter' && addRecipient()}
             className="sm:w-48 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
-          <Button
+          <button
             onClick={addRecipient}
-            className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium"
+            className="flex items-center gap-2 px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium transition-colors"
           >
+            <Plus className="w-4 h-4" />
             Lägg till
-          </Button>
+          </button>
         </div>
         <p className="text-sm text-gray-500 mt-2">
           💡 Mottagare får automatiskt dagliga email-rapporter efter varje scraping
@@ -201,8 +209,9 @@ export default function NotificationsPage() {
                   </button>
                   <button
                     onClick={() => deleteRecipient(recipient.id, recipient.email)}
-                    className="px-4 py-2 bg-red-50 text-red-700 rounded-lg hover:bg-red-100 font-medium transition-colors"
+                    className="flex items-center gap-2 px-4 py-2 bg-red-50 text-red-700 rounded-lg hover:bg-red-100 font-medium transition-colors"
                   >
+                    <Trash2 className="w-4 h-4" />
                     Ta bort
                   </button>
                 </div>
@@ -222,7 +231,8 @@ export default function NotificationsPage() {
           <li>• Använd <code className="bg-blue-100 px-1 rounded">onboarding@resend.dev</code> som avsändare tills du verifierar din egen domän</li>
         </ul>
       </div>
-    </div>
+      </div>
+    </ProtectedLayout>
   );
 }
 
