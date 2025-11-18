@@ -11,6 +11,11 @@ on:
         required: false
         default: 'false'
 
+# Add write permissions for issues
+permissions:
+  contents: read
+  issues: write
+
 jobs:
   scrape-events:
     runs-on: ubuntu-latest
@@ -23,7 +28,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
           cache: 'npm'
 
       - name: Install dependencies
