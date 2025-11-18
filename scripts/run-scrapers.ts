@@ -229,6 +229,51 @@ async function main() {
   console.log(`${'='.repeat(60)}`);
   console.log('✅ Scraping complete!\n');
   
+  // 📧 Skicka email-rapport (endast från GitHub Actions)
+  if (isGitHubActions) {
+    console.log('📧 Sending daily email report...');
+    try {
+      const { EmailService } = await import('../src/lib/services/email-service');
+      const emailService = new EmailService();
+      
+      // Hämta senaste logs för att bygga rapporten
+      const { data: logs } = await supabase
+        .from('scraper_logs')
+        .select('*')
+        .gte('started_at', new Date(startTime).toISOString())
+        .order('started_at', { ascending: false });
+      
+      const scraperDetails = (logs || []).map(log => ({
+        name: log.scraper_name,
+        status: log.status,
+        eventsFound: log.events_found,
+        eventsImported: log.events_imported,
+        errors: log.errors || []
+      }));
+      
+      await emailService.sendDailyReport({
+        totalScrapers: scrapers.length,
+        successfulScrapers: scrapers.length - failedScrapers,
+        failedScrapers,
+        totalEventsFound: totalFound,
+        totalEventsImported: totalImported,
+        totalDuplicates: totalDuplicates,
+        duration: Date.now() - startTime,
+        scraperDetails,
+        runDate: new Date().toLocaleString('sv-SE', { 
+          dateStyle: 'full', 
+          timeStyle: 'short' 
+        }),
+        runUrl
+      });
+      
+      console.log('✅ Email report sent successfully\n');
+    } catch (error) {
+      console.error('❌ Failed to send email report:', error);
+      // Fortsätt ändå - vi vill inte att mail-fel ska stoppa scrapern
+    }
+  }
+  
   // Exit code: 0 if at least one scraper succeeded, 1 if all failed
   if (failedScrapers === scrapers.length && scrapers.length > 0) {
     console.error('💥 All scrapers failed!');

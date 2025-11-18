@@ -166,6 +166,16 @@ export interface EventTip {
   updated_at: string
 }
 
+export interface EmailRecipient {
+  id: number
+  email: string
+  name?: string
+  notification_types: string[]
+  enabled: boolean
+  created_at: string
+  updated_at: string
+}
+
 export interface Database {
   public: {
     Tables: {
@@ -200,6 +210,11 @@ export interface Database {
         Row: EventTip
         Insert: Omit<EventTip, 'id' | 'created_at' | 'updated_at'>
         Update: Partial<Omit<EventTip, 'id' | 'created_at' | 'updated_at'>>
+      }
+      email_recipients: {
+        Row: EmailRecipient
+        Insert: Omit<EmailRecipient, 'id' | 'created_at' | 'updated_at'>
+        Update: Partial<Omit<EmailRecipient, 'id' | 'created_at' | 'updated_at'>>
       }
     }
   }

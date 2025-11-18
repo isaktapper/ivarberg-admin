@@ -14,7 +14,8 @@ import {
   AlertCircle,
   Globe,
   PanelLeftClose,
-  PanelLeftOpen
+  PanelLeftOpen,
+  Mail
 } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
@@ -43,6 +44,7 @@ const navigation = [
   { name: 'Scrapers', href: '/scrapers', icon: Download },
   { name: 'Organizers', href: '/organizers', icon: Users },
   { name: 'Arrangörssidor', href: '/organizer-pages', icon: Globe },
+  { name: 'Email-notifikationer', href: '/admin/settings/notifications', icon: Mail },
 ]
 
 export function AppSidebar() {
@@ -141,7 +143,8 @@ export function AppSidebar() {
                   (item.href === '/events/review' && pathname?.startsWith('/events/review')) ||
                   (item.href === '/events/statistics' && pathname?.startsWith('/events/statistics')) ||
                   (item.href === '/organizer-pages' && pathname?.startsWith('/organizer-pages')) ||
-                  (item.href === '/admin/tips' && pathname?.startsWith('/admin/tips'))
+                  (item.href === '/admin/tips' && pathname?.startsWith('/admin/tips')) ||
+                  (item.href === '/admin/settings/notifications' && pathname?.startsWith('/admin/settings/notifications'))
 
                 return (
                   <SidebarMenuItem key={item.name}>
