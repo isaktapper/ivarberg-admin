@@ -8,7 +8,9 @@ export interface ScrapedEvent {
   venue_name?: string;
   price?: string;
   image_url?: string;
-  organizer_event_url?: string;
+  organizer_event_url?: string; // Scraper-URL (används för deduplicering)
+  event_website?: string; // Arrangörens event-sida (visas för användaren, används av Visit Varberg)
+  booking_url?: string; // Länk till biljettsida (används av Visit Varberg m.fl.)
   categories?: EventCategory[]; // 1-3 kategorier, fylls i av AI
   category_scores?: Record<string, number>; // Confidence scores från AI
   max_participants?: number;

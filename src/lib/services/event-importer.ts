@@ -606,6 +606,8 @@ export class EventImporter {
       price: event.price,
       image_url: event.image_url,
       organizer_event_url: event.organizer_event_url,
+      event_website: event.event_website, // Arrangörens event-sida (UI)
+      booking_url: event.booking_url, // Länk till biljettsida
       categories: event.categories || ['Okategoriserad'],
       category_scores: event.category_scores,
       organizer_id: organizerId,

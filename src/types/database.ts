@@ -38,6 +38,8 @@ export interface Event {
   price?: string
   image_url?: string
   organizer_event_url?: string
+  event_website?: string // Arrangörens event-sida (visas för användaren)
+  booking_url?: string // Länk till biljettsida
   category?: EventCategory // Deprecated: använd categories istället
   categories: EventCategory[] // 1-3 kategorier, sorterade efter relevans
   category_scores?: CategoryScore // Confidence scores för varje kategori

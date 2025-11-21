@@ -168,7 +168,9 @@ export class VisitVarbergScraper extends BaseScraper {
       description,
       image_url,
       price,
-      organizer_event_url: url,
+      organizer_event_url: url, // Visit Varberg URL (unik - används för deduplicering)
+      event_website: eventData.website, // Arrangörens event-sida (visas för användaren)
+      booking_url: eventData.bookingLink, // Länk till biljettsida
       // categories fylls i av AI senare
       // Lägg till metadata för senare användning
       metadata: organizerMetadata,
