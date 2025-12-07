@@ -53,9 +53,7 @@ export default function EditEventPage() {
         price: event.price || '',
         image_url: event.image_url || '',
         organizer_event_url: event.organizer_event_url || '',
-        // Support både gamla och nya kategori-systemet
-        category: event.category,
-        categories: event.categories || (event.category ? [event.category] : []),
+        categories: event.categories || [],
         organizer_id: event.organizer_id || undefined,
         featured: event.featured,
         status: event.status,
@@ -107,7 +105,7 @@ export default function EditEventPage() {
     setLoading(true)
     try {
       const updateData = {
-        event_id: data.event_id,
+        // OBS: event_id uppdateras INTE - det är immutable
         name: data.name,
         description: data.description || null,
         date_time: data.date_time,
@@ -116,9 +114,7 @@ export default function EditEventPage() {
         price: data.price || null,
         image_url: data.image_url || null,
         organizer_event_url: data.organizer_event_url || null,
-        // Uppdatera både gamla och nya kategori-systemet
-        category: data.categories?.[0] || data.category, // Behåll första kategorin som huvudkategori för bakåtkompatibilitet
-        categories: data.categories || (data.category ? [data.category] : ['Okategoriserad']), // Säkerställ att vi alltid har en array
+        categories: data.categories || ['Okategoriserad'], // Använd categories (plural)
         organizer_id: data.organizer_id || null,
         featured: data.featured,
         is_featured: data.featured, // Uppdatera båda kolumnerna för säkerhets skull
@@ -248,16 +244,17 @@ export default function EditEventPage() {
                 {/* Event ID */}
                 <div className="sm:col-span-2">
                   <label htmlFor="event_id" className="block text-sm font-medium text-gray-700">
-                    Event ID
+                    Event ID (kan inte ändras)
                   </label>
                   <input
                     type="text"
                     {...register('event_id')}
-                    className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                    disabled
+                    className="mt-1 block w-full border-gray-300 rounded-md shadow-sm bg-gray-100 text-gray-500 cursor-not-allowed sm:text-sm"
                   />
-                  {errors.event_id && (
-                    <p className="mt-2 text-sm text-red-600">{errors.event_id.message}</p>
-                  )}
+                  <p className="mt-1 text-xs text-gray-500">
+                    Event ID kan inte ändras efter att eventet har skapats
+                  </p>
                 </div>
 
                 {/* Name */}

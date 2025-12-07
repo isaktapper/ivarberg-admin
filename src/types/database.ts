@@ -178,6 +178,17 @@ export interface EmailRecipient {
   updated_at: string
 }
 
+export interface HeroFeaturedEvent {
+  id: number
+  event_id: number
+  position: 'main' | 'secondary'
+  priority?: number // 1-5 för secondary (1 är högst prioritet)
+  created_at: string
+  updated_at: string
+  // Joined data
+  event?: Event
+}
+
 export interface Database {
   public: {
     Tables: {
@@ -217,6 +228,11 @@ export interface Database {
         Row: EmailRecipient
         Insert: Omit<EmailRecipient, 'id' | 'created_at' | 'updated_at'>
         Update: Partial<Omit<EmailRecipient, 'id' | 'created_at' | 'updated_at'>>
+      }
+      hero_featured_events: {
+        Row: HeroFeaturedEvent
+        Insert: Omit<HeroFeaturedEvent, 'id' | 'created_at' | 'updated_at' | 'event'>
+        Update: Partial<Omit<HeroFeaturedEvent, 'id' | 'created_at' | 'updated_at' | 'event'>>
       }
     }
   }

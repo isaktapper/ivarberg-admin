@@ -180,3 +180,7 @@ Vid frågor eller problem:
 2. Kolla GitHub Actions loggar
 3. Kolla Supabase loggar för databas-fel
 
+
+
+
+

@@ -1,0 +1,1709 @@
+﻿2025-11-20T21:27:33.8925147Z Current runner version: '2.329.0'
+2025-11-20T21:27:33.8949908Z ##[group]Runner Image Provisioner
+2025-11-20T21:27:33.8950907Z Hosted Compute Agent
+2025-11-20T21:27:33.8951462Z Version: 20251016.436
+2025-11-20T21:27:33.8952083Z Commit: 8ab8ac8bfd662a3739dab9fe09456aba92132568
+2025-11-20T21:27:33.8952957Z Build Date: 2025-10-15T20:44:12Z
+2025-11-20T21:27:33.8953589Z ##[endgroup]
+2025-11-20T21:27:33.8954168Z ##[group]Operating System
+2025-11-20T21:27:33.8955139Z Ubuntu
+2025-11-20T21:27:33.8955602Z 24.04.3
+2025-11-20T21:27:33.8956136Z LTS
+2025-11-20T21:27:33.8956648Z ##[endgroup]
+2025-11-20T21:27:33.8957213Z ##[group]Runner Image
+2025-11-20T21:27:33.8957835Z Image: ubuntu-24.04
+2025-11-20T21:27:33.8958386Z Version: 20251112.124.1
+2025-11-20T21:27:33.8959398Z Included Software: https://github.com/actions/runner-images/blob/ubuntu24/20251112.124/images/ubuntu/Ubuntu2404-Readme.md
+2025-11-20T21:27:33.8961060Z Image Release: https://github.com/actions/runner-images/releases/tag/ubuntu24%2F20251112.124
+2025-11-20T21:27:33.8962178Z ##[endgroup]
+2025-11-20T21:27:33.8963310Z ##[group]GITHUB_TOKEN Permissions
+2025-11-20T21:27:33.8965757Z Contents: read
+2025-11-20T21:27:33.8966571Z Issues: write
+2025-11-20T21:27:33.8967110Z Metadata: read
+2025-11-20T21:27:33.8967589Z ##[endgroup]
+2025-11-20T21:27:33.8969874Z Secret source: Actions
+2025-11-20T21:27:33.8970923Z Prepare workflow directory
+2025-11-20T21:27:33.9313971Z Prepare all required actions
+2025-11-20T21:27:33.9352833Z Getting action download info
+2025-11-20T21:27:34.3009226Z Download action repository 'actions/checkout@v4' (SHA:34e114876b0b11c390a56381ad16ebd13914f8d5)
+2025-11-20T21:27:34.6858961Z Download action repository 'actions/setup-node@v4' (SHA:49933ea5288caeca8642d1e84afbd3f7d6820020)
+2025-11-20T21:27:34.7807378Z Download action repository 'actions/upload-artifact@v4' (SHA:ea165f8d65b6e75b540449e92b4886f43607fa02)
+2025-11-20T21:27:34.9777860Z Complete job name: scrape-events
+2025-11-20T21:27:35.0460474Z ##[group]Run actions/checkout@v4
+2025-11-20T21:27:35.0461444Z with:
+2025-11-20T21:27:35.0461910Z   repository: isaktapper/ivarberg-admin
+2025-11-20T21:27:35.0462664Z   token: ***
+2025-11-20T21:27:35.0463125Z   ssh-strict: true
+2025-11-20T21:27:35.0463581Z   ssh-user: git
+2025-11-20T21:27:35.0464010Z   persist-credentials: true
+2025-11-20T21:27:35.0464633Z   clean: true
+2025-11-20T21:27:35.0465056Z   sparse-checkout-cone-mode: true
+2025-11-20T21:27:35.0465552Z   fetch-depth: 1
+2025-11-20T21:27:35.0465951Z   fetch-tags: false
+2025-11-20T21:27:35.0466421Z   show-progress: true
+2025-11-20T21:27:35.0466844Z   lfs: false
+2025-11-20T21:27:35.0467231Z   submodules: false
+2025-11-20T21:27:35.0467655Z   set-safe-directory: true
+2025-11-20T21:27:35.0468361Z ##[endgroup]
+2025-11-20T21:27:35.1597164Z Syncing repository: isaktapper/ivarberg-admin
+2025-11-20T21:27:35.1600050Z ##[group]Getting Git version info
+2025-11-20T21:27:35.1601499Z Working directory is '/home/runner/work/ivarberg-admin/ivarberg-admin'
+2025-11-20T21:27:35.1603356Z [command]/usr/bin/git version
+2025-11-20T21:27:35.1670336Z git version 2.51.2
+2025-11-20T21:27:35.1700323Z ##[endgroup]
+2025-11-20T21:27:35.1716908Z Temporarily overriding HOME='/home/runner/work/_temp/aaafbbfb-bc2e-48b2-a3f0-438ea4fc623b' before making global git config changes
+2025-11-20T21:27:35.1719329Z Adding repository directory to the temporary git global config as a safe directory
+2025-11-20T21:27:35.1731782Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/ivarberg-admin/ivarberg-admin
+2025-11-20T21:27:35.1771241Z Deleting the contents of '/home/runner/work/ivarberg-admin/ivarberg-admin'
+2025-11-20T21:27:35.1775376Z ##[group]Initializing the repository
+2025-11-20T21:27:35.1780287Z [command]/usr/bin/git init /home/runner/work/ivarberg-admin/ivarberg-admin
+2025-11-20T21:27:35.1881346Z hint: Using 'master' as the name for the initial branch. This default branch name
+2025-11-20T21:27:35.1882688Z hint: is subject to change. To configure the initial branch name to use in all
+2025-11-20T21:27:35.1884034Z hint: of your new repositories, which will suppress this warning, call:
+2025-11-20T21:27:35.1885555Z hint:
+2025-11-20T21:27:35.1886393Z hint: 	git config --global init.defaultBranch <name>
+2025-11-20T21:27:35.1887451Z hint:
+2025-11-20T21:27:35.1888500Z hint: Names commonly chosen instead of 'master' are 'main', 'trunk' and
+2025-11-20T21:27:35.1890141Z hint: 'development'. The just-created branch can be renamed via this command:
+2025-11-20T21:27:35.1891484Z hint:
+2025-11-20T21:27:35.1892211Z hint: 	git branch -m <name>
+2025-11-20T21:27:35.1893012Z hint:
+2025-11-20T21:27:35.1894022Z hint: Disable this message with "git config set advice.defaultBranchName false"
+2025-11-20T21:27:35.1895982Z Initialized empty Git repository in /home/runner/work/ivarberg-admin/ivarberg-admin/.git/
+2025-11-20T21:27:35.1899535Z [command]/usr/bin/git remote add origin https://github.com/isaktapper/ivarberg-admin
+2025-11-20T21:27:35.1934753Z ##[endgroup]
+2025-11-20T21:27:35.1936026Z ##[group]Disabling automatic garbage collection
+2025-11-20T21:27:35.1939780Z [command]/usr/bin/git config --local gc.auto 0
+2025-11-20T21:27:35.1971714Z ##[endgroup]
+2025-11-20T21:27:35.1972398Z ##[group]Setting up auth
+2025-11-20T21:27:35.1980195Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2025-11-20T21:27:35.2012044Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2025-11-20T21:27:35.2341683Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2025-11-20T21:27:35.2373336Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2025-11-20T21:27:35.2596147Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2025-11-20T21:27:35.2628315Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2025-11-20T21:27:35.2863604Z [command]/usr/bin/git config --local http.https://github.com/.extraheader AUTHORIZATION: basic ***
+2025-11-20T21:27:35.2899175Z ##[endgroup]
+2025-11-20T21:27:35.2900164Z ##[group]Fetching the repository
+2025-11-20T21:27:35.2908022Z [command]/usr/bin/git -c protocol.version=2 fetch --no-tags --prune --no-recurse-submodules --depth=1 origin +572352a91d33aa761c1e5ea313b6f5e085bb99d2:refs/remotes/origin/main
+2025-11-20T21:27:35.6477660Z From https://github.com/isaktapper/ivarberg-admin
+2025-11-20T21:27:35.6479650Z  * [new ref]         572352a91d33aa761c1e5ea313b6f5e085bb99d2 -> origin/main
+2025-11-20T21:27:35.6520661Z ##[endgroup]
+2025-11-20T21:27:35.6522363Z ##[group]Determining the checkout info
+2025-11-20T21:27:35.6524598Z ##[endgroup]
+2025-11-20T21:27:35.6529921Z [command]/usr/bin/git sparse-checkout disable
+2025-11-20T21:27:35.6574776Z [command]/usr/bin/git config --local --unset-all extensions.worktreeConfig
+2025-11-20T21:27:35.6604588Z ##[group]Checking out the ref
+2025-11-20T21:27:35.6608440Z [command]/usr/bin/git checkout --progress --force -B main refs/remotes/origin/main
+2025-11-20T21:27:35.6785772Z Switched to a new branch 'main'
+2025-11-20T21:27:35.6789410Z branch 'main' set up to track 'origin/main'.
+2025-11-20T21:27:35.6794744Z ##[endgroup]
+2025-11-20T21:27:35.6832875Z [command]/usr/bin/git log -1 --format=%H
+2025-11-20T21:27:35.6856873Z 572352a91d33aa761c1e5ea313b6f5e085bb99d2
+2025-11-20T21:27:35.7162560Z ##[group]Run actions/setup-node@v4
+2025-11-20T21:27:35.7163687Z with:
+2025-11-20T21:27:35.7164598Z   node-version: 22
+2025-11-20T21:27:35.7165433Z   cache: npm
+2025-11-20T21:27:35.7166225Z   always-auth: false
+2025-11-20T21:27:35.7167121Z   check-latest: false
+2025-11-20T21:27:35.7168296Z   token: ***
+2025-11-20T21:27:35.7169071Z ##[endgroup]
+2025-11-20T21:27:35.9039551Z Found in cache @ /opt/hostedtoolcache/node/22.21.1/x64
+2025-11-20T21:27:35.9046332Z ##[group]Environment details
+2025-11-20T21:27:38.8158432Z node: v22.21.1
+2025-11-20T21:27:38.8159913Z npm: 10.9.4
+2025-11-20T21:27:38.8160333Z yarn: 1.22.22
+2025-11-20T21:27:38.8161568Z ##[endgroup]
+2025-11-20T21:27:38.8188855Z [command]/opt/hostedtoolcache/node/22.21.1/x64/bin/npm config get cache
+2025-11-20T21:27:39.1456054Z /home/runner/.npm
+2025-11-20T21:27:39.3644690Z Cache hit for: node-cache-Linux-x64-npm-c2f4abdb178402df8421acacf1f08714db15faed0d07c479131acf6e5be5953a
+2025-11-20T21:27:40.5002676Z Received 130023424 of 189303021 (68.7%), 124.0 MBs/sec
+2025-11-20T21:27:41.0019417Z Received 189303021 of 189303021 (100.0%), 120.2 MBs/sec
+2025-11-20T21:27:41.0021414Z Cache Size: ~181 MB (189303021 B)
+2025-11-20T21:27:41.0059220Z [command]/usr/bin/tar -xf /home/runner/work/_temp/9ea199e2-ce16-4a10-b9ed-37a9fd0af61b/cache.tzst -P -C /home/runner/work/ivarberg-admin/ivarberg-admin --use-compress-program unzstd
+2025-11-20T21:27:41.3369653Z Cache restored successfully
+2025-11-20T21:27:41.3733740Z Cache restored from key: node-cache-Linux-x64-npm-c2f4abdb178402df8421acacf1f08714db15faed0d07c479131acf6e5be5953a
+2025-11-20T21:27:41.3910173Z ##[group]Run npm ci
+2025-11-20T21:27:41.3910841Z [36;1mnpm ci[0m
+2025-11-20T21:27:41.3957076Z shell: /usr/bin/bash -e {0}
+2025-11-20T21:27:41.3957428Z ##[endgroup]
+2025-11-20T21:27:46.5630033Z npm warn deprecated string-similarity@4.0.4: Package no longer supported. Contact Support at https://www.npmjs.com/support for more info.
+2025-11-20T21:27:52.0932455Z 
+2025-11-20T21:27:52.0933344Z added 484 packages, and audited 485 packages in 11s
+2025-11-20T21:27:52.0933800Z 
+2025-11-20T21:27:52.0934138Z 163 packages are looking for funding
+2025-11-20T21:27:52.0935285Z   run `npm fund` for details
+2025-11-20T21:27:52.0984652Z 
+2025-11-20T21:27:52.0995422Z 3 vulnerabilities (2 moderate, 1 high)
+2025-11-20T21:27:52.0996218Z 
+2025-11-20T21:27:52.0996829Z To address issues that do not require attention, run:
+2025-11-20T21:27:52.0997578Z   npm audit fix
+2025-11-20T21:27:52.0999030Z 
+2025-11-20T21:27:52.0999416Z Some issues need review, and may require choosing
+2025-11-20T21:27:52.1000102Z a different dependency.
+2025-11-20T21:27:52.1000365Z 
+2025-11-20T21:27:52.1000583Z Run `npm audit` for details.
+2025-11-20T21:27:52.2145467Z ##[group]Run npx tsx scripts/run-scrapers.ts
+2025-11-20T21:27:52.2145896Z [36;1mnpx tsx scripts/run-scrapers.ts[0m
+2025-11-20T21:27:52.2180077Z shell: /usr/bin/bash -e {0}
+2025-11-20T21:27:52.2180358Z env:
+2025-11-20T21:27:52.2180836Z   NEXT_PUBLIC_SUPABASE_URL: ***
+2025-11-20T21:27:52.2182362Z   SUPABASE_SERVICE_ROLE_KEY: ***
+2025-11-20T21:27:52.2183308Z   OPENAI_API_KEY: ***
+2025-11-20T21:27:52.2183595Z   RESEND_API_KEY: ***
+2025-11-20T21:27:52.2183811Z ##[endgroup]
+2025-11-20T21:27:53.4080311Z 🚀 Starting iVarberg event scraping...
+2025-11-20T21:27:53.4080794Z 
+2025-11-20T21:27:53.4091849Z 📍 Running from: github-actions
+2025-11-20T21:27:53.4092957Z 🔗 Run URL: https://github.com/isaktapper/ivarberg-admin/actions/runs/19551874086
+2025-11-20T21:27:53.4093481Z 
+2025-11-20T21:27:53.4093779Z 📋 Found 4 active scrapers
+2025-11-20T21:27:53.4094081Z 
+2025-11-20T21:27:53.4094849Z 📅 Updating scraper schedules...
+2025-11-20T21:27:53.4237648Z    Next scheduled run: 2025-11-21T05:00:00.000Z (2025-11-21 05:00:00)
+2025-11-20T21:27:53.4238175Z 
+2025-11-20T21:27:55.7649272Z ============================================================
+2025-11-20T21:27:55.7650192Z 📡 Running: Arena Varberg
+2025-11-20T21:27:55.7650790Z 🔗 URL: https://arenavarberg.se/evenemang-varberg/
+2025-11-20T21:27:55.7651356Z ============================================================
+2025-11-20T21:27:55.7651632Z 
+2025-11-20T21:27:56.0775651Z   📝 Created log entry #123
+2025-11-20T21:27:56.4560422Z Error scraping Arena Varberg: Error: HTTP 415: Unsupported Media Type
+2025-11-20T21:27:56.4561299Z     at ArenaVarbergScraper.fetchHTML (/home/runner/work/ivarberg-admin/ivarberg-admin/src/lib/scrapers/base-scraper.ts:36:13)
+2025-11-20T21:27:56.4562325Z     at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+2025-11-20T21:27:56.4564631Z     at async ArenaVarbergScraper.scrape (/home/runner/work/ivarberg-admin/ivarberg-admin/src/lib/scrapers/arena-varberg-scraper.ts:45:28)
+2025-11-20T21:27:56.4566104Z     at async main (/home/runner/work/ivarberg-admin/ivarberg-admin/scripts/run-scrapers.ts:123:22)
+2025-11-20T21:27:56.4567248Z   ❌ Error scraping Arena Varberg:
+2025-11-20T21:27:56.4567790Z      HTTP 415: Unsupported Media Type
+2025-11-20T21:27:56.4568427Z      Stack trace: Error: HTTP 415: Unsupported Media Type
+2025-11-20T21:27:56.4569620Z          at ArenaVarbergScraper.fetchHTML (/home/runner/work/ivarberg-admin/ivarberg-admin/src/lib/scrapers/base-scraper.ts:36:13)
+2025-11-20T21:27:56.4571029Z          at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+2025-11-20T21:27:56.6784850Z   ⏭️  Continuing with next scraper...
+2025-11-20T21:27:56.6785187Z 
+2025-11-20T21:27:56.6785456Z ============================================================
+2025-11-20T21:27:56.6786004Z 📡 Running: Varbergs Teater
+2025-11-20T21:27:56.6788430Z 🔗 URL: https://varberg.se/kulturhuset-komedianten/kalender
+2025-11-20T21:27:56.6789317Z ============================================================
+2025-11-20T21:27:56.6789782Z 
+2025-11-20T21:27:56.8976606Z   📝 Created log entry #124
+2025-11-20T21:27:56.8978104Z 🎭 Startar scraping av Varbergs Teater via API...
+2025-11-20T21:27:57.7337721Z 📊 Totalt 50 events på 5 sidor
+2025-11-20T21:27:57.7345049Z 
+2025-11-20T21:27:57.7349166Z 📋 Hämtar sida 1/5...
+2025-11-20T21:27:58.2195863Z 📝 Hittade 12 events på sida 1
+2025-11-20T21:27:58.4936544Z   ✓ Digital hjälp
+2025-11-20T21:27:59.2455826Z   ✓ Språkcafé: Kakbuffé och julpyssel
+2025-11-20T21:27:59.9828887Z   ✓ Föreläsning: Mitt liv äger ingen
+2025-11-20T21:28:00.7161153Z   ✓ Klas Hallberg - Att leva innan man dör
+2025-11-20T21:28:01.4602673Z   ✓ Släktforskarhjälp
+2025-11-20T21:28:02.1993931Z   ✓ Minibokmässa: All världens språk 2025
+2025-11-20T21:28:02.9344881Z   ✓ Tunnelseende​ - 22
+2025-11-20T21:28:03.6483138Z   ✓ Bob Hansson- Snällast vinner, en invasion av Hopp!
+2025-11-20T21:28:04.3500190Z   ✓ Klas Klättermus och de andra djuren i Hackebackeskogen
+2025-11-20T21:28:05.0658217Z   ✓ Att försvinna sig – en mor och dotters berättelse om anorexi​
+2025-11-20T21:28:05.7796891Z   ✓ Filmklubben: Den siste vikingen
+2025-11-20T21:28:06.4930549Z   ✓ Mattehjälpen
+2025-11-20T21:28:07.9935708Z 
+2025-11-20T21:28:07.9936794Z 📋 Hämtar sida 2/5...
+2025-11-20T21:28:08.5089208Z 📝 Hittade 12 events på sida 2
+2025-11-20T21:28:08.7353420Z   ✓ Digital hjälp
+2025-11-20T21:28:09.4504099Z   ✓ Språkcafé
+2025-11-20T21:28:10.1577921Z   ✓ ELZ fd.Crying Day Care Choir
+2025-11-20T21:28:10.9266858Z   ✓ Adventsmys vid sagopromenaden i Brunnsbergsskogen​​
+2025-11-20T21:28:11.6695653Z   ✓ Konstworkshop: Hur bor djur​​
+2025-11-20T21:28:12.4047972Z   ✓ Virkdag med Moa​
+2025-11-20T21:28:13.1334641Z   ✓ Jul i stan med Street Bourbon Band
+2025-11-20T21:28:13.8732858Z   ✓ Guidad visning av Varbergs Teater
+2025-11-20T21:28:14.5989710Z   ✓ Workshop: Brillmans brädor​
+2025-11-20T21:28:15.3163224Z   ✓ Filmklubben: Drömmar
+2025-11-20T21:28:16.0269885Z   ✓ Mattehjälpen
+2025-11-20T21:28:16.7470805Z   ✓ Julunderhållning och boktips
+2025-11-20T21:28:18.2482179Z 
+2025-11-20T21:28:18.2483087Z 📋 Hämtar sida 3/5...
+2025-11-20T21:28:18.6558277Z 📝 Hittade 12 events på sida 3
+2025-11-20T21:28:18.8761914Z   ✓ Digital hjälp
+2025-11-20T21:28:19.6089648Z   ✓ Språkcafé
+2025-11-20T21:28:20.3311236Z   ✓ Småbarnsstund: Babydisco
+2025-11-20T21:28:21.0388383Z   ✓ Emmi Christensson & Rickard Söderberg - En Fridfull Jul
+2025-11-20T21:28:21.7602384Z   ✓ KEN RING - MUSIKEN
+2025-11-20T21:28:22.4683741Z   ✓ Mumin 80 år!
+2025-11-20T21:28:23.1875520Z   ✓ Mattehjälpen
+2025-11-20T21:28:23.8929810Z   ✓ ​Bebisföreställning: Gro​
+2025-11-20T21:28:24.6015053Z   ✓ Digital hjälp
+2025-11-20T21:28:25.3333467Z   ✓ Från jazz till visa med Tellqvist​​
+2025-11-20T21:28:26.0685878Z   ✓ Språkcafé: Lucia
+2025-11-20T21:28:26.7765793Z   ✓ Luciafirande
+2025-11-20T21:28:28.2768597Z 
+2025-11-20T21:28:28.2769518Z 📋 Hämtar sida 4/5...
+2025-11-20T21:28:28.7733739Z 📝 Hittade 12 events på sida 4
+2025-11-20T21:28:29.0224591Z   ✓ Konstworkshop: Djuren firar jul​
+2025-11-20T21:28:29.7270001Z   ✓ Christmas with Elvis
+2025-11-20T21:28:30.4381512Z   ✓ Christmas On – Filmkväll & julmys på Varbergs teater!
+2025-11-20T21:28:31.1452112Z   ✓ West of Eden - Celtic Christmas
+2025-11-20T21:28:31.8996060Z   ✓ Jullovsbio: Kungarna på Mullbärsgatan​
+2025-11-20T21:28:32.6140783Z   ✓ Ryskt krig i Ukraina - vad väntar i framtiden?
+2025-11-20T21:28:33.3807522Z   ✓ Jalla, väx upp!
+2025-11-20T21:28:34.0928142Z   ✓ Chris Kläfford - The Kitchen Session Tour
+2025-11-20T21:28:34.7944535Z   ✓ ​Jens Lekman​
+2025-11-20T21:28:35.5013274Z   ✓ Det är samma åsna, bara med en ny sadel
+2025-11-20T21:28:36.1979419Z   ✓ ​Emil Gittansson Jensen- Vi måste hålla kontakten​
+2025-11-20T21:28:36.9300520Z   ✓ Pappa Kapsyl - Dinosaurielåtar
+2025-11-20T21:28:38.4312399Z 
+2025-11-20T21:28:38.4315441Z 📋 Hämtar sida 5/5...
+2025-11-20T21:28:38.7432839Z 📝 Hittade 2 events på sida 5
+2025-11-20T21:28:39.0057995Z   ✓ Magnus Betnér - ”Mellan oss”
+2025-11-20T21:28:39.7296568Z   ✓ ERIC CLAPTON TRIBUTE
+2025-11-20T21:28:41.2311666Z 
+2025-11-20T21:28:41.2312879Z 🎉 Scraping klar! Hittade 50 unika events totalt
+2025-11-20T21:28:41.2315421Z   ✓ Found 50 events (44.6s)
+2025-11-20T21:28:41.2316943Z 
+2025-11-20T21:28:41.2320439Z 📦 Importerar 50 events...
+2025-11-20T21:28:41.2320985Z   📊 Hittade 50 events
+2025-11-20T21:28:41.5378844Z   📊 Rensar interna dubletter...
+2025-11-20T21:28:42.0878894Z ✓ Efter intern deduplicering: 50 unika events
+2025-11-20T21:28:42.0879867Z   📊 Kontrollerar mot databas... [0/50]
+2025-11-20T21:28:42.4711283Z   ⊘ URL duplicate: https://varberg.se/kulturhuset-komedianten/kalender/2025/november/2025-08-05-digital-hjalp---20-11
+2025-11-20T21:28:42.6324739Z   ⊘ URL duplicate: https://varberg.se/kulturhuset-komedianten/kalender/2025/november/2025-09-03-sprakcafe-kakbuffe-och-julpyssel---20-11
+2025-11-20T21:28:42.8001429Z   ⊘ URL duplicate: https://varberg.se/kulturhuset-komedianten/kalender/2025/oktober/2025-09-09-forelasning-mitt-liv-ager-ingen
+2025-11-20T21:28:42.9602869Z   ⊘ URL duplicate: https://varberg.se/kulturhuset-komedianten/kalender/2025/november/2025-04-11-klas-hallberg---att-leva-innan-man-dor---21-11
+2025-11-20T21:28:43.1362010Z   ⊘ URL duplicate: https://varberg.se/kulturhuset-komedianten/kalender/2025/november/2025-09-15-slaktforskarhjalp---22-11
+2025-11-20T21:28:43.3601242Z   ⊘ URL duplicate: https://varberg.se/kulturhuset-komedianten/kalender/2025/november/2025-08-29-minibokmassa-all-varldens-sprak-2025-----22-11
+2025-11-20T21:28:43.5885778Z   ⊘ URL duplicate: https://varberg.se/kulturhuset-komedianten/kalender/2025/november/2025-10-24-tunnelseende​---22-28-11
+2025-11-20T21:28:43.7481170Z   ⊘ URL duplicate: https://varberg.se/kulturhuset-komedianten/kalender/2025/november/2025-06-23-bob-hansson--snallast-vinner-en-invasion-av-hopp--22-11
+2025-11-20T21:28:43.9080974Z   ⊘ URL duplicate: https://varberg.se/kulturhuset-komedianten/kalender/2025/november/2025-06-24-klas-klattermus-och-de-andra-djuren-i-hackebackeskogen---23-11
+2025-11-20T21:28:44.1161277Z   ⊘ URL duplicate: https://varberg.se/kulturhuset-komedianten/kalender/2025/november/2025-08-29-att-forsvinna-sig---en-mor-och-dotters-berattelse-om-anorexi​---25-11
+2025-11-20T21:28:44.2891994Z   ⊘ URL duplicate: https://varberg.se/kulturhuset-komedianten/kalender/2025/november/2025-10-06-filmklubben-den-siste-vikingen---25-11
+2025-11-20T21:28:44.5308915Z   ⊘ URL duplicate: https://varberg.se/kulturhuset-komedianten/kalender/2025/november/2025-08-20-mattehjalpen---26-11
+2025-11-20T21:28:44.6977307Z   ⊘ URL duplicate: https://varberg.se/kulturhuset-komedianten/kalender/2025/november/2025-08-05-digital-hjalp---27-11
+2025-11-20T21:28:44.9314201Z   ⊘ URL duplicate: https://varberg.se/kulturhuset-komedianten/kalender/2025/november/2025-09-03-sprakcafe---27-11
+2025-11-20T21:28:45.3007502Z   ⊘ Fuzzy duplicate (87% match):
+2025-11-20T21:28:45.3008136Z     New: "ELZ fd.Crying Day Care Choir"
+2025-11-20T21:28:45.3008746Z     Existing: "Crying Day Care Choir"
+2025-11-20T21:28:45.3009822Z     Date: 2025-11-27 | Venue: Varbergs
+2025-11-20T21:28:45.4669779Z   ⊘ URL duplicate: https://varberg.se/kulturhuset-komedianten/kalender/2025/oktober/2025-08-29-adventsmys-vid-sagopromenaden-i-brunnsbergsskogen​​---28-11
+2025-11-20T21:28:45.6310990Z   ⊘ URL duplicate: https://varberg.se/kulturhuset-komedianten/kalender/2025/november/2025-11-07-konstworkshop-hur-bor-djur​​---29-11
+2025-11-20T21:28:45.8014064Z   ⊘ URL duplicate: https://varberg.se/kulturhuset-komedianten/kalender/2025/november/2025-08-29-virkdag-med-moa​---29-11
+2025-11-20T21:28:45.9637639Z   ⊘ URL duplicate: https://varberg.se/kulturhuset-komedianten/kalender/2025/november/2025-07-30-jul-i-stan-med-street-bourbon-band---30-11
+2025-11-20T21:28:46.1318468Z   ⊘ URL duplicate: https://varberg.se/kulturhuset-komedianten/kalender/2025/december/2025-10-30-guidad-visning-av-varbergs-teater---1-12
+2025-11-20T21:28:46.2940223Z   ⊘ URL duplicate: https://varberg.se/kulturhuset-komedianten/kalender/2025/december/2025-08-29-workshop-brillmans-brador​---2-12
+2025-11-20T21:28:46.4663036Z   ⊘ URL duplicate: https://varberg.se/kulturhuset-komedianten/kalender/2025/december/2025-10-06-filmklubben-drommar---2-12
+2025-11-20T21:28:46.6303861Z   ⊘ URL duplicate: https://varberg.se/kulturhuset-komedianten/kalender/2025/december/2025-08-20-mattehjalpen---3-12
+2025-11-20T21:28:46.7920709Z   ⊘ URL duplicate: https://varberg.se/kulturhuset-komedianten/kalender/2025/december/2025-10-29-julunderhallning-och-boktips---3-12
+2025-11-20T21:28:46.9786029Z   ⊘ URL duplicate: https://varberg.se/kulturhuset-komedianten/kalender/2025/december/2025-08-05-digital-hjalp---4-12
+2025-11-20T21:28:47.1457179Z   ⊘ URL duplicate: https://varberg.se/kulturhuset-komedianten/kalender/2025/december/2025-09-03-sprakcafe---4-12
+2025-11-20T21:28:47.3335908Z   ⊘ URL duplicate: https://varberg.se/kulturhuset-komedianten/kalender/2025/december/2025-09-23-smabarnsstund--babydisco-----5-12
+2025-11-20T21:28:47.5334657Z   ⊘ URL duplicate: https://varberg.se/kulturhuset-komedianten/kalender/2025/december/2025-05-15-emmi-christensson--rickard-soderberg---en-fridfull-jul---6-12
+2025-11-20T21:28:47.6992391Z   ⊘ URL duplicate: https://varberg.se/kulturhuset-komedianten/kalender/2025/december/2025-06-23-ken-ring---musiken---7-12
+2025-11-20T21:28:47.8746210Z   ⊘ URL duplicate: https://varberg.se/kulturhuset-komedianten/kalender/2025/december/2025-08-29-mumin-80-ar---9-12
+2025-11-20T21:28:48.0507592Z   ⊘ URL duplicate: https://varberg.se/kulturhuset-komedianten/kalender/2025/december/2025-08-20-mattehjalpen---10-12
+2025-11-20T21:28:48.2192157Z   ⊘ URL duplicate: https://varberg.se/kulturhuset-komedianten/kalender/2025/december/2025-08-29-​bebisforestallning-gro​---11-12
+2025-11-20T21:28:48.3903536Z   ⊘ URL duplicate: https://varberg.se/kulturhusetkomedianten/kalender/2025/december/digitalhjalp412.5.4e5b3d90198736afc3f857a7.html
+2025-11-20T21:28:48.8938655Z   ⊘ URL duplicate: https://varberg.se/kulturhuset-komedianten/kalender/2025/december/2025-09-03-sprakcafe-lucia---11-12
+2025-11-20T21:28:49.0549149Z   ⊘ URL duplicate: https://varberg.se/kulturhuset-komedianten/kalender/2025/december/2025-10-01-luciafirande---11-12
+2025-11-20T21:28:49.2438497Z   ⊘ URL duplicate: https://varberg.se/kulturhuset-komedianten/kalender/2025/december/2025-11-07-konstworkshop-djuren-firar-jul​---13-12
+2025-11-20T21:28:49.4635301Z   ⊘ URL duplicate: https://varberg.se/kulturhuset-komedianten/kalender/2025/december/2025-09-17-christmas-with-elvis---13-12
+2025-11-20T21:28:49.6379587Z   ⊘ URL duplicate: https://varberg.se/kulturhuset-komedianten/kalender/2025/december/2025-08-29-christmas-on---filmkvall--julmys-pa-varbergs-teater---14-12
+2025-11-20T21:28:49.8082925Z   ⊘ URL duplicate: https://varberg.se/kulturhuset-komedianten/kalender/2025/december/2025-04-11-west-of-eden---celtic-christmas---18-12
+2025-11-20T21:28:49.9993027Z   ⊘ URL duplicate: https://varberg.se/kulturhuset-komedianten/kalender/2026/januari/2025-11-14-jullovsbio-kungarna-pa-mullbarsgatan​---7-1
+2025-11-20T21:28:50.3585175Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:28:50.3586652Z     New: "Ryskt krig i Ukraina - vad väntar i framtiden?"
+2025-11-20T21:28:50.3587505Z     Existing: "Ryskt krig i Ukraina - vad väntar i framtiden?"
+2025-11-20T21:28:50.3588142Z     Date: 2026-01-29 | Venue: Varbergs
+2025-11-20T21:28:50.5152229Z   ⊘ URL duplicate: https://varberg.se/kulturhuset-komedianten/kalender/2026/februari/2025-10-27-jalla-vax-upp---13-2
+2025-11-20T21:28:50.6792482Z   ⊘ URL duplicate: https://varberg.se/kulturhuset-komedianten/kalender/2026/februari/2025-10-27-chris-klafford---the-kitchen-session-tour---19-2
+2025-11-20T21:28:50.8379980Z   ⊘ URL duplicate: https://varberg.se/kulturhuset-komedianten/kalender/2026/februari/2025-10-29-​jens-lekman​---26-2
+2025-11-20T21:28:51.1641898Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:28:51.1642736Z     New: "Det är samma åsna, bara med en ny sadel"
+2025-11-20T21:28:51.1643609Z     Existing: "Det är samma åsna, bara med en ny sadel"
+2025-11-20T21:28:51.1644505Z     Date: 2026-02-27 | Venue: Varbergs
+2025-11-20T21:28:51.3382720Z   ⊘ URL duplicate: https://varberg.se/kulturhuset-komedianten/kalender/2026/mars/2025-11-13-​--emil-gittansson-jensen----vi-maste-halla-kontakten--​---12-3
+2025-11-20T21:28:51.5102369Z   ⊘ URL duplicate: https://varberg.se/kulturhuset-komedianten/kalender/2026/mars/2025-10-27-pappa-kapsyl---dinosaurielatar---29-3
+2025-11-20T21:28:51.6693405Z   ⊘ URL duplicate: https://varberg.se/kulturhuset-komedianten/kalender/2025/oktober/2025-05-27-magnus-betner---mellan-oss---17-10
+2025-11-20T21:28:51.8338898Z   ⊘ URL duplicate: https://varberg.se/kulturhuset-komedianten/kalender/2026/november/2025-09-25-eric-clapton-tribute---13-11
+2025-11-20T21:28:51.8340189Z ✓ Efter databas-deduplicering: 1 nya events
+2025-11-20T21:28:51.8340828Z   📊 Rensade bort 49 dubletter
+2025-11-20T21:28:52.0128518Z 
+2025-11-20T21:28:52.0129688Z 🤖 Startar AI-kategorisering och kvalitetsbedömning...
+2025-11-20T21:28:52.0130488Z   📊 Startar AI-kategorisering... [0/1]
+2025-11-20T21:28:52.3542503Z 📊 1 events grupperade i 1 unika eventnamn
+2025-11-20T21:28:52.7400587Z   🤖 AI-kategoriserar: Från jazz till visa med Tellqvist​​...
+2025-11-20T21:28:54.6291419Z      Raw AI response: {
+2025-11-20T21:28:54.6292455Z   "categories": ["Scen", "Barn & Familj"],
+2025-11-20T21:28:54.6292821Z   "scores": {
+2025-11-20T21:28:54.6293052Z     "Scen": 0.9,
+2025-11-20T21:28:54.6293368Z     "Barn & Familj": 0.7
+2025-11-20T21:28:54.6293783Z   }
+2025-11-20T21:28:54.6294105Z }...
+2025-11-20T21:28:54.6295088Z      → Scen, Barn & Familj (Scen: 90%, Barn & Familj: 70%)
+2025-11-20T21:28:54.6295841Z   🤖 AI categorized "Från jazz till visa med Tellqvist​​": Scen, Barn & Familj (1 occasions)
+2025-11-20T21:28:56.6291181Z   ✓ Skippar moderation för betrodd källa: Varbergs Teater
+2025-11-20T21:28:56.6293023Z   ✅ Från jazz till visa med Tellqvist​​... [2025-12-11]
+2025-11-20T21:28:56.6294176Z      Kategorier: Scen, Barn & Familj | Status: published | Score: 100/100
+2025-11-20T21:28:56.6295690Z ✓ Kategorisering och kvalitetsbedömning klar: 1 events
+2025-11-20T21:28:56.6296081Z 
+2025-11-20T21:28:56.6296306Z 🏢 Matchning av arrangörer...
+2025-11-20T21:28:56.6297409Z   📊 Matchar arrangörer... [0/1]
+2025-11-20T21:28:56.8212137Z ✓ Arrangörmatchning klar
+2025-11-20T21:28:56.8212574Z 
+2025-11-20T21:28:56.8212844Z 💾 Sparar till databas...
+2025-11-20T21:28:56.8213416Z   📊 Sparar events till databas... [0/1]
+2025-11-20T21:28:57.8632794Z 
+2025-11-20T21:28:57.8633634Z 📊 Statistik:
+2025-11-20T21:28:57.8634030Z   - 1 auto-publicerade
+2025-11-20T21:28:57.8634664Z   - 0 behöver granskning
+2025-11-20T21:28:57.8634914Z   - 0 markerade som draft
+2025-11-20T21:28:57.8635254Z   - Genomsnittlig kvalitetspoäng: 100/100
+2025-11-20T21:28:58.1183137Z 💾 Saved 49 duplicate logs to database
+2025-11-20T21:28:58.1184191Z   📊 Klar! 1 events importerade (1 auto-publicerade)
+2025-11-20T21:28:58.3036798Z 
+2025-11-20T21:28:58.3037758Z ✅ Import klar!
+2025-11-20T21:28:58.3038099Z 
+2025-11-20T21:28:58.3038129Z 
+2025-11-20T21:28:58.3038413Z   📊 Results for Varbergs Teater:
+2025-11-20T21:28:58.3039682Z      • Imported: 1 new events
+2025-11-20T21:28:58.3040324Z      • Duplicates: 49 skipped
+2025-11-20T21:28:58.3040964Z      • Import time: 17.1s
+2025-11-20T21:28:58.4732151Z   ✅ Updated log entry with status: success
+2025-11-20T21:28:58.4732583Z 
+2025-11-20T21:28:58.4732922Z ============================================================
+2025-11-20T21:28:58.4733595Z 📡 Running: Societén
+2025-11-20T21:28:58.4734444Z 🔗 URL: https://societen.se/kalender/
+2025-11-20T21:28:58.4735125Z ============================================================
+2025-11-20T21:28:58.4735367Z 
+2025-11-20T21:28:58.6517195Z   📝 Created log entry #125
+2025-11-20T21:28:58.6518168Z 🎭 Starting scrape of Societén...
+2025-11-20T21:28:59.1091039Z Error scraping Societén: Error: HTTP 415: Unsupported Media Type
+2025-11-20T21:28:59.1092766Z     at SocietenScraper.fetchHTML (/home/runner/work/ivarberg-admin/ivarberg-admin/src/lib/scrapers/base-scraper.ts:36:13)
+2025-11-20T21:28:59.1093967Z     at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+2025-11-20T21:28:59.1097815Z     at async SocietenScraper.scrape (/home/runner/work/ivarberg-admin/ivarberg-admin/src/lib/scrapers/societen-scraper.ts:16:24)
+2025-11-20T21:28:59.1099053Z     at async main (/home/runner/work/ivarberg-admin/ivarberg-admin/scripts/run-scrapers.ts:123:22)
+2025-11-20T21:28:59.1099912Z   ❌ Error scraping Societén:
+2025-11-20T21:28:59.1100215Z      HTTP 415: Unsupported Media Type
+2025-11-20T21:28:59.1100577Z      Stack trace: Error: HTTP 415: Unsupported Media Type
+2025-11-20T21:28:59.1101242Z          at SocietenScraper.fetchHTML (/home/runner/work/ivarberg-admin/ivarberg-admin/src/lib/scrapers/base-scraper.ts:36:13)
+2025-11-20T21:28:59.1101964Z          at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+2025-11-20T21:28:59.2891686Z   ⏭️  Continuing with next scraper...
+2025-11-20T21:28:59.2892220Z 
+2025-11-20T21:28:59.2892644Z ============================================================
+2025-11-20T21:28:59.2893536Z 📡 Running: Visit Varberg
+2025-11-20T21:28:59.2894842Z 🔗 URL: https://visitvarberg.se/evenemang?limit=500
+2025-11-20T21:28:59.2896037Z ============================================================
+2025-11-20T21:28:59.2896335Z 
+2025-11-20T21:28:59.4822411Z   📝 Created log entry #126
+2025-11-20T21:28:59.4823376Z 🎭 Starting scrape of Visit Varberg...
+2025-11-20T21:29:00.7661815Z 📋 Found 89 event URLs
+2025-11-20T21:29:01.5188658Z   ⊘ Skipped "Babymåleri på biblioteket" - all dates in the past
+2025-11-20T21:29:02.2741055Z   ⊘ Skipped "Gårdsmys söder om Varberg - hitta stämningen inför advent" - all dates in the past
+2025-11-20T21:29:03.0193068Z   ⊘ Skipped "Stina Hellberg Agback Trio" - all dates in the past
+2025-11-20T21:29:03.7488225Z   ✓ Minibokmässa: All världens språk (1 occasion)
+2025-11-20T21:29:04.4820907Z   ✓ Warberg IC Herr - Visby IBK (1 occasion)
+2025-11-20T21:29:05.2244691Z   ✓ Kransbindning & Vinprovning (1 occasion)
+2025-11-20T21:29:05.9673462Z   ✓ Bob Hansson: Snällast vinner- en invasion av hopp! (1 occasion)
+2025-11-20T21:29:06.7420251Z   ✓ Best of the Boss - Bruce Springsteen Tribute (1 occasion)
+2025-11-20T21:29:07.5334828Z   ✓ Klas Hallberg - Att leva innan man dör (1 occasion)
+2025-11-20T21:29:08.3378369Z   ✓ Julmarknad på Obbhults gård (1 occasion)
+2025-11-20T21:29:09.0749154Z   ✓ Julmarknad på Villa Stenhuset (1 occasion)
+2025-11-20T21:29:09.8044139Z   ✓ Punkten. Hur kom den till och hur fick den just den storleken? (1 occasion)
+2025-11-20T21:29:10.5766047Z   ✓ Författarföredrag med Andreas Karlsson (1 occasion)
+2025-11-20T21:29:11.3323384Z   ✓ Föreläsning: Att försvinna sig - en berättelse om anorexi (1 occasion)
+2025-11-20T21:29:12.0652194Z   ✓ Unga riksspelmän och lokala berättelser (1 occasion)
+2025-11-20T21:29:12.8398045Z   ✓ Ummikos (1 occasion)
+2025-11-20T21:29:13.6235625Z   ✓ ELZ (fd Crying Day Care Choir) (1 occasion)
+2025-11-20T21:29:14.3782480Z   ✓ Julmarknad på naturum Getterön 2026 (2 occasions)
+2025-11-20T21:29:15.1162466Z   ✓ Livemusik - TRIO DE LUXE (2 occasions)
+2025-11-20T21:29:15.8740239Z   ✓ Afternoon Tea @Gården vid Bron (2 occasions)
+2025-11-20T21:29:16.6259680Z   ✓ Mörkervandringar (4 occasions)
+2025-11-20T21:29:17.3923554Z   ✓ Tunnelseende (8 occasions)
+2025-11-20T21:29:18.1630864Z   ✓ Utställning om Fladdermusprojektet 2023-2025 i Varbergs kommun (11 occasions)
+2025-11-20T21:29:18.9204206Z   ✓ Varbergs konstklubb - utställning (14 occasions)
+2025-11-20T21:29:19.6904920Z   ✓ Trädens möjligheter (22 occasions)
+2025-11-20T21:29:20.4978400Z   ⚠️  Long-term event: limited from 40 to 40 occasions (next 60 days)
+2025-11-20T21:29:20.4979224Z   ✓ Do a LongwaveRadioRun – wherever you are (40 occasions)
+2025-11-20T21:29:21.2735474Z   ⚠️  Long-term event: limited from 45 to 45 occasions (next 60 days)
+2025-11-20T21:29:21.2767526Z   ✓ Utställning med Fredrik Strid på Varbergs konsthall (45 occasions)
+2025-11-20T21:29:22.0550201Z   ⚠️  Long-term event: limited from 177 to 45 occasions (next 60 days)
+2025-11-20T21:29:22.0579754Z   ✓ Bockstensmannen (45 occasions)
+2025-11-20T21:29:22.8661781Z   ⚠️  Long-term event: limited from 183 to 51 occasions (next 60 days)
+2025-11-20T21:29:22.8695026Z   ✓ Borgen – rum för medeltidslek (51 occasions)
+2025-11-20T21:29:23.6218186Z   ✓ Tobbe Trollkarl ”30 år i barnens tjänst” - jubileumsshowen! (1 occasion)
+2025-11-20T21:29:24.3791348Z   ✓ Grimeton Lantmäns lilla julmarknad (1 occasion)
+2025-11-20T21:29:25.1475540Z   ✓ Julmarknad på Norvalla IP (1 occasion)
+2025-11-20T21:29:25.8757029Z   ✓ Julmarknad Sibbarps bygdegård (1 occasion)
+2025-11-20T21:29:26.6146351Z   ✓ En magisk julmarknad på Varbergs fästning (1 occasion)
+2025-11-20T21:29:27.3713475Z   ✓ Virkdag med Moa (1 occasion)
+2025-11-20T21:29:28.1067846Z   ✓ Greczula (1 occasion)
+2025-11-20T21:29:28.8390487Z   ✓ Julmarknad på Sonjas veranda (2 occasions)
+2025-11-20T21:29:29.6176895Z   ✓ The Dudes Christmas (1 occasion)
+2025-11-20T21:29:30.3618742Z   ✓ UF-julmässa (1 occasion)
+2025-11-20T21:29:31.0926374Z   ✓ UF-julmässa 2026 (1 occasion)
+2025-11-20T21:29:31.8178091Z   ✓ Juldoppet (1 occasion)
+2025-11-20T21:29:32.5521705Z   ✓ Julmarknad och tomtepromenad i Skällinge (1 occasion)
+2025-11-20T21:29:33.2878826Z   ✓ Första advent på Varbergs torg (1 occasion)
+2025-11-20T21:29:34.0179361Z   ✓ Jul i stan med Street Bourbon Band (1 occasion)
+2025-11-20T21:29:34.7514870Z   ✓ Julmarknad @Gården vid Bron 30/11 (1 occasion)
+2025-11-20T21:29:35.4828918Z   ✓ Jul i stan med Street Bourbon Band (1 occasion)
+2025-11-20T21:29:36.2395936Z   ✓ Workshop: Brillmans brädor (1 occasion)
+2025-11-20T21:29:37.0391252Z   ✓ Mord till Maten - Mardrömmen i Chicago (1 occasion)
+2025-11-20T21:29:37.7737182Z   ✓ Kulturquiz med Pär Andin (1 occasion)
+2025-11-20T21:29:38.5041222Z   ✓ Julsångs-afterwork (1 occasion)
+2025-11-20T21:29:39.2472645Z   ✓ Varberg för musikhjälpen (1 occasion)
+2025-11-20T21:29:39.9753154Z   ✓ Adventsmaker - En smakpromenad i Varberg (1 occasion)
+2025-11-20T21:29:40.7152867Z   ✓ Julform julmarknad (1 occasion)
+2025-11-20T21:29:41.4417842Z   ✓ Svansjön (1 occasion)
+2025-11-20T21:29:42.2042394Z   ✓ Julmarknad på Studio Terra (Varbergs tågstation) (3 occasions)
+2025-11-20T21:29:42.9640787Z   ✓ Andra advent med vinterbio på Varbergs torg (1 occasion)
+2025-11-20T21:29:43.7052880Z   ✓ Julmarknad med julpromenad (2 occasions)
+2025-11-20T21:29:44.4726044Z   ✓ Julefrid - konsert med Karin Dahlberg och Catharina Löfqvist (2 occasions)
+2025-11-20T21:29:45.2041428Z   ✓ Adventsmys @Gården vid Bron (3 occasions)
+2025-11-20T21:29:45.9600641Z   ✓ Öppen föreläsning: Tobias Persson (1 occasion)
+2025-11-20T21:29:46.7023762Z   ✓ Luciafirande (1 occasion)
+2025-11-20T21:29:47.4365388Z   ✓ Rydell & Quick - årets julfest (1 occasion)
+2025-11-20T21:29:48.2010683Z   ✓ Bebisföreställning: Gro (2 occasions)
+2025-11-20T21:29:48.9326069Z   ✓ Julkonsert med Peter Jöback (1 occasion)
+2025-11-20T21:29:49.6734152Z   ✓ Bengtsson & Bengtzing (1 occasion)
+2025-11-20T21:29:50.4637207Z   ✓ Christmas with Elvis (1 occasion)
+2025-11-20T21:29:51.2355799Z   ✓ Varbergs Lucia besöker naturum Getterön (1 occasion)
+2025-11-20T21:29:51.9823074Z   ✓ Julmarknad på Öströö Fårfarm (1 occasion)
+2025-11-20T21:29:52.7331784Z   ✓ Tredje advent på Varbergs torg (1 occasion)
+2025-11-20T21:29:53.4833733Z   ✓ Kom in i värmen - Julkonsert med Octava Gospel (1 occasion)
+2025-11-20T21:29:54.2348220Z   ✓ Jul på Rosenfred 2025 (2 occasions)
+2025-11-20T21:29:54.9798462Z   ✓ Onsdagslive - Lalles vänner (1 occasion)
+2025-11-20T21:29:55.7039763Z   ✓ West of Eden - Celtic Christmas (1 occasion)
+2025-11-20T21:29:56.4334942Z   ✓ Julkonsert med Viktor Norén & Mark Levengood (1 occasion)
+2025-11-20T21:29:57.1903327Z   ✓ Fjärde advent i Galleria Trädgården - träffa tomten (2 occasions)
+2025-11-20T21:29:57.9657278Z   ✓ Julsång i centrum (1 occasion)
+2025-11-20T21:29:58.6996619Z   ✓ Konsert med Staffankören på Världsarvet Grimeton (1 occasion)
+2025-11-20T21:29:59.4422531Z   ✓ Jullov på Stättared (8 occasions)
+2025-11-20T21:30:00.1919787Z   ✓ Nyårsfirande på Varbergs torg (1 occasion)
+2025-11-20T21:30:00.9283370Z   ✓ Quiz på Solviken (1 occasion)
+2025-11-20T21:30:01.6928688Z   ✓ Grill, Quiz och Rockkompaniet på Solviken (1 occasion)
+2025-11-20T21:30:02.5218391Z   ✓ Bocksten TrailRun Winter (1 occasion)
+2025-11-20T21:30:03.2827086Z   ✓ Jens Lekman (1 occasion)
+2025-11-20T21:30:04.1130394Z   ✓ Emil Gittansson Jensen- Vi måste hålla kontakten (1 occasion)
+2025-11-20T21:30:04.8779853Z   ✓ Att lyfta sig själv och andra - Tomas Gunnarsson (1 occasion)
+2025-11-20T21:30:05.6285497Z   ✓ Korslagda (1 occasion)
+2025-11-20T21:30:06.3896435Z   ✓ Bocksten TrailRun (1 occasion)
+2025-11-20T21:30:07.1357013Z   ✓ The Ark turné 2026 (1 occasion)
+2025-11-20T21:30:07.8895219Z   ✓ Varberg Halvmarathon 2026 (1 occasion)
+2025-11-20T21:30:07.8896032Z 🎉 Scraping complete! Found 337 total events (including multiple occasions)
+2025-11-20T21:30:07.8896590Z   ✓ Found 337 events (68.6s)
+2025-11-20T21:30:07.8896797Z 
+2025-11-20T21:30:07.8896979Z 📦 Importerar 337 events...
+2025-11-20T21:30:07.8897314Z   📊 Hittade 337 events
+2025-11-20T21:30:08.2412810Z   📊 Rensar interna dubletter...
+2025-11-20T21:30:08.4355372Z   ⊘ Intern dublett: Mörkervandringar
+2025-11-20T21:30:08.4355969Z   ⊘ Intern dublett: Tunnelseende
+2025-11-20T21:30:08.4356488Z   ⊘ Intern dublett: Tunnelseende
+2025-11-20T21:30:08.4357624Z   ⊘ Intern dublett: Tunnelseende
+2025-11-20T21:30:08.4358359Z   ⊘ Intern dublett: Tunnelseende
+2025-11-20T21:30:08.4359265Z   ⊘ Intern dublett: Utställning om Fladdermusprojektet 2023-2025 i Varbergs kommun
+2025-11-20T21:30:08.4360325Z   ⊘ Intern dublett: Jul i stan med Street Bourbon Band
+2025-11-20T21:30:08.4360873Z   ⊘ Intern dublett: Julmarknad med julpromenad
+2025-11-20T21:30:08.4361826Z   ⊘ Intern dublett: Julefrid - konsert med Karin Dahlberg och Catharina Löfqvist
+2025-11-20T21:30:08.4362565Z   ⊘ Intern dublett: Bebisföreställning: Gro
+2025-11-20T21:30:08.4363791Z ✓ Efter intern deduplicering: 327 unika events
+2025-11-20T21:30:08.4364708Z   📊 Kontrollerar mot databas... [0/327]
+2025-11-20T21:30:08.8053886Z   ⊘ URL duplicate: https://visitvarberg.se/evenemang/tillfalle?eventId=DpeD7gmlRDIgmO3eq3Eq
+2025-11-20T21:30:08.9548779Z   ⊘ URL duplicate: https://visitvarberg.se/evenemang/tillfalle?eventId=6JMom1aG8qtJAoXb57dA
+2025-11-20T21:30:09.1072296Z   ⊘ URL duplicate: https://visitvarberg.se/evenemang/tillfalle?eventId=5JRgQ7QRGgcyPDO9y6br
+2025-11-20T21:30:09.4465449Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:30:09.4466021Z     New: "Bob Hansson: Snällast vinner- en invasion av hopp!"
+2025-11-20T21:30:09.4466620Z     Existing: "Bob Hansson- Snällast vinner, en invasion av Hopp!"
+2025-11-20T21:30:09.4467063Z     Date: 2025-11-22 | Venue: Varbergs
+2025-11-20T21:30:09.7587779Z   ⊘ Fuzzy duplicate (93% match):
+2025-11-20T21:30:09.7588286Z     New: "Best of the Boss - Bruce Springsteen Tribute"
+2025-11-20T21:30:09.7588887Z     Existing: "Best Of The Boss – The Bruce Springsteen Tribute"
+2025-11-20T21:30:09.7589419Z     Date: 2025-11-22 | Venue: Nöjeshallen
+2025-11-20T21:30:09.9292252Z   ⊘ URL duplicate: https://visitvarberg.se/evenemang/tillfalle?eventId=g6M6yOjGeMS9NNOXeNAN
+2025-11-20T21:30:10.0899522Z   ⊘ URL duplicate: https://visitvarberg.se/evenemang/tillfalle?eventId=DpDAGGgGn9C3yjlnQ25P
+2025-11-20T21:30:10.2483637Z   ⊘ URL duplicate: https://visitvarberg.se/evenemang/tillfalle?eventId=1JljzA6j0GsnRAJpZOen
+2025-11-20T21:30:10.4043489Z   ⊘ URL duplicate: https://visitvarberg.se/evenemang/tillfalle?eventId=EO58Jq79m6Sv8eA4POQD
+2025-11-20T21:30:10.6124209Z   ⊘ URL duplicate: https://visitvarberg.se/evenemang/tillfalle?eventId=JvDEyOx950fBBPmAnEBZ
+2025-11-20T21:30:10.8026780Z   ⊘ URL duplicate: https://visitvarberg.se/evenemang/tillfalle?eventId=n8oOJoBbmlSPkrombo1l
+2025-11-20T21:30:10.9722874Z   ⊘ URL duplicate: https://visitvarberg.se/evenemang/tillfalle?eventId=ZMaR5Pxvq4tOR7y8Ebl2
+2025-11-20T21:30:11.1338349Z   ⊘ URL duplicate: https://visitvarberg.se/evenemang/tillfalle?eventId=ozNyM2yZn8IaXXMXQ6dO
+2025-11-20T21:30:11.4775641Z   ⊘ Fuzzy duplicate (87% match):
+2025-11-20T21:30:11.4776207Z     New: "ELZ (fd Crying Day Care Choir)"
+2025-11-20T21:30:11.4776688Z     Existing: "Crying Day Care Choir"
+2025-11-20T21:30:11.4777172Z     Date: 2025-11-27 | Venue: Varbergs
+2025-11-20T21:30:11.7778574Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:30:11.7779358Z     New: "Julmarknad på naturum Getterön 2026"
+2025-11-20T21:30:11.7780087Z     Existing: "Julmarknad på naturum Getterön 2026"
+2025-11-20T21:30:11.7780632Z     Date: 2025-11-22 | Venue: Naturum
+2025-11-20T21:30:12.0942506Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:30:12.0943362Z     New: "Julmarknad på naturum Getterön 2026"
+2025-11-20T21:30:12.0943984Z     Existing: "Julmarknad på naturum Getterön 2026"
+2025-11-20T21:30:12.0944731Z     Date: 2025-11-23 | Venue: Naturum
+2025-11-20T21:30:12.4303901Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:30:12.4304814Z     New: "Livemusik - TRIO DE LUXE"
+2025-11-20T21:30:12.4305252Z     Existing: "Livemusik - TRIO DE LUXE"
+2025-11-20T21:30:12.4305633Z     Date: 2025-11-27 | Venue: Krabbes
+2025-11-20T21:30:12.7424069Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:30:12.7424958Z     New: "Livemusik - TRIO DE LUXE"
+2025-11-20T21:30:12.7425560Z     Existing: "Livemusik - TRIO DE LUXE"
+2025-11-20T21:30:12.7426055Z     Date: 2025-12-18 | Venue: Krabbes
+2025-11-20T21:30:13.0694776Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:30:13.0698773Z     New: "Afternoon Tea @Gården vid Bron"
+2025-11-20T21:30:13.0699427Z     Existing: "Afternoon Tea @Gården vid Bron"
+2025-11-20T21:30:13.0699843Z     Date: 2025-12-04 | Venue: Gården
+2025-11-20T21:30:13.4008528Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:30:13.4009393Z     New: "Afternoon Tea @Gården vid Bron"
+2025-11-20T21:30:13.4010266Z     Existing: "Afternoon Tea @Gården vid Bron"
+2025-11-20T21:30:13.4010993Z     Date: 2025-12-18 | Venue: Gården
+2025-11-20T21:30:13.7553071Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:30:13.7553806Z     New: "Mörkervandringar"
+2025-11-20T21:30:13.7554729Z     Existing: "Mörkervandringar"
+2025-11-20T21:30:13.7555353Z     Date: 2025-11-22 | Venue: Hallands
+2025-11-20T21:30:14.1273358Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:30:14.1274051Z     New: "Mörkervandringar"
+2025-11-20T21:30:14.1275019Z     Existing: "Mörkervandringar"
+2025-11-20T21:30:14.1275520Z     Date: 2025-11-27 | Venue: Hallands
+2025-11-20T21:30:14.4402407Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:30:14.4403076Z     New: "Mörkervandringar"
+2025-11-20T21:30:14.4403726Z     Existing: "Mörkervandringar"
+2025-11-20T21:30:14.4404213Z     Date: 2025-11-30 | Venue: Hallands
+2025-11-20T21:30:14.8739279Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:30:14.8739931Z     New: "Tunnelseende"
+2025-11-20T21:30:14.8740398Z     Existing: "Tunnelseende"
+2025-11-20T21:30:14.8740980Z     Date: 2025-11-22 | Venue: Kulturhuset
+2025-11-20T21:30:15.1916366Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:30:15.1917013Z     New: "Tunnelseende"
+2025-11-20T21:30:15.1917574Z     Existing: "Tunnelseende"
+2025-11-20T21:30:15.1918163Z     Date: 2025-11-23 | Venue: Kulturhuset
+2025-11-20T21:30:15.5246140Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:30:15.5246774Z     New: "Tunnelseende"
+2025-11-20T21:30:15.5247281Z     Existing: "Tunnelseende"
+2025-11-20T21:30:15.5248734Z     Date: 2025-11-27 | Venue: Kulturhuset
+2025-11-20T21:30:15.8242953Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:30:15.8243585Z     New: "Tunnelseende"
+2025-11-20T21:30:15.8244027Z     Existing: "Tunnelseende"
+2025-11-20T21:30:15.8244818Z     Date: 2025-11-28 | Venue: Kulturhuset
+2025-11-20T21:30:16.1296287Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:30:16.1297770Z     New: "Utställning om Fladdermusprojektet 2023-2025 i Varbergs kommun"
+2025-11-20T21:30:16.1299257Z     Existing: "Utställning om Fladdermusprojektet 2023-2025 i Varbergs kommun"
+2025-11-20T21:30:16.1301811Z     Date: 2025-11-21 | Venue: Kulturhuset
+2025-11-20T21:30:16.4385410Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:30:16.4386402Z     New: "Utställning om Fladdermusprojektet 2023-2025 i Varbergs kommun"
+2025-11-20T21:30:16.4387472Z     Existing: "Utställning om Fladdermusprojektet 2023-2025 i Varbergs kommun"
+2025-11-20T21:30:16.4388193Z     Date: 2025-11-22 | Venue: Kulturhuset
+2025-11-20T21:30:16.7713507Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:30:16.7714818Z     New: "Utställning om Fladdermusprojektet 2023-2025 i Varbergs kommun"
+2025-11-20T21:30:16.7716115Z     Existing: "Utställning om Fladdermusprojektet 2023-2025 i Varbergs kommun"
+2025-11-20T21:30:16.7716933Z     Date: 2025-11-23 | Venue: Kulturhuset
+2025-11-20T21:30:17.1173516Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:30:17.1174898Z     New: "Utställning om Fladdermusprojektet 2023-2025 i Varbergs kommun"
+2025-11-20T21:30:17.1176030Z     Existing: "Utställning om Fladdermusprojektet 2023-2025 i Varbergs kommun"
+2025-11-20T21:30:17.1176608Z     Date: 2025-11-24 | Venue: Kulturhuset
+2025-11-20T21:30:17.4294551Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:30:17.4295590Z     New: "Utställning om Fladdermusprojektet 2023-2025 i Varbergs kommun"
+2025-11-20T21:30:17.4296540Z     Existing: "Utställning om Fladdermusprojektet 2023-2025 i Varbergs kommun"
+2025-11-20T21:30:17.4297211Z     Date: 2025-11-25 | Venue: Kulturhuset
+2025-11-20T21:30:17.7560588Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:30:17.7561828Z     New: "Utställning om Fladdermusprojektet 2023-2025 i Varbergs kommun"
+2025-11-20T21:30:17.7563785Z     Existing: "Utställning om Fladdermusprojektet 2023-2025 i Varbergs kommun"
+2025-11-20T21:30:17.7564883Z     Date: 2025-11-26 | Venue: Kulturhuset
+2025-11-20T21:30:18.0846246Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:30:18.0847446Z     New: "Utställning om Fladdermusprojektet 2023-2025 i Varbergs kommun"
+2025-11-20T21:30:18.0848882Z     Existing: "Utställning om Fladdermusprojektet 2023-2025 i Varbergs kommun"
+2025-11-20T21:30:18.0849913Z     Date: 2025-11-27 | Venue: Kulturhuset
+2025-11-20T21:30:18.4379251Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:30:18.4380386Z     New: "Utställning om Fladdermusprojektet 2023-2025 i Varbergs kommun"
+2025-11-20T21:30:18.4381718Z     Existing: "Utställning om Fladdermusprojektet 2023-2025 i Varbergs kommun"
+2025-11-20T21:30:18.4382426Z     Date: 2025-11-28 | Venue: Kulturhuset
+2025-11-20T21:30:18.7616848Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:30:18.7617916Z     New: "Utställning om Fladdermusprojektet 2023-2025 i Varbergs kommun"
+2025-11-20T21:30:18.7619110Z     Existing: "Utställning om Fladdermusprojektet 2023-2025 i Varbergs kommun"
+2025-11-20T21:30:18.7619784Z     Date: 2025-11-29 | Venue: Kulturhuset
+2025-11-20T21:30:19.0647137Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:30:19.0648449Z     New: "Utställning om Fladdermusprojektet 2023-2025 i Varbergs kommun"
+2025-11-20T21:30:19.0649640Z     Existing: "Utställning om Fladdermusprojektet 2023-2025 i Varbergs kommun"
+2025-11-20T21:30:19.0650409Z     Date: 2025-11-30 | Venue: Kulturhuset
+2025-11-20T21:30:19.3741022Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:30:19.3741632Z     New: "Varbergs konstklubb - utställning"
+2025-11-20T21:30:19.3742219Z     Existing: "Varbergs konstklubb - utställning"
+2025-11-20T21:30:19.3742693Z     Date: 2025-11-21 | Venue: Varberg
+2025-11-20T21:30:19.7452984Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:30:19.7453692Z     New: "Varbergs konstklubb - utställning"
+2025-11-20T21:30:19.7454667Z     Existing: "Varbergs konstklubb - utställning"
+2025-11-20T21:30:19.7455223Z     Date: 2025-11-22 | Venue: Varberg
+2025-11-20T21:30:20.0833967Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:30:20.0835123Z     New: "Varbergs konstklubb - utställning"
+2025-11-20T21:30:20.0836011Z     Existing: "Varbergs konstklubb - utställning"
+2025-11-20T21:30:20.0836735Z     Date: 2025-11-24 | Venue: Varberg
+2025-11-20T21:30:20.4225958Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:30:20.4226611Z     New: "Varbergs konstklubb - utställning"
+2025-11-20T21:30:20.4227136Z     Existing: "Varbergs konstklubb - utställning"
+2025-11-20T21:30:20.4227571Z     Date: 2025-11-25 | Venue: Varberg
+2025-11-20T21:30:20.7486911Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:30:20.7487808Z     New: "Varbergs konstklubb - utställning"
+2025-11-20T21:30:20.7488644Z     Existing: "Varbergs konstklubb - utställning"
+2025-11-20T21:30:20.7489370Z     Date: 2025-11-26 | Venue: Varberg
+2025-11-20T21:30:21.0491933Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:30:21.0492624Z     New: "Varbergs konstklubb - utställning"
+2025-11-20T21:30:21.0493274Z     Existing: "Varbergs konstklubb - utställning"
+2025-11-20T21:30:21.0493800Z     Date: 2025-11-27 | Venue: Varberg
+2025-11-20T21:30:21.3858548Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:30:21.3860566Z     New: "Varbergs konstklubb - utställning"
+2025-11-20T21:30:21.3861292Z     Existing: "Varbergs konstklubb - utställning"
+2025-11-20T21:30:21.3861974Z     Date: 2025-11-28 | Venue: Varberg
+2025-11-20T21:30:21.6870763Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:30:21.6871560Z     New: "Varbergs konstklubb - utställning"
+2025-11-20T21:30:21.6872348Z     Existing: "Varbergs konstklubb - utställning"
+2025-11-20T21:30:21.6872992Z     Date: 2025-11-29 | Venue: Varberg
+2025-11-20T21:30:22.0409638Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:30:22.0410624Z     New: "Varbergs konstklubb - utställning"
+2025-11-20T21:30:22.0411605Z     Existing: "Varbergs konstklubb - utställning"
+2025-11-20T21:30:22.0412867Z     Date: 2025-12-01 | Venue: Varberg
+2025-11-20T21:30:22.3479214Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:30:22.3480099Z     New: "Varbergs konstklubb - utställning"
+2025-11-20T21:30:22.3480911Z     Existing: "Varbergs konstklubb - utställning"
+2025-11-20T21:30:22.3481490Z     Date: 2025-12-02 | Venue: Varberg
+2025-11-20T21:30:22.6699609Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:30:22.6700393Z     New: "Varbergs konstklubb - utställning"
+2025-11-20T21:30:22.6701173Z     Existing: "Varbergs konstklubb - utställning"
+2025-11-20T21:30:22.6701809Z     Date: 2025-12-03 | Venue: Varberg
+2025-11-20T21:30:22.9949290Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:30:22.9950075Z     New: "Varbergs konstklubb - utställning"
+2025-11-20T21:30:22.9950860Z     Existing: "Varbergs konstklubb - utställning"
+2025-11-20T21:30:22.9951505Z     Date: 2025-12-04 | Venue: Varberg
+2025-11-20T21:30:23.3062067Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:30:23.3062796Z     New: "Varbergs konstklubb - utställning"
+2025-11-20T21:30:23.3063433Z     Existing: "Varbergs konstklubb - utställning"
+2025-11-20T21:30:23.3063916Z     Date: 2025-12-05 | Venue: Varberg
+2025-11-20T21:30:23.6391609Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:30:23.6392500Z     New: "Varbergs konstklubb - utställning"
+2025-11-20T21:30:23.6393390Z     Existing: "Varbergs konstklubb - utställning"
+2025-11-20T21:30:23.6394112Z     Date: 2025-12-06 | Venue: Varberg
+2025-11-20T21:30:23.9500704Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:30:23.9501186Z     New: "Trädens möjligheter"
+2025-11-20T21:30:23.9501567Z     Existing: "Trädens möjligheter"
+2025-11-20T21:30:23.9501914Z     Date: 2025-11-21 | Venue: Derome
+2025-11-20T21:30:24.2529856Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:30:24.2530572Z     New: "Trädens möjligheter"
+2025-11-20T21:30:24.2531294Z     Existing: "Trädens möjligheter"
+2025-11-20T21:30:24.2532493Z     Date: 2025-11-26 | Venue: Derome
+2025-11-20T21:30:24.5606935Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:30:24.5607652Z     New: "Trädens möjligheter"
+2025-11-20T21:30:24.5608271Z     Existing: "Trädens möjligheter"
+2025-11-20T21:30:24.5608767Z     Date: 2025-11-27 | Venue: Derome
+2025-11-20T21:30:24.8872789Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:30:24.8873468Z     New: "Trädens möjligheter"
+2025-11-20T21:30:24.8874036Z     Existing: "Trädens möjligheter"
+2025-11-20T21:30:24.8874849Z     Date: 2025-11-28 | Venue: Derome
+2025-11-20T21:30:25.2039522Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:30:25.2040260Z     New: "Trädens möjligheter"
+2025-11-20T21:30:25.2040891Z     Existing: "Trädens möjligheter"
+2025-11-20T21:30:25.2041431Z     Date: 2025-12-03 | Venue: Derome
+2025-11-20T21:30:25.5095204Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:30:25.5095915Z     New: "Trädens möjligheter"
+2025-11-20T21:30:25.5096612Z     Existing: "Trädens möjligheter"
+2025-11-20T21:30:25.5097178Z     Date: 2025-12-04 | Venue: Derome
+2025-11-20T21:30:25.8337711Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:30:25.8338401Z     New: "Trädens möjligheter"
+2025-11-20T21:30:25.8339470Z     Existing: "Trädens möjligheter"
+2025-11-20T21:30:25.8340022Z     Date: 2025-12-05 | Venue: Derome
+2025-11-20T21:30:26.1595193Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:30:26.1595866Z     New: "Trädens möjligheter"
+2025-11-20T21:30:26.1596449Z     Existing: "Trädens möjligheter"
+2025-11-20T21:30:26.1596938Z     Date: 2025-12-10 | Venue: Derome
+2025-11-20T21:30:26.4910505Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:30:26.4910995Z     New: "Trädens möjligheter"
+2025-11-20T21:30:26.4911398Z     Existing: "Trädens möjligheter"
+2025-11-20T21:30:26.4911759Z     Date: 2025-12-11 | Venue: Derome
+2025-11-20T21:30:26.8056126Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:30:26.8056822Z     New: "Trädens möjligheter"
+2025-11-20T21:30:26.8057380Z     Existing: "Trädens möjligheter"
+2025-11-20T21:30:26.8057991Z     Date: 2025-12-12 | Venue: Derome
+2025-11-20T21:30:27.1535229Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:30:27.1535902Z     New: "Trädens möjligheter"
+2025-11-20T21:30:27.1536518Z     Existing: "Trädens möjligheter"
+2025-11-20T21:30:27.1536990Z     Date: 2025-12-17 | Venue: Derome
+2025-11-20T21:30:27.5252228Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:30:27.5252946Z     New: "Trädens möjligheter"
+2025-11-20T21:30:27.5253615Z     Existing: "Trädens möjligheter"
+2025-11-20T21:30:27.5254128Z     Date: 2025-12-18 | Venue: Derome
+2025-11-20T21:30:27.8357681Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:30:27.8358342Z     New: "Trädens möjligheter"
+2025-11-20T21:30:27.8358885Z     Existing: "Trädens möjligheter"
+2025-11-20T21:30:27.8359358Z     Date: 2025-12-19 | Venue: Derome
+2025-11-20T21:30:28.1642662Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:30:28.1643412Z     New: "Trädens möjligheter"
+2025-11-20T21:30:28.1643970Z     Existing: "Trädens möjligheter"
+2025-11-20T21:30:28.1645337Z     Date: 2025-12-24 | Venue: Derome
+2025-11-20T21:30:28.5074622Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:30:28.5075342Z     New: "Trädens möjligheter"
+2025-11-20T21:30:28.5075956Z     Existing: "Trädens möjligheter"
+2025-11-20T21:30:28.5076499Z     Date: 2025-12-25 | Venue: Derome
+2025-11-20T21:30:28.8687287Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:30:28.8687959Z     New: "Trädens möjligheter"
+2025-11-20T21:30:28.8688553Z     Existing: "Trädens möjligheter"
+2025-11-20T21:30:28.8689021Z     Date: 2025-12-26 | Venue: Derome
+2025-11-20T21:30:29.1693371Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:30:29.1694175Z     New: "Trädens möjligheter"
+2025-11-20T21:30:29.1695083Z     Existing: "Trädens möjligheter"
+2025-11-20T21:30:29.1695604Z     Date: 2025-12-31 | Venue: Derome
+2025-11-20T21:30:29.4883133Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:30:29.4883810Z     New: "Trädens möjligheter"
+2025-11-20T21:30:29.4884754Z     Existing: "Trädens möjligheter"
+2025-11-20T21:30:29.4885312Z     Date: 2026-01-01 | Venue: Derome
+2025-11-20T21:30:29.8208765Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:30:29.8209454Z     New: "Trädens möjligheter"
+2025-11-20T21:30:29.8210124Z     Existing: "Trädens möjligheter"
+2025-11-20T21:30:29.8210650Z     Date: 2026-01-02 | Venue: Derome
+2025-11-20T21:30:30.1241653Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:30:30.1242180Z     New: "Trädens möjligheter"
+2025-11-20T21:30:30.1242631Z     Existing: "Trädens möjligheter"
+2025-11-20T21:30:30.1243040Z     Date: 2026-01-07 | Venue: Derome
+2025-11-20T21:30:30.7972458Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:30:30.7972939Z     New: "Trädens möjligheter"
+2025-11-20T21:30:30.7973339Z     Existing: "Trädens möjligheter"
+2025-11-20T21:30:30.7973702Z     Date: 2026-01-08 | Venue: Derome
+2025-11-20T21:30:31.1064486Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:30:31.1065257Z     New: "Trädens möjligheter"
+2025-11-20T21:30:31.1065809Z     Existing: "Trädens möjligheter"
+2025-11-20T21:30:31.1066301Z     Date: 2026-01-09 | Venue: Derome
+2025-11-20T21:30:31.4215663Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:30:31.4216628Z     New: "Do a LongwaveRadioRun – wherever you are"
+2025-11-20T21:30:31.4218121Z     Existing: "Do a LongwaveRadioRun – wherever you are"
+2025-11-20T21:30:31.4218888Z     Date: 2025-11-21 | Venue: World
+2025-11-20T21:30:31.7284995Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:30:31.7285758Z     New: "Do a LongwaveRadioRun – wherever you are"
+2025-11-20T21:30:31.7286513Z     Existing: "Do a LongwaveRadioRun – wherever you are"
+2025-11-20T21:30:31.7287084Z     Date: 2025-11-22 | Venue: World
+2025-11-20T21:30:32.0261912Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:30:32.0262723Z     New: "Do a LongwaveRadioRun – wherever you are"
+2025-11-20T21:30:32.0263486Z     Existing: "Do a LongwaveRadioRun – wherever you are"
+2025-11-20T21:30:32.0264055Z     Date: 2025-11-23 | Venue: World
+2025-11-20T21:30:32.3411157Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:30:32.3411930Z     New: "Do a LongwaveRadioRun – wherever you are"
+2025-11-20T21:30:32.3412741Z     Existing: "Do a LongwaveRadioRun – wherever you are"
+2025-11-20T21:30:32.3413345Z     Date: 2025-11-24 | Venue: World
+2025-11-20T21:30:32.6683064Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:30:32.6683947Z     New: "Do a LongwaveRadioRun – wherever you are"
+2025-11-20T21:30:32.6685156Z     Existing: "Do a LongwaveRadioRun – wherever you are"
+2025-11-20T21:30:32.6685761Z     Date: 2025-11-25 | Venue: World
+2025-11-20T21:30:32.9886339Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:30:32.9887472Z     New: "Do a LongwaveRadioRun – wherever you are"
+2025-11-20T21:30:32.9888379Z     Existing: "Do a LongwaveRadioRun – wherever you are"
+2025-11-20T21:30:32.9888975Z     Date: 2025-11-26 | Venue: World
+2025-11-20T21:30:33.2963902Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:30:33.2964789Z     New: "Do a LongwaveRadioRun – wherever you are"
+2025-11-20T21:30:33.2965491Z     Existing: "Do a LongwaveRadioRun – wherever you are"
+2025-11-20T21:30:33.2966344Z     Date: 2025-11-27 | Venue: World
+2025-11-20T21:30:33.5968491Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:30:33.5969039Z     New: "Do a LongwaveRadioRun – wherever you are"
+2025-11-20T21:30:33.5969570Z     Existing: "Do a LongwaveRadioRun – wherever you are"
+2025-11-20T21:30:33.5969974Z     Date: 2025-11-28 | Venue: World
+2025-11-20T21:30:33.8980589Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:30:33.8981325Z     New: "Do a LongwaveRadioRun – wherever you are"
+2025-11-20T21:30:33.8982029Z     Existing: "Do a LongwaveRadioRun – wherever you are"
+2025-11-20T21:30:33.8982569Z     Date: 2025-11-29 | Venue: World
+2025-11-20T21:30:34.1992617Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:30:34.1993106Z     New: "Do a LongwaveRadioRun – wherever you are"
+2025-11-20T21:30:34.1993554Z     Existing: "Do a LongwaveRadioRun – wherever you are"
+2025-11-20T21:30:34.1993893Z     Date: 2025-11-30 | Venue: World
+2025-11-20T21:30:34.5389493Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:30:34.5390271Z     New: "Do a LongwaveRadioRun – wherever you are"
+2025-11-20T21:30:34.5391134Z     Existing: "Do a LongwaveRadioRun – wherever you are"
+2025-11-20T21:30:34.5391747Z     Date: 2025-12-01 | Venue: World
+2025-11-20T21:30:34.8553880Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:30:34.8554789Z     New: "Do a LongwaveRadioRun – wherever you are"
+2025-11-20T21:30:34.8555424Z     Existing: "Do a LongwaveRadioRun – wherever you are"
+2025-11-20T21:30:34.8555919Z     Date: 2025-12-02 | Venue: World
+2025-11-20T21:30:35.1627243Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:30:35.1627883Z     New: "Do a LongwaveRadioRun – wherever you are"
+2025-11-20T21:30:35.1628538Z     Existing: "Do a LongwaveRadioRun – wherever you are"
+2025-11-20T21:30:35.1629038Z     Date: 2025-12-03 | Venue: World
+2025-11-20T21:30:35.5455961Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:30:35.5456581Z     New: "Do a LongwaveRadioRun – wherever you are"
+2025-11-20T21:30:35.5457229Z     Existing: "Do a LongwaveRadioRun – wherever you are"
+2025-11-20T21:30:35.5457782Z     Date: 2025-12-04 | Venue: World
+2025-11-20T21:30:35.8984027Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:30:35.8985411Z     New: "Do a LongwaveRadioRun – wherever you are"
+2025-11-20T21:30:35.8986106Z     Existing: "Do a LongwaveRadioRun – wherever you are"
+2025-11-20T21:30:35.8986627Z     Date: 2025-12-05 | Venue: World
+2025-11-20T21:30:36.2261972Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:30:36.2262552Z     New: "Do a LongwaveRadioRun – wherever you are"
+2025-11-20T21:30:36.2263131Z     Existing: "Do a LongwaveRadioRun – wherever you are"
+2025-11-20T21:30:36.2263576Z     Date: 2025-12-06 | Venue: World
+2025-11-20T21:30:36.5498165Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:30:36.5498778Z     New: "Do a LongwaveRadioRun – wherever you are"
+2025-11-20T21:30:36.5499415Z     Existing: "Do a LongwaveRadioRun – wherever you are"
+2025-11-20T21:30:36.5499903Z     Date: 2025-12-07 | Venue: World
+2025-11-20T21:30:36.8699948Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:30:36.8700762Z     New: "Do a LongwaveRadioRun – wherever you are"
+2025-11-20T21:30:36.8701589Z     Existing: "Do a LongwaveRadioRun – wherever you are"
+2025-11-20T21:30:36.8702340Z     Date: 2025-12-08 | Venue: World
+2025-11-20T21:30:37.1930468Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:30:37.1931281Z     New: "Do a LongwaveRadioRun – wherever you are"
+2025-11-20T21:30:37.1931838Z     Existing: "Do a LongwaveRadioRun – wherever you are"
+2025-11-20T21:30:37.1932257Z     Date: 2025-12-09 | Venue: World
+2025-11-20T21:30:37.5058244Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:30:37.5058913Z     New: "Do a LongwaveRadioRun – wherever you are"
+2025-11-20T21:30:37.5059615Z     Existing: "Do a LongwaveRadioRun – wherever you are"
+2025-11-20T21:30:37.5060164Z     Date: 2025-12-10 | Venue: World
+2025-11-20T21:30:37.8326578Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:30:37.8327252Z     New: "Do a LongwaveRadioRun – wherever you are"
+2025-11-20T21:30:37.8327956Z     Existing: "Do a LongwaveRadioRun – wherever you are"
+2025-11-20T21:30:37.8328957Z     Date: 2025-12-11 | Venue: World
+2025-11-20T21:30:38.1423818Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:30:38.1424908Z     New: "Do a LongwaveRadioRun – wherever you are"
+2025-11-20T21:30:38.1425692Z     Existing: "Do a LongwaveRadioRun – wherever you are"
+2025-11-20T21:30:38.1426276Z     Date: 2025-12-12 | Venue: World
+2025-11-20T21:30:38.4595353Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:30:38.4596140Z     New: "Do a LongwaveRadioRun – wherever you are"
+2025-11-20T21:30:38.4596738Z     Existing: "Do a LongwaveRadioRun – wherever you are"
+2025-11-20T21:30:38.4597195Z     Date: 2025-12-13 | Venue: World
+2025-11-20T21:30:38.7922428Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:30:38.7923140Z     New: "Do a LongwaveRadioRun – wherever you are"
+2025-11-20T21:30:38.7923753Z     Existing: "Do a LongwaveRadioRun – wherever you are"
+2025-11-20T21:30:38.7924381Z     Date: 2025-12-14 | Venue: World
+2025-11-20T21:30:39.1033723Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:30:39.1035094Z     New: "Do a LongwaveRadioRun – wherever you are"
+2025-11-20T21:30:39.1036208Z     Existing: "Do a LongwaveRadioRun – wherever you are"
+2025-11-20T21:30:39.1037102Z     Date: 2025-12-15 | Venue: World
+2025-11-20T21:30:39.4563811Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:30:39.4565058Z     New: "Do a LongwaveRadioRun – wherever you are"
+2025-11-20T21:30:39.4565970Z     Existing: "Do a LongwaveRadioRun – wherever you are"
+2025-11-20T21:30:39.4566681Z     Date: 2025-12-16 | Venue: World
+2025-11-20T21:30:39.7774650Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:30:39.7775556Z     New: "Do a LongwaveRadioRun – wherever you are"
+2025-11-20T21:30:39.7776446Z     Existing: "Do a LongwaveRadioRun – wherever you are"
+2025-11-20T21:30:39.7777200Z     Date: 2025-12-17 | Venue: World
+2025-11-20T21:30:40.0877223Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:30:40.0877982Z     New: "Do a LongwaveRadioRun – wherever you are"
+2025-11-20T21:30:40.0878798Z     Existing: "Do a LongwaveRadioRun – wherever you are"
+2025-11-20T21:30:40.0879410Z     Date: 2025-12-18 | Venue: World
+2025-11-20T21:30:40.3981864Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:30:40.3983302Z     New: "Do a LongwaveRadioRun – wherever you are"
+2025-11-20T21:30:40.3984630Z     Existing: "Do a LongwaveRadioRun – wherever you are"
+2025-11-20T21:30:40.3985408Z     Date: 2025-12-19 | Venue: World
+2025-11-20T21:30:40.7490438Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:30:40.7491309Z     New: "Do a LongwaveRadioRun – wherever you are"
+2025-11-20T21:30:40.7492234Z     Existing: "Do a LongwaveRadioRun – wherever you are"
+2025-11-20T21:30:40.7492926Z     Date: 2025-12-20 | Venue: World
+2025-11-20T21:30:41.0487469Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:30:41.0488193Z     New: "Do a LongwaveRadioRun – wherever you are"
+2025-11-20T21:30:41.0488948Z     Existing: "Do a LongwaveRadioRun – wherever you are"
+2025-11-20T21:30:41.0489536Z     Date: 2025-12-21 | Venue: World
+2025-11-20T21:30:41.3608412Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:30:41.3609262Z     New: "Do a LongwaveRadioRun – wherever you are"
+2025-11-20T21:30:41.3610010Z     Existing: "Do a LongwaveRadioRun – wherever you are"
+2025-11-20T21:30:41.3610591Z     Date: 2025-12-22 | Venue: World
+2025-11-20T21:30:41.6647001Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:30:41.6647875Z     New: "Do a LongwaveRadioRun – wherever you are"
+2025-11-20T21:30:41.6648767Z     Existing: "Do a LongwaveRadioRun – wherever you are"
+2025-11-20T21:30:41.6649532Z     Date: 2025-12-23 | Venue: World
+2025-11-20T21:30:41.9788945Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:30:41.9789461Z     New: "Do a LongwaveRadioRun – wherever you are"
+2025-11-20T21:30:41.9789968Z     Existing: "Do a LongwaveRadioRun – wherever you are"
+2025-11-20T21:30:41.9790359Z     Date: 2025-12-24 | Venue: World
+2025-11-20T21:30:42.3068383Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:30:42.3069110Z     New: "Do a LongwaveRadioRun – wherever you are"
+2025-11-20T21:30:42.3069868Z     Existing: "Do a LongwaveRadioRun – wherever you are"
+2025-11-20T21:30:42.3071025Z     Date: 2025-12-25 | Venue: World
+2025-11-20T21:30:42.6710441Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:30:42.6711462Z     New: "Do a LongwaveRadioRun – wherever you are"
+2025-11-20T21:30:42.6712329Z     Existing: "Do a LongwaveRadioRun – wherever you are"
+2025-11-20T21:30:42.6713005Z     Date: 2025-12-26 | Venue: World
+2025-11-20T21:30:42.9814748Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:30:42.9815646Z     New: "Do a LongwaveRadioRun – wherever you are"
+2025-11-20T21:30:42.9816402Z     Existing: "Do a LongwaveRadioRun – wherever you are"
+2025-11-20T21:30:42.9816970Z     Date: 2025-12-27 | Venue: World
+2025-11-20T21:30:43.4618480Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:30:43.4619346Z     New: "Do a LongwaveRadioRun – wherever you are"
+2025-11-20T21:30:43.4620152Z     Existing: "Do a LongwaveRadioRun – wherever you are"
+2025-11-20T21:30:43.4620740Z     Date: 2025-12-28 | Venue: World
+2025-11-20T21:30:43.7912103Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:30:43.7912866Z     New: "Do a LongwaveRadioRun – wherever you are"
+2025-11-20T21:30:43.7913646Z     Existing: "Do a LongwaveRadioRun – wherever you are"
+2025-11-20T21:30:43.7914210Z     Date: 2025-12-29 | Venue: World
+2025-11-20T21:30:44.1127326Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:30:44.1128103Z     New: "Do a LongwaveRadioRun – wherever you are"
+2025-11-20T21:30:44.1128878Z     Existing: "Do a LongwaveRadioRun – wherever you are"
+2025-11-20T21:30:44.1129541Z     Date: 2025-12-30 | Venue: World
+2025-11-20T21:30:44.4314560Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:30:44.4315604Z     New: "Utställning med Fredrik Strid på Varbergs konsthall"
+2025-11-20T21:30:44.4316695Z     Existing: "Utställning med Fredrik Strid på Varbergs konsthall"
+2025-11-20T21:30:44.4317517Z     Date: 2025-11-21 | Venue: Varbergs
+2025-11-20T21:30:44.7437806Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:30:44.7438931Z     New: "Utställning med Fredrik Strid på Varbergs konsthall"
+2025-11-20T21:30:44.7440333Z     Existing: "Utställning med Fredrik Strid på Varbergs konsthall"
+2025-11-20T21:30:44.7441116Z     Date: 2025-11-22 | Venue: Varbergs
+2025-11-20T21:30:45.0755814Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:30:45.0756543Z     New: "Utställning med Fredrik Strid på Varbergs konsthall"
+2025-11-20T21:30:45.0757289Z     Existing: "Utställning med Fredrik Strid på Varbergs konsthall"
+2025-11-20T21:30:45.0757822Z     Date: 2025-11-23 | Venue: Varbergs
+2025-11-20T21:30:45.4260022Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:30:45.4260745Z     New: "Utställning med Fredrik Strid på Varbergs konsthall"
+2025-11-20T21:30:45.4261508Z     Existing: "Utställning med Fredrik Strid på Varbergs konsthall"
+2025-11-20T21:30:45.4262061Z     Date: 2025-11-25 | Venue: Varbergs
+2025-11-20T21:30:45.7452084Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:30:45.7453005Z     New: "Utställning med Fredrik Strid på Varbergs konsthall"
+2025-11-20T21:30:45.7453978Z     Existing: "Utställning med Fredrik Strid på Varbergs konsthall"
+2025-11-20T21:30:45.7455039Z     Date: 2025-11-26 | Venue: Varbergs
+2025-11-20T21:30:46.0562392Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:30:46.0563420Z     New: "Utställning med Fredrik Strid på Varbergs konsthall"
+2025-11-20T21:30:46.0564848Z     Existing: "Utställning med Fredrik Strid på Varbergs konsthall"
+2025-11-20T21:30:46.0565623Z     Date: 2025-11-27 | Venue: Varbergs
+2025-11-20T21:30:46.3850226Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:30:46.3851237Z     New: "Utställning med Fredrik Strid på Varbergs konsthall"
+2025-11-20T21:30:46.3852316Z     Existing: "Utställning med Fredrik Strid på Varbergs konsthall"
+2025-11-20T21:30:46.3853029Z     Date: 2025-11-28 | Venue: Varbergs
+2025-11-20T21:30:46.7048975Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:30:46.7049987Z     New: "Utställning med Fredrik Strid på Varbergs konsthall"
+2025-11-20T21:30:46.7051078Z     Existing: "Utställning med Fredrik Strid på Varbergs konsthall"
+2025-11-20T21:30:46.7052577Z     Date: 2025-11-29 | Venue: Varbergs
+2025-11-20T21:30:47.0254988Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:30:47.0255918Z     New: "Utställning med Fredrik Strid på Varbergs konsthall"
+2025-11-20T21:30:47.0256878Z     Existing: "Utställning med Fredrik Strid på Varbergs konsthall"
+2025-11-20T21:30:47.0257549Z     Date: 2025-11-30 | Venue: Varbergs
+2025-11-20T21:30:47.3666051Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:30:47.3667044Z     New: "Utställning med Fredrik Strid på Varbergs konsthall"
+2025-11-20T21:30:47.3668212Z     Existing: "Utställning med Fredrik Strid på Varbergs konsthall"
+2025-11-20T21:30:47.3669015Z     Date: 2025-12-02 | Venue: Varbergs
+2025-11-20T21:30:47.6871757Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:30:47.6872668Z     New: "Utställning med Fredrik Strid på Varbergs konsthall"
+2025-11-20T21:30:47.6873727Z     Existing: "Utställning med Fredrik Strid på Varbergs konsthall"
+2025-11-20T21:30:47.6874752Z     Date: 2025-12-03 | Venue: Varbergs
+2025-11-20T21:30:48.0875520Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:30:48.0876825Z     New: "Utställning med Fredrik Strid på Varbergs konsthall"
+2025-11-20T21:30:48.0878295Z     Existing: "Utställning med Fredrik Strid på Varbergs konsthall"
+2025-11-20T21:30:48.0879074Z     Date: 2025-12-04 | Venue: Varbergs
+2025-11-20T21:30:48.4399167Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:30:48.4400155Z     New: "Utställning med Fredrik Strid på Varbergs konsthall"
+2025-11-20T21:30:48.4401112Z     Existing: "Utställning med Fredrik Strid på Varbergs konsthall"
+2025-11-20T21:30:48.4401839Z     Date: 2025-12-05 | Venue: Varbergs
+2025-11-20T21:30:48.7775892Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:30:48.7776854Z     New: "Utställning med Fredrik Strid på Varbergs konsthall"
+2025-11-20T21:30:48.7777814Z     Existing: "Utställning med Fredrik Strid på Varbergs konsthall"
+2025-11-20T21:30:48.7778528Z     Date: 2025-12-06 | Venue: Varbergs
+2025-11-20T21:30:49.1008281Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:30:49.1009401Z     New: "Utställning med Fredrik Strid på Varbergs konsthall"
+2025-11-20T21:30:49.1010472Z     Existing: "Utställning med Fredrik Strid på Varbergs konsthall"
+2025-11-20T21:30:49.1011763Z     Date: 2025-12-07 | Venue: Varbergs
+2025-11-20T21:30:49.4073885Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:30:49.4075135Z     New: "Utställning med Fredrik Strid på Varbergs konsthall"
+2025-11-20T21:30:49.4076237Z     Existing: "Utställning med Fredrik Strid på Varbergs konsthall"
+2025-11-20T21:30:49.4077122Z     Date: 2025-12-09 | Venue: Varbergs
+2025-11-20T21:30:49.7086113Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:30:49.7087017Z     New: "Utställning med Fredrik Strid på Varbergs konsthall"
+2025-11-20T21:30:49.7087889Z     Existing: "Utställning med Fredrik Strid på Varbergs konsthall"
+2025-11-20T21:30:49.7088520Z     Date: 2025-12-10 | Venue: Varbergs
+2025-11-20T21:30:50.0103638Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:30:50.0104859Z     New: "Utställning med Fredrik Strid på Varbergs konsthall"
+2025-11-20T21:30:50.0105978Z     Existing: "Utställning med Fredrik Strid på Varbergs konsthall"
+2025-11-20T21:30:50.0106674Z     Date: 2025-12-11 | Venue: Varbergs
+2025-11-20T21:30:50.3388757Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:30:50.3389644Z     New: "Utställning med Fredrik Strid på Varbergs konsthall"
+2025-11-20T21:30:50.3390486Z     Existing: "Utställning med Fredrik Strid på Varbergs konsthall"
+2025-11-20T21:30:50.3391045Z     Date: 2025-12-12 | Venue: Varbergs
+2025-11-20T21:30:50.6617487Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:30:50.6618543Z     New: "Utställning med Fredrik Strid på Varbergs konsthall"
+2025-11-20T21:30:50.6619640Z     Existing: "Utställning med Fredrik Strid på Varbergs konsthall"
+2025-11-20T21:30:50.6620428Z     Date: 2025-12-13 | Venue: Varbergs
+2025-11-20T21:30:50.9802511Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:30:50.9803429Z     New: "Utställning med Fredrik Strid på Varbergs konsthall"
+2025-11-20T21:30:50.9804704Z     Existing: "Utställning med Fredrik Strid på Varbergs konsthall"
+2025-11-20T21:30:50.9806020Z     Date: 2025-12-14 | Venue: Varbergs
+2025-11-20T21:30:51.3146235Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:30:51.3147260Z     New: "Utställning med Fredrik Strid på Varbergs konsthall"
+2025-11-20T21:30:51.3148219Z     Existing: "Utställning med Fredrik Strid på Varbergs konsthall"
+2025-11-20T21:30:51.3148959Z     Date: 2025-12-16 | Venue: Varbergs
+2025-11-20T21:30:51.6404568Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:30:51.6405492Z     New: "Utställning med Fredrik Strid på Varbergs konsthall"
+2025-11-20T21:30:51.6406495Z     Existing: "Utställning med Fredrik Strid på Varbergs konsthall"
+2025-11-20T21:30:51.6407234Z     Date: 2025-12-17 | Venue: Varbergs
+2025-11-20T21:30:51.9835349Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:30:51.9836032Z     New: "Utställning med Fredrik Strid på Varbergs konsthall"
+2025-11-20T21:30:51.9836698Z     Existing: "Utställning med Fredrik Strid på Varbergs konsthall"
+2025-11-20T21:30:51.9837224Z     Date: 2025-12-18 | Venue: Varbergs
+2025-11-20T21:30:52.3294693Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:30:52.3295380Z     New: "Utställning med Fredrik Strid på Varbergs konsthall"
+2025-11-20T21:30:52.3296055Z     Existing: "Utställning med Fredrik Strid på Varbergs konsthall"
+2025-11-20T21:30:52.3296551Z     Date: 2025-12-19 | Venue: Varbergs
+2025-11-20T21:30:52.6352807Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:30:52.6353628Z     New: "Utställning med Fredrik Strid på Varbergs konsthall"
+2025-11-20T21:30:52.6354832Z     Existing: "Utställning med Fredrik Strid på Varbergs konsthall"
+2025-11-20T21:30:52.6355515Z     Date: 2025-12-20 | Venue: Varbergs
+2025-11-20T21:30:52.9801752Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:30:52.9802580Z     New: "Utställning med Fredrik Strid på Varbergs konsthall"
+2025-11-20T21:30:52.9803498Z     Existing: "Utställning med Fredrik Strid på Varbergs konsthall"
+2025-11-20T21:30:52.9804151Z     Date: 2025-12-21 | Venue: Varbergs
+2025-11-20T21:30:53.2985724Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:30:53.2986538Z     New: "Utställning med Fredrik Strid på Varbergs konsthall"
+2025-11-20T21:30:53.2987895Z     Existing: "Utställning med Fredrik Strid på Varbergs konsthall"
+2025-11-20T21:30:53.2988578Z     Date: 2025-12-23 | Venue: Varbergs
+2025-11-20T21:30:53.6048907Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:30:53.6049773Z     New: "Utställning med Fredrik Strid på Varbergs konsthall"
+2025-11-20T21:30:53.6050679Z     Existing: "Utställning med Fredrik Strid på Varbergs konsthall"
+2025-11-20T21:30:53.6051340Z     Date: 2025-12-24 | Venue: Varbergs
+2025-11-20T21:30:53.9144203Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:30:53.9145307Z     New: "Utställning med Fredrik Strid på Varbergs konsthall"
+2025-11-20T21:30:53.9146222Z     Existing: "Utställning med Fredrik Strid på Varbergs konsthall"
+2025-11-20T21:30:53.9146903Z     Date: 2025-12-25 | Venue: Varbergs
+2025-11-20T21:30:54.2557968Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:30:54.2559049Z     New: "Utställning med Fredrik Strid på Varbergs konsthall"
+2025-11-20T21:30:54.2560106Z     Existing: "Utställning med Fredrik Strid på Varbergs konsthall"
+2025-11-20T21:30:54.2560855Z     Date: 2025-12-26 | Venue: Varbergs
+2025-11-20T21:30:54.5712492Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:30:54.5713610Z     New: "Utställning med Fredrik Strid på Varbergs konsthall"
+2025-11-20T21:30:54.5715194Z     Existing: "Utställning med Fredrik Strid på Varbergs konsthall"
+2025-11-20T21:30:54.5715942Z     Date: 2025-12-27 | Venue: Varbergs
+2025-11-20T21:30:54.9226059Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:30:54.9226744Z     New: "Utställning med Fredrik Strid på Varbergs konsthall"
+2025-11-20T21:30:54.9227476Z     Existing: "Utställning med Fredrik Strid på Varbergs konsthall"
+2025-11-20T21:30:54.9228007Z     Date: 2025-12-28 | Venue: Varbergs
+2025-11-20T21:30:55.2603364Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:30:55.2604797Z     New: "Utställning med Fredrik Strid på Varbergs konsthall"
+2025-11-20T21:30:55.2606524Z     Existing: "Utställning med Fredrik Strid på Varbergs konsthall"
+2025-11-20T21:30:55.2607220Z     Date: 2025-12-30 | Venue: Varbergs
+2025-11-20T21:30:55.5951048Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:30:55.5952070Z     New: "Utställning med Fredrik Strid på Varbergs konsthall"
+2025-11-20T21:30:55.5953159Z     Existing: "Utställning med Fredrik Strid på Varbergs konsthall"
+2025-11-20T21:30:55.5953916Z     Date: 2025-12-31 | Venue: Varbergs
+2025-11-20T21:30:55.8991148Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:30:55.8992141Z     New: "Utställning med Fredrik Strid på Varbergs konsthall"
+2025-11-20T21:30:55.8993226Z     Existing: "Utställning med Fredrik Strid på Varbergs konsthall"
+2025-11-20T21:30:55.8994053Z     Date: 2026-01-01 | Venue: Varbergs
+2025-11-20T21:30:56.2521102Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:30:56.2522033Z     New: "Utställning med Fredrik Strid på Varbergs konsthall"
+2025-11-20T21:30:56.2522991Z     Existing: "Utställning med Fredrik Strid på Varbergs konsthall"
+2025-11-20T21:30:56.2523832Z     Date: 2026-01-02 | Venue: Varbergs
+2025-11-20T21:30:56.5980793Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:30:56.5981924Z     New: "Utställning med Fredrik Strid på Varbergs konsthall"
+2025-11-20T21:30:56.5982986Z     Existing: "Utställning med Fredrik Strid på Varbergs konsthall"
+2025-11-20T21:30:56.5983694Z     Date: 2026-01-03 | Venue: Varbergs
+2025-11-20T21:30:56.9341247Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:30:56.9342260Z     New: "Utställning med Fredrik Strid på Varbergs konsthall"
+2025-11-20T21:30:56.9343401Z     Existing: "Utställning med Fredrik Strid på Varbergs konsthall"
+2025-11-20T21:30:56.9344185Z     Date: 2026-01-04 | Venue: Varbergs
+2025-11-20T21:30:57.2583993Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:30:57.2585231Z     New: "Utställning med Fredrik Strid på Varbergs konsthall"
+2025-11-20T21:30:57.2586293Z     Existing: "Utställning med Fredrik Strid på Varbergs konsthall"
+2025-11-20T21:30:57.2587059Z     Date: 2026-01-06 | Venue: Varbergs
+2025-11-20T21:30:57.5863046Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:30:57.5864727Z     New: "Utställning med Fredrik Strid på Varbergs konsthall"
+2025-11-20T21:30:57.5865765Z     Existing: "Utställning med Fredrik Strid på Varbergs konsthall"
+2025-11-20T21:30:57.5866410Z     Date: 2026-01-07 | Venue: Varbergs
+2025-11-20T21:30:57.8902089Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:30:57.8902778Z     New: "Utställning med Fredrik Strid på Varbergs konsthall"
+2025-11-20T21:30:57.8903452Z     Existing: "Utställning med Fredrik Strid på Varbergs konsthall"
+2025-11-20T21:30:57.8904010Z     Date: 2026-01-08 | Venue: Varbergs
+2025-11-20T21:30:58.2098827Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:30:58.2099667Z     New: "Utställning med Fredrik Strid på Varbergs konsthall"
+2025-11-20T21:30:58.2100584Z     Existing: "Utställning med Fredrik Strid på Varbergs konsthall"
+2025-11-20T21:30:58.2101258Z     Date: 2026-01-09 | Venue: Varbergs
+2025-11-20T21:30:58.5181485Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:30:58.5182318Z     New: "Utställning med Fredrik Strid på Varbergs konsthall"
+2025-11-20T21:30:58.5183268Z     Existing: "Utställning med Fredrik Strid på Varbergs konsthall"
+2025-11-20T21:30:58.5183920Z     Date: 2026-01-10 | Venue: Varbergs
+2025-11-20T21:30:58.8818845Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:30:58.8819897Z     New: "Utställning med Fredrik Strid på Varbergs konsthall"
+2025-11-20T21:30:58.8820994Z     Existing: "Utställning med Fredrik Strid på Varbergs konsthall"
+2025-11-20T21:30:58.8821809Z     Date: 2026-01-11 | Venue: Varbergs
+2025-11-20T21:30:59.2023886Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:30:59.2024739Z     New: "Bockstensmannen"
+2025-11-20T21:30:59.2025225Z     Existing: "Bockstensmannen"
+2025-11-20T21:30:59.2025768Z     Date: 2025-11-21 | Venue: Varbergs
+2025-11-20T21:30:59.5525446Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:30:59.5526046Z     New: "Bockstensmannen"
+2025-11-20T21:30:59.5527062Z     Existing: "Bockstensmannen"
+2025-11-20T21:30:59.5527709Z     Date: 2025-11-22 | Venue: Varbergs
+2025-11-20T21:30:59.8972066Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:30:59.8972676Z     New: "Bockstensmannen"
+2025-11-20T21:30:59.8973255Z     Existing: "Bockstensmannen"
+2025-11-20T21:30:59.8973780Z     Date: 2025-11-23 | Venue: Varbergs
+2025-11-20T21:31:00.2876071Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:31:00.2876609Z     New: "Bockstensmannen"
+2025-11-20T21:31:00.2877053Z     Existing: "Bockstensmannen"
+2025-11-20T21:31:00.2877544Z     Date: 2025-11-25 | Venue: Varbergs
+2025-11-20T21:31:00.6603518Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:31:00.6604031Z     New: "Bockstensmannen"
+2025-11-20T21:31:00.6604770Z     Existing: "Bockstensmannen"
+2025-11-20T21:31:00.6605239Z     Date: 2025-11-26 | Venue: Varbergs
+2025-11-20T21:31:00.9750873Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:31:00.9751455Z     New: "Bockstensmannen"
+2025-11-20T21:31:00.9751945Z     Existing: "Bockstensmannen"
+2025-11-20T21:31:00.9752506Z     Date: 2025-11-27 | Venue: Varbergs
+2025-11-20T21:31:01.3015996Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:31:01.3016496Z     New: "Bockstensmannen"
+2025-11-20T21:31:01.3016898Z     Existing: "Bockstensmannen"
+2025-11-20T21:31:01.3017305Z     Date: 2025-11-28 | Venue: Varbergs
+2025-11-20T21:31:01.6348795Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:31:01.6349227Z     New: "Bockstensmannen"
+2025-11-20T21:31:01.6349597Z     Existing: "Bockstensmannen"
+2025-11-20T21:31:01.6349979Z     Date: 2025-11-29 | Venue: Varbergs
+2025-11-20T21:31:01.9561882Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:31:01.9562342Z     New: "Bockstensmannen"
+2025-11-20T21:31:01.9562680Z     Existing: "Bockstensmannen"
+2025-11-20T21:31:01.9563030Z     Date: 2025-11-30 | Venue: Varbergs
+2025-11-20T21:31:02.2824810Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:31:02.2825228Z     New: "Bockstensmannen"
+2025-11-20T21:31:02.2825611Z     Existing: "Bockstensmannen"
+2025-11-20T21:31:02.2826216Z     Date: 2025-12-02 | Venue: Varbergs
+2025-11-20T21:31:02.6493739Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:31:02.6494653Z     New: "Bockstensmannen"
+2025-11-20T21:31:02.6495594Z     Existing: "Bockstensmannen"
+2025-11-20T21:31:02.6496219Z     Date: 2025-12-03 | Venue: Varbergs
+2025-11-20T21:31:02.9736512Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:31:02.9785747Z     New: "Bockstensmannen"
+2025-11-20T21:31:02.9786142Z     Existing: "Bockstensmannen"
+2025-11-20T21:31:02.9786438Z     Date: 2025-12-04 | Venue: Varbergs
+2025-11-20T21:31:03.3097066Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:31:03.3097667Z     New: "Bockstensmannen"
+2025-11-20T21:31:03.3098131Z     Existing: "Bockstensmannen"
+2025-11-20T21:31:03.3098651Z     Date: 2025-12-05 | Venue: Varbergs
+2025-11-20T21:31:03.6308880Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:31:03.6309463Z     New: "Bockstensmannen"
+2025-11-20T21:31:03.6309948Z     Existing: "Bockstensmannen"
+2025-11-20T21:31:03.6310465Z     Date: 2025-12-06 | Venue: Varbergs
+2025-11-20T21:31:03.9502206Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:31:03.9502784Z     New: "Bockstensmannen"
+2025-11-20T21:31:03.9503288Z     Existing: "Bockstensmannen"
+2025-11-20T21:31:03.9503799Z     Date: 2025-12-07 | Venue: Varbergs
+2025-11-20T21:31:04.2832747Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:31:04.2833266Z     New: "Bockstensmannen"
+2025-11-20T21:31:04.2833691Z     Existing: "Bockstensmannen"
+2025-11-20T21:31:04.2834142Z     Date: 2025-12-09 | Venue: Varbergs
+2025-11-20T21:31:04.6820335Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:31:04.6820897Z     New: "Bockstensmannen"
+2025-11-20T21:31:04.6821439Z     Existing: "Bockstensmannen"
+2025-11-20T21:31:04.6821957Z     Date: 2025-12-10 | Venue: Varbergs
+2025-11-20T21:31:05.0149218Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:31:05.0149796Z     New: "Bockstensmannen"
+2025-11-20T21:31:05.0150325Z     Existing: "Bockstensmannen"
+2025-11-20T21:31:05.0150814Z     Date: 2025-12-11 | Venue: Varbergs
+2025-11-20T21:31:05.3359872Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:31:05.3360390Z     New: "Bockstensmannen"
+2025-11-20T21:31:05.3360863Z     Existing: "Bockstensmannen"
+2025-11-20T21:31:05.3361379Z     Date: 2025-12-12 | Venue: Varbergs
+2025-11-20T21:31:05.6621182Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:31:05.6621712Z     New: "Bockstensmannen"
+2025-11-20T21:31:05.6622175Z     Existing: "Bockstensmannen"
+2025-11-20T21:31:05.6622665Z     Date: 2025-12-13 | Venue: Varbergs
+2025-11-20T21:31:05.9852523Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:31:05.9853002Z     New: "Bockstensmannen"
+2025-11-20T21:31:05.9853422Z     Existing: "Bockstensmannen"
+2025-11-20T21:31:05.9853864Z     Date: 2025-12-14 | Venue: Varbergs
+2025-11-20T21:31:06.3003104Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:31:06.3003578Z     New: "Bockstensmannen"
+2025-11-20T21:31:06.3003920Z     Existing: "Bockstensmannen"
+2025-11-20T21:31:06.3004499Z     Date: 2025-12-16 | Venue: Varbergs
+2025-11-20T21:31:06.6405735Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:31:06.6406276Z     New: "Bockstensmannen"
+2025-11-20T21:31:06.6406695Z     Existing: "Bockstensmannen"
+2025-11-20T21:31:06.6407152Z     Date: 2025-12-17 | Venue: Varbergs
+2025-11-20T21:31:06.9565131Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:31:06.9565732Z     New: "Bockstensmannen"
+2025-11-20T21:31:06.9566258Z     Existing: "Bockstensmannen"
+2025-11-20T21:31:06.9566814Z     Date: 2025-12-18 | Venue: Varbergs
+2025-11-20T21:31:07.2755638Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:31:07.2756037Z     New: "Bockstensmannen"
+2025-11-20T21:31:07.2756383Z     Existing: "Bockstensmannen"
+2025-11-20T21:31:07.2756741Z     Date: 2025-12-19 | Venue: Varbergs
+2025-11-20T21:31:07.6359134Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:31:07.6359536Z     New: "Bockstensmannen"
+2025-11-20T21:31:07.6359880Z     Existing: "Bockstensmannen"
+2025-11-20T21:31:07.6360239Z     Date: 2025-12-20 | Venue: Varbergs
+2025-11-20T21:31:07.9593750Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:31:07.9594473Z     New: "Bockstensmannen"
+2025-11-20T21:31:07.9594884Z     Existing: "Bockstensmannen"
+2025-11-20T21:31:07.9595281Z     Date: 2025-12-21 | Venue: Varbergs
+2025-11-20T21:31:08.2825562Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:31:08.2826204Z     New: "Bockstensmannen"
+2025-11-20T21:31:08.2826769Z     Existing: "Bockstensmannen"
+2025-11-20T21:31:08.2827333Z     Date: 2025-12-27 | Venue: Varbergs
+2025-11-20T21:31:08.6185420Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:31:08.6185997Z     New: "Bockstensmannen"
+2025-11-20T21:31:08.6186475Z     Existing: "Bockstensmannen"
+2025-11-20T21:31:08.6187043Z     Date: 2025-12-28 | Venue: Varbergs
+2025-11-20T21:31:08.9359767Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:31:08.9360315Z     New: "Bockstensmannen"
+2025-11-20T21:31:08.9360799Z     Existing: "Bockstensmannen"
+2025-11-20T21:31:08.9361300Z     Date: 2025-12-30 | Venue: Varbergs
+2025-11-20T21:31:09.2529179Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:31:09.2529716Z     New: "Bockstensmannen"
+2025-11-20T21:31:09.2530215Z     Existing: "Bockstensmannen"
+2025-11-20T21:31:09.2530674Z     Date: 2026-01-02 | Venue: Varbergs
+2025-11-20T21:31:09.5812590Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:31:09.5813162Z     New: "Bockstensmannen"
+2025-11-20T21:31:09.5813658Z     Existing: "Bockstensmannen"
+2025-11-20T21:31:09.5814164Z     Date: 2026-01-03 | Venue: Varbergs
+2025-11-20T21:31:09.9298086Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:31:09.9298600Z     New: "Bockstensmannen"
+2025-11-20T21:31:09.9299105Z     Existing: "Bockstensmannen"
+2025-11-20T21:31:09.9299546Z     Date: 2026-01-04 | Venue: Varbergs
+2025-11-20T21:31:10.2615641Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:31:10.2616234Z     New: "Bockstensmannen"
+2025-11-20T21:31:10.2616785Z     Existing: "Bockstensmannen"
+2025-11-20T21:31:10.2617344Z     Date: 2026-01-06 | Venue: Varbergs
+2025-11-20T21:31:10.6464131Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:31:10.6464929Z     New: "Bockstensmannen"
+2025-11-20T21:31:10.6465374Z     Existing: "Bockstensmannen"
+2025-11-20T21:31:10.6466384Z     Date: 2026-01-07 | Venue: Varbergs
+2025-11-20T21:31:10.9995627Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:31:10.9996300Z     New: "Bockstensmannen"
+2025-11-20T21:31:10.9996845Z     Existing: "Bockstensmannen"
+2025-11-20T21:31:10.9997389Z     Date: 2026-01-08 | Venue: Varbergs
+2025-11-20T21:31:11.3133138Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:31:11.3133653Z     New: "Bockstensmannen"
+2025-11-20T21:31:11.3134135Z     Existing: "Bockstensmannen"
+2025-11-20T21:31:11.3134922Z     Date: 2026-01-09 | Venue: Varbergs
+2025-11-20T21:31:11.6389762Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:31:11.6390291Z     New: "Bockstensmannen"
+2025-11-20T21:31:11.6390728Z     Existing: "Bockstensmannen"
+2025-11-20T21:31:11.6391245Z     Date: 2026-01-10 | Venue: Varbergs
+2025-11-20T21:31:11.9764704Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:31:11.9765287Z     New: "Bockstensmannen"
+2025-11-20T21:31:11.9765791Z     Existing: "Bockstensmannen"
+2025-11-20T21:31:11.9766358Z     Date: 2026-01-11 | Venue: Varbergs
+2025-11-20T21:31:12.2891040Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:31:12.2891612Z     New: "Bockstensmannen"
+2025-11-20T21:31:12.2892146Z     Existing: "Bockstensmannen"
+2025-11-20T21:31:12.2892639Z     Date: 2026-01-13 | Venue: Varbergs
+2025-11-20T21:31:12.6021010Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:31:12.6021633Z     New: "Bockstensmannen"
+2025-11-20T21:31:12.6022187Z     Existing: "Bockstensmannen"
+2025-11-20T21:31:12.6022748Z     Date: 2026-01-14 | Venue: Varbergs
+2025-11-20T21:31:12.9368400Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:31:12.9368830Z     New: "Bockstensmannen"
+2025-11-20T21:31:12.9369204Z     Existing: "Bockstensmannen"
+2025-11-20T21:31:12.9369602Z     Date: 2026-01-15 | Venue: Varbergs
+2025-11-20T21:31:13.2597967Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:31:13.2598368Z     New: "Bockstensmannen"
+2025-11-20T21:31:13.2598713Z     Existing: "Bockstensmannen"
+2025-11-20T21:31:13.2599082Z     Date: 2026-01-16 | Venue: Varbergs
+2025-11-20T21:31:13.6084128Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:31:13.6084958Z     New: "Bockstensmannen"
+2025-11-20T21:31:13.6085935Z     Existing: "Bockstensmannen"
+2025-11-20T21:31:13.6086481Z     Date: 2026-01-17 | Venue: Varbergs
+2025-11-20T21:31:13.9509065Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:31:13.9509621Z     New: "Bockstensmannen"
+2025-11-20T21:31:13.9510108Z     Existing: "Bockstensmannen"
+2025-11-20T21:31:13.9510603Z     Date: 2026-01-18 | Venue: Varbergs
+2025-11-20T21:31:14.2696273Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:31:14.2696915Z     New: "Borgen – rum för medeltidslek"
+2025-11-20T21:31:14.2697494Z     Existing: "Borgen – rum för medeltidslek"
+2025-11-20T21:31:14.2697983Z     Date: 2025-11-21 | Venue: Varbergs
+2025-11-20T21:31:14.6306038Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:31:14.6306550Z     New: "Borgen – rum för medeltidslek"
+2025-11-20T21:31:14.6307013Z     Existing: "Borgen – rum för medeltidslek"
+2025-11-20T21:31:14.6307455Z     Date: 2025-11-22 | Venue: Varbergs
+2025-11-20T21:31:14.9497353Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:31:14.9497900Z     New: "Borgen – rum för medeltidslek"
+2025-11-20T21:31:14.9498376Z     Existing: "Borgen – rum för medeltidslek"
+2025-11-20T21:31:14.9498784Z     Date: 2025-11-23 | Venue: Varbergs
+2025-11-20T21:31:15.2868164Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:31:15.2868670Z     New: "Borgen – rum för medeltidslek"
+2025-11-20T21:31:15.2869130Z     Existing: "Borgen – rum för medeltidslek"
+2025-11-20T21:31:15.2869526Z     Date: 2025-11-25 | Venue: Varbergs
+2025-11-20T21:31:15.6390803Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:31:15.6391308Z     New: "Borgen – rum för medeltidslek"
+2025-11-20T21:31:15.6391783Z     Existing: "Borgen – rum för medeltidslek"
+2025-11-20T21:31:15.6392179Z     Date: 2025-11-26 | Venue: Varbergs
+2025-11-20T21:31:15.9632291Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:31:15.9632800Z     New: "Borgen – rum för medeltidslek"
+2025-11-20T21:31:15.9633675Z     Existing: "Borgen – rum för medeltidslek"
+2025-11-20T21:31:15.9634069Z     Date: 2025-11-27 | Venue: Varbergs
+2025-11-20T21:31:16.3055904Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:31:16.3056415Z     New: "Borgen – rum för medeltidslek"
+2025-11-20T21:31:16.3056887Z     Existing: "Borgen – rum för medeltidslek"
+2025-11-20T21:31:16.3057288Z     Date: 2025-11-28 | Venue: Varbergs
+2025-11-20T21:31:16.6563644Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:31:16.6564078Z     New: "Borgen – rum för medeltidslek"
+2025-11-20T21:31:16.6564748Z     Existing: "Borgen – rum för medeltidslek"
+2025-11-20T21:31:16.6565074Z     Date: 2025-11-29 | Venue: Varbergs
+2025-11-20T21:31:16.9762403Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:31:16.9762899Z     New: "Borgen – rum för medeltidslek"
+2025-11-20T21:31:16.9763366Z     Existing: "Borgen – rum för medeltidslek"
+2025-11-20T21:31:16.9763772Z     Date: 2025-11-30 | Venue: Varbergs
+2025-11-20T21:31:17.3540139Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:31:17.3541011Z     New: "Borgen – rum för medeltidslek"
+2025-11-20T21:31:17.3541628Z     Existing: "Borgen – rum för medeltidslek"
+2025-11-20T21:31:17.3542197Z     Date: 2025-12-02 | Venue: Varbergs
+2025-11-20T21:31:17.7087411Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:31:17.7087926Z     New: "Borgen – rum för medeltidslek"
+2025-11-20T21:31:17.7088409Z     Existing: "Borgen – rum för medeltidslek"
+2025-11-20T21:31:17.7088818Z     Date: 2025-12-03 | Venue: Varbergs
+2025-11-20T21:31:18.0416141Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:31:18.0416677Z     New: "Borgen – rum för medeltidslek"
+2025-11-20T21:31:18.0417190Z     Existing: "Borgen – rum för medeltidslek"
+2025-11-20T21:31:18.0417625Z     Date: 2025-12-04 | Venue: Varbergs
+2025-11-20T21:31:18.3508101Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:31:18.3508652Z     New: "Borgen – rum för medeltidslek"
+2025-11-20T21:31:18.3509180Z     Existing: "Borgen – rum för medeltidslek"
+2025-11-20T21:31:18.3509627Z     Date: 2025-12-05 | Venue: Varbergs
+2025-11-20T21:31:18.7449813Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:31:18.7450249Z     New: "Borgen – rum för medeltidslek"
+2025-11-20T21:31:18.7451032Z     Existing: "Borgen – rum för medeltidslek"
+2025-11-20T21:31:18.7451360Z     Date: 2025-12-06 | Venue: Varbergs
+2025-11-20T21:31:19.1025659Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:31:19.1026199Z     New: "Borgen – rum för medeltidslek"
+2025-11-20T21:31:19.1026723Z     Existing: "Borgen – rum för medeltidslek"
+2025-11-20T21:31:19.1027173Z     Date: 2025-12-07 | Venue: Varbergs
+2025-11-20T21:31:19.4287878Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:31:19.4288433Z     New: "Borgen – rum för medeltidslek"
+2025-11-20T21:31:19.4288963Z     Existing: "Borgen – rum för medeltidslek"
+2025-11-20T21:31:19.4289404Z     Date: 2025-12-09 | Venue: Varbergs
+2025-11-20T21:31:19.7582327Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:31:19.7582831Z     New: "Borgen – rum för medeltidslek"
+2025-11-20T21:31:19.7583303Z     Existing: "Borgen – rum för medeltidslek"
+2025-11-20T21:31:19.7583736Z     Date: 2025-12-10 | Venue: Varbergs
+2025-11-20T21:31:20.0982443Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:31:20.0983184Z     New: "Borgen – rum för medeltidslek"
+2025-11-20T21:31:20.0983678Z     Existing: "Borgen – rum för medeltidslek"
+2025-11-20T21:31:20.0984087Z     Date: 2025-12-11 | Venue: Varbergs
+2025-11-20T21:31:20.4359483Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:31:20.4360000Z     New: "Borgen – rum för medeltidslek"
+2025-11-20T21:31:20.4360473Z     Existing: "Borgen – rum för medeltidslek"
+2025-11-20T21:31:20.4360878Z     Date: 2025-12-12 | Venue: Varbergs
+2025-11-20T21:31:20.7511143Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:31:20.7511898Z     New: "Borgen – rum för medeltidslek"
+2025-11-20T21:31:20.7512618Z     Existing: "Borgen – rum för medeltidslek"
+2025-11-20T21:31:20.7513164Z     Date: 2025-12-13 | Venue: Varbergs
+2025-11-20T21:31:21.0747449Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:31:21.0747983Z     New: "Borgen – rum för medeltidslek"
+2025-11-20T21:31:21.0748859Z     Existing: "Borgen – rum för medeltidslek"
+2025-11-20T21:31:21.0749298Z     Date: 2025-12-14 | Venue: Varbergs
+2025-11-20T21:31:21.4348633Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:31:21.4349146Z     New: "Borgen – rum för medeltidslek"
+2025-11-20T21:31:21.4349624Z     Existing: "Borgen – rum för medeltidslek"
+2025-11-20T21:31:21.4350019Z     Date: 2025-12-16 | Venue: Varbergs
+2025-11-20T21:31:21.7764996Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:31:21.7765515Z     New: "Borgen – rum för medeltidslek"
+2025-11-20T21:31:21.7765989Z     Existing: "Borgen – rum för medeltidslek"
+2025-11-20T21:31:21.7766398Z     Date: 2025-12-17 | Venue: Varbergs
+2025-11-20T21:31:22.1000165Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:31:22.1000686Z     New: "Borgen – rum för medeltidslek"
+2025-11-20T21:31:22.1001163Z     Existing: "Borgen – rum för medeltidslek"
+2025-11-20T21:31:22.1001561Z     Date: 2025-12-18 | Venue: Varbergs
+2025-11-20T21:31:22.4312637Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:31:22.4313161Z     New: "Borgen – rum för medeltidslek"
+2025-11-20T21:31:22.4313665Z     Existing: "Borgen – rum för medeltidslek"
+2025-11-20T21:31:22.4314060Z     Date: 2025-12-19 | Venue: Varbergs
+2025-11-20T21:31:22.7617231Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:31:22.7617709Z     New: "Borgen – rum för medeltidslek"
+2025-11-20T21:31:22.7618155Z     Existing: "Borgen – rum för medeltidslek"
+2025-11-20T21:31:22.7618530Z     Date: 2025-12-20 | Venue: Varbergs
+2025-11-20T21:31:23.0995916Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:31:23.0996453Z     New: "Borgen – rum för medeltidslek"
+2025-11-20T21:31:23.0996972Z     Existing: "Borgen – rum för medeltidslek"
+2025-11-20T21:31:23.0997407Z     Date: 2025-12-21 | Venue: Varbergs
+2025-11-20T21:31:23.4337199Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:31:23.4337707Z     New: "Borgen – rum för medeltidslek"
+2025-11-20T21:31:23.4338174Z     Existing: "Borgen – rum för medeltidslek"
+2025-11-20T21:31:23.4338614Z     Date: 2025-12-23 | Venue: Varbergs
+2025-11-20T21:31:23.7936202Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:31:23.7937098Z     New: "Borgen – rum för medeltidslek"
+2025-11-20T21:31:23.7937551Z     Existing: "Borgen – rum för medeltidslek"
+2025-11-20T21:31:23.7937917Z     Date: 2025-12-24 | Venue: Varbergs
+2025-11-20T21:31:24.1099401Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:31:24.1099837Z     New: "Borgen – rum för medeltidslek"
+2025-11-20T21:31:24.1100219Z     Existing: "Borgen – rum för medeltidslek"
+2025-11-20T21:31:24.1100528Z     Date: 2025-12-25 | Venue: Varbergs
+2025-11-20T21:31:24.4560286Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:31:24.4560799Z     New: "Borgen – rum för medeltidslek"
+2025-11-20T21:31:24.4561274Z     Existing: "Borgen – rum för medeltidslek"
+2025-11-20T21:31:24.4561676Z     Date: 2025-12-26 | Venue: Varbergs
+2025-11-20T21:31:24.7961373Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:31:24.7961894Z     New: "Borgen – rum för medeltidslek"
+2025-11-20T21:31:24.7962408Z     Existing: "Borgen – rum för medeltidslek"
+2025-11-20T21:31:24.7962802Z     Date: 2025-12-27 | Venue: Varbergs
+2025-11-20T21:31:25.1667944Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:31:25.1668484Z     New: "Borgen – rum för medeltidslek"
+2025-11-20T21:31:25.1669003Z     Existing: "Borgen – rum för medeltidslek"
+2025-11-20T21:31:25.1669441Z     Date: 2025-12-28 | Venue: Varbergs
+2025-11-20T21:31:25.5471046Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:31:25.5471867Z     New: "Borgen – rum för medeltidslek"
+2025-11-20T21:31:25.5472606Z     Existing: "Borgen – rum för medeltidslek"
+2025-11-20T21:31:25.5473265Z     Date: 2025-12-30 | Venue: Varbergs
+2025-11-20T21:31:25.8683175Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:31:25.8684053Z     New: "Borgen – rum för medeltidslek"
+2025-11-20T21:31:25.8685102Z     Existing: "Borgen – rum för medeltidslek"
+2025-11-20T21:31:25.8685788Z     Date: 2025-12-31 | Venue: Varbergs
+2025-11-20T21:31:26.2002594Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:31:26.2003893Z     New: "Borgen – rum för medeltidslek"
+2025-11-20T21:31:26.2004830Z     Existing: "Borgen – rum för medeltidslek"
+2025-11-20T21:31:26.2005421Z     Date: 2026-01-01 | Venue: Varbergs
+2025-11-20T21:31:26.5254854Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:31:26.5255597Z     New: "Borgen – rum för medeltidslek"
+2025-11-20T21:31:26.5256275Z     Existing: "Borgen – rum för medeltidslek"
+2025-11-20T21:31:26.5256859Z     Date: 2026-01-02 | Venue: Varbergs
+2025-11-20T21:31:26.8542331Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:31:26.8543021Z     New: "Borgen – rum för medeltidslek"
+2025-11-20T21:31:26.8543741Z     Existing: "Borgen – rum för medeltidslek"
+2025-11-20T21:31:26.8544533Z     Date: 2026-01-03 | Venue: Varbergs
+2025-11-20T21:31:27.1680987Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:31:27.1681704Z     New: "Borgen – rum för medeltidslek"
+2025-11-20T21:31:27.1682404Z     Existing: "Borgen – rum för medeltidslek"
+2025-11-20T21:31:27.1682941Z     Date: 2026-01-04 | Venue: Varbergs
+2025-11-20T21:31:27.4832482Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:31:27.4833244Z     New: "Borgen – rum för medeltidslek"
+2025-11-20T21:31:27.4834770Z     Existing: "Borgen – rum för medeltidslek"
+2025-11-20T21:31:27.4835434Z     Date: 2026-01-06 | Venue: Varbergs
+2025-11-20T21:31:27.8153897Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:31:27.8154967Z     New: "Borgen – rum för medeltidslek"
+2025-11-20T21:31:27.8155720Z     Existing: "Borgen – rum för medeltidslek"
+2025-11-20T21:31:27.8156361Z     Date: 2026-01-07 | Venue: Varbergs
+2025-11-20T21:31:28.1341070Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:31:28.1341520Z     New: "Borgen – rum för medeltidslek"
+2025-11-20T21:31:28.1341894Z     Existing: "Borgen – rum för medeltidslek"
+2025-11-20T21:31:28.1342207Z     Date: 2026-01-08 | Venue: Varbergs
+2025-11-20T21:31:28.4771420Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:31:28.4771861Z     New: "Borgen – rum för medeltidslek"
+2025-11-20T21:31:28.4772230Z     Existing: "Borgen – rum för medeltidslek"
+2025-11-20T21:31:28.4772579Z     Date: 2026-01-09 | Venue: Varbergs
+2025-11-20T21:31:28.8059984Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:31:28.8060938Z     New: "Borgen – rum för medeltidslek"
+2025-11-20T21:31:28.8061717Z     Existing: "Borgen – rum för medeltidslek"
+2025-11-20T21:31:28.8062372Z     Date: 2026-01-10 | Venue: Varbergs
+2025-11-20T21:31:29.1578368Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:31:29.1578889Z     New: "Borgen – rum för medeltidslek"
+2025-11-20T21:31:29.1579352Z     Existing: "Borgen – rum för medeltidslek"
+2025-11-20T21:31:29.1579745Z     Date: 2026-01-11 | Venue: Varbergs
+2025-11-20T21:31:29.4881102Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:31:29.4881614Z     New: "Borgen – rum för medeltidslek"
+2025-11-20T21:31:29.4882087Z     Existing: "Borgen – rum för medeltidslek"
+2025-11-20T21:31:29.4882482Z     Date: 2026-01-13 | Venue: Varbergs
+2025-11-20T21:31:29.8079915Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:31:29.8080933Z     New: "Borgen – rum för medeltidslek"
+2025-11-20T21:31:29.8081401Z     Existing: "Borgen – rum för medeltidslek"
+2025-11-20T21:31:29.8081811Z     Date: 2026-01-14 | Venue: Varbergs
+2025-11-20T21:31:30.1436014Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:31:30.1437721Z     New: "Borgen – rum för medeltidslek"
+2025-11-20T21:31:30.1438596Z     Existing: "Borgen – rum för medeltidslek"
+2025-11-20T21:31:30.1439368Z     Date: 2026-01-15 | Venue: Varbergs
+2025-11-20T21:31:30.4529613Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:31:30.4531542Z     New: "Borgen – rum för medeltidslek"
+2025-11-20T21:31:30.4532427Z     Existing: "Borgen – rum för medeltidslek"
+2025-11-20T21:31:30.4533285Z     Date: 2026-01-16 | Venue: Varbergs
+2025-11-20T21:31:30.7928452Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:31:30.7929365Z     New: "Borgen – rum för medeltidslek"
+2025-11-20T21:31:30.7930225Z     Existing: "Borgen – rum för medeltidslek"
+2025-11-20T21:31:30.7930903Z     Date: 2026-01-17 | Venue: Varbergs
+2025-11-20T21:31:31.1514986Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:31:31.1515498Z     New: "Borgen – rum för medeltidslek"
+2025-11-20T21:31:31.1515990Z     Existing: "Borgen – rum för medeltidslek"
+2025-11-20T21:31:31.1516381Z     Date: 2026-01-18 | Venue: Varbergs
+2025-11-20T21:31:31.3223949Z   ⊘ URL duplicate: https://visitvarberg.se/evenemang/tillfalle?eventId=Onqen2K9oRhVlEJmDk8m
+2025-11-20T21:31:31.4849275Z   ⊘ URL duplicate: https://visitvarberg.se/evenemang/tillfalle?eventId=Xo73gzkod2uZyMA9ql09
+2025-11-20T21:31:31.6409100Z   ⊘ URL duplicate: https://visitvarberg.se/evenemang/tillfalle?eventId=EOqa1oxoeGh5XvOyJejy
+2025-11-20T21:31:31.8445015Z   ⊘ URL duplicate: https://visitvarberg.se/evenemang/tillfalle?eventId=R8NBOoEln6HeN8jOXEVg
+2025-11-20T21:31:32.0189452Z   ⊘ URL duplicate: https://visitvarberg.se/evenemang/tillfalle?eventId=ADdr5r6XA8U7QGEyDG0e
+2025-11-20T21:31:32.1775729Z   ⊘ URL duplicate: https://visitvarberg.se/evenemang/tillfalle?eventId=ZMa7PXXdNZsEJ6y0oyPM
+2025-11-20T21:31:32.3406034Z   ⊘ URL duplicate: https://visitvarberg.se/evenemang/tillfalle?eventId=9lD4VneaZoFyGEbMqm1X
+2025-11-20T21:31:32.6892257Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:31:32.6893218Z     New: "Julmarknad på Sonjas veranda"
+2025-11-20T21:31:32.6893716Z     Existing: "Julmarknad på Sonjas veranda"
+2025-11-20T21:31:32.6894117Z     Date: 2025-11-29 | Venue: Sonjas
+2025-11-20T21:31:33.0401331Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:31:33.0401839Z     New: "Julmarknad på Sonjas veranda"
+2025-11-20T21:31:33.0402309Z     Existing: "Julmarknad på Sonjas veranda"
+2025-11-20T21:31:33.0402698Z     Date: 2025-11-30 | Venue: Sonjas
+2025-11-20T21:31:33.2241190Z   ⊘ URL duplicate: https://visitvarberg.se/evenemang/tillfalle?eventId=6JMv9GQyZ4td2rx3EjoQ
+2025-11-20T21:31:33.4116909Z   ⊘ URL duplicate: https://visitvarberg.se/evenemang/tillfalle?eventId=rPzy4j3gm6Uv3OgPNrvo
+2025-11-20T21:31:33.5824771Z   ⊘ URL duplicate: https://visitvarberg.se/evenemang/tillfalle?eventId=3JeOOvVprEhgB773j9AA
+2025-11-20T21:31:33.7505309Z   ⊘ URL duplicate: https://visitvarberg.se/evenemang/tillfalle?eventId=3J4e1jyjl8HZXxqV0Z5g
+2025-11-20T21:31:33.9168574Z   ⊘ URL duplicate: https://visitvarberg.se/evenemang/tillfalle?eventId=3Je0bDVePpf3JOG6Xoen
+2025-11-20T21:31:34.0826917Z   ⊘ URL duplicate: https://visitvarberg.se/evenemang/tillfalle?eventId=mA5vZ9XEP9cXq0mamV89
+2025-11-20T21:31:34.4044721Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:31:34.4045388Z     New: "Jul i stan med Street Bourbon Band"
+2025-11-20T21:31:34.4046051Z     Existing: "Jul i stan med Street Bourbon Band"
+2025-11-20T21:31:34.4046638Z     Date: 2025-11-30 | Venue: Varbergs
+2025-11-20T21:31:34.5644877Z   ⊘ URL duplicate: https://visitvarberg.se/evenemang/tillfalle?eventId=PypKQj1kmlIn6yMN4Gr5
+2025-11-20T21:31:34.7277840Z   ⊘ URL duplicate: https://visitvarberg.se/evenemang/tillfalle?eventId=VV3G1r31PgUbqoBRkljX
+2025-11-20T21:31:34.8864144Z   ⊘ URL duplicate: https://visitvarberg.se/evenemang/tillfalle?eventId=EOqbX5pxMpIvA7yAJAMG
+2025-11-20T21:31:35.2227753Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:31:35.2228841Z     New: "Kulturquiz med Pär Andin"
+2025-11-20T21:31:35.2229433Z     Existing: "Kulturquiz med Pär Andin"
+2025-11-20T21:31:35.2230340Z     Date: 2025-12-04 | Venue: Borgmästaregatan
+2025-11-20T21:31:35.3843028Z   ⊘ URL duplicate: https://visitvarberg.se/evenemang/tillfalle?eventId=yPvMzQlR3Gtka5MqR4GJ
+2025-11-20T21:31:35.5391765Z   ⊘ URL duplicate: https://visitvarberg.se/evenemang/tillfalle?eventId=ozMgPN5G3aU5Mg9y6XpM
+2025-11-20T21:31:35.7012169Z   ⊘ URL duplicate: https://visitvarberg.se/evenemang/tillfalle?eventId=n8oxX4Zoknt182zG9kEA
+2025-11-20T21:31:35.8846536Z   ⊘ URL duplicate: https://visitvarberg.se/evenemang/tillfalle?eventId=5JRBl9gorjSD1JJ04rev
+2025-11-20T21:31:36.0496336Z   ⊘ URL duplicate: https://visitvarberg.se/evenemang/tillfalle?eventId=ADq46qQRD3Sq4qM3yM2b
+2025-11-20T21:31:36.3745354Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:31:36.3746105Z     New: "Julmarknad på Studio Terra (Varbergs tågstation)"
+2025-11-20T21:31:36.3746782Z     Existing: "Julmarknad på Studio Terra (Varbergs tågstation)"
+2025-11-20T21:31:36.3747260Z     Date: 2025-12-06 | Venue: Studio
+2025-11-20T21:31:36.6956589Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:31:36.6957573Z     New: "Julmarknad på Studio Terra (Varbergs tågstation)"
+2025-11-20T21:31:36.6958665Z     Existing: "Julmarknad på Studio Terra (Varbergs tågstation)"
+2025-11-20T21:31:36.6959397Z     Date: 2025-12-13 | Venue: Studio
+2025-11-20T21:31:37.0100214Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:31:37.0101217Z     New: "Julmarknad på Studio Terra (Varbergs tågstation)"
+2025-11-20T21:31:37.0102247Z     Existing: "Julmarknad på Studio Terra (Varbergs tågstation)"
+2025-11-20T21:31:37.0103001Z     Date: 2025-12-20 | Venue: Studio
+2025-11-20T21:31:37.1667178Z   ⊘ URL duplicate: https://visitvarberg.se/evenemang/tillfalle?eventId=rPDzoOz7N9FNq4rVrmR0
+2025-11-20T21:31:37.3201442Z   ⊘ URL duplicate: https://visitvarberg.se/evenemang/tillfalle?eventId=mAnOo5vg9ZCrmeEdnN6g
+2025-11-20T21:31:37.4804013Z   ⊘ URL duplicate: https://visitvarberg.se/evenemang/tillfalle?eventId=rPz7qNyeBDtvZJgMm7xm
+2025-11-20T21:31:37.8240700Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:31:37.8241965Z     New: "Adventsmys @Gården vid Bron"
+2025-11-20T21:31:37.8242711Z     Existing: "Adventsmys @Gården vid Bron"
+2025-11-20T21:31:37.8243343Z     Date: 2025-12-07 | Venue: Gården
+2025-11-20T21:31:38.1415668Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:31:38.1416394Z     New: "Adventsmys @Gården vid Bron"
+2025-11-20T21:31:38.1417063Z     Existing: "Adventsmys @Gården vid Bron"
+2025-11-20T21:31:38.1417711Z     Date: 2025-12-14 | Venue: Gården
+2025-11-20T21:31:38.4889334Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:31:38.4890076Z     New: "Adventsmys @Gården vid Bron"
+2025-11-20T21:31:38.4890804Z     Existing: "Adventsmys @Gården vid Bron"
+2025-11-20T21:31:38.4891488Z     Date: 2025-12-21 | Venue: Gården
+2025-11-20T21:31:38.6947671Z   ⊘ URL duplicate: https://visitvarberg.se/evenemang/tillfalle?eventId=6J4KXPlkDDHB4pdD7gll
+2025-11-20T21:31:38.8704501Z   ⊘ URL duplicate: https://visitvarberg.se/evenemang/tillfalle?eventId=PypzgVBV2dTRd3rOB5N1
+2025-11-20T21:31:39.2192623Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:31:39.2193396Z     New: "Rydell & Quick - årets julfest"
+2025-11-20T21:31:39.2194101Z     Existing: "Rydell & Quick – Årets Julfest!"
+2025-11-20T21:31:39.2195002Z     Date: 2025-12-11 | Venue: Arena
+2025-11-20T21:31:39.3893539Z   ⊘ URL duplicate: https://visitvarberg.se/evenemang/tillfalle?eventId=eEyAAPv2abu9BOZyrpNQ
+2025-11-20T21:31:39.5582468Z   ⊘ URL duplicate: https://visitvarberg.se/evenemang/tillfalle?eventId=OnN4nE8z05hjQGqglaNB
+2025-11-20T21:31:39.7281335Z   ⊘ URL duplicate: https://visitvarberg.se/evenemang/tillfalle?eventId=VV7578MjXVCaNd06orlB
+2025-11-20T21:31:40.0472839Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:31:40.0473471Z     New: "Christmas with Elvis"
+2025-11-20T21:31:40.0474023Z     Existing: "Christmas with Elvis"
+2025-11-20T21:31:40.0474851Z     Date: 2025-12-13 | Venue: Varbergs
+2025-11-20T21:31:40.2054577Z   ⊘ URL duplicate: https://visitvarberg.se/evenemang/tillfalle?eventId=VV7PPA4B6RSoOKQDAdEk
+2025-11-20T21:31:40.3877714Z   ⊘ URL duplicate: https://visitvarberg.se/evenemang/tillfalle?eventId=g6OBj1zjx3tG6R3GxERm
+2025-11-20T21:31:40.5480316Z   ⊘ URL duplicate: https://visitvarberg.se/evenemang/tillfalle?eventId=3JZZnZkaD7CnyJ1jdK3G
+2025-11-20T21:31:40.7043415Z   ⊘ URL duplicate: https://visitvarberg.se/evenemang/tillfalle?eventId=lybrjJv0KKhvJ9aE9xNV
+2025-11-20T21:31:41.0205334Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:31:41.0205993Z     New: "Jul på Rosenfred 2025"
+2025-11-20T21:31:41.0206590Z     Existing: "Jul på Rosenfred 2025"
+2025-11-20T21:31:41.0207168Z     Date: 2025-12-15 | Venue: Rosenfredsskolan
+2025-11-20T21:31:41.3372156Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:31:41.3372866Z     New: "Jul på Rosenfred 2025"
+2025-11-20T21:31:41.3373515Z     Existing: "Jul på Rosenfred 2025"
+2025-11-20T21:31:41.3374143Z     Date: 2025-12-16 | Venue: Rosenfredsskolan
+2025-11-20T21:31:41.4922311Z   ⊘ URL duplicate: https://visitvarberg.se/evenemang/tillfalle?eventId=2Jqdyl0OxgImRkEd5dA0
+2025-11-20T21:31:41.8165234Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:31:41.8165957Z     New: "West of Eden - Celtic Christmas"
+2025-11-20T21:31:41.8166628Z     Existing: "West of Eden - Celtic Christmas"
+2025-11-20T21:31:41.8167252Z     Date: 2025-12-18 | Venue: Varbergs
+2025-11-20T21:31:41.9703343Z   ⊘ URL duplicate: https://visitvarberg.se/evenemang/tillfalle?eventId=g6OE6JD3gauZ6RVXpPGR
+2025-11-20T21:31:42.3111041Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:31:42.3111961Z     New: "Fjärde advent i Galleria Trädgården - träffa tomten"
+2025-11-20T21:31:42.3112965Z     Existing: "Fjärde advent i Galleria Trädgården - träffa tomten"
+2025-11-20T21:31:42.3113660Z     Date: 2025-12-20 | Venue: Galleria
+2025-11-20T21:31:42.6573893Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:31:42.6575132Z     New: "Fjärde advent i Galleria Trädgården - träffa tomten"
+2025-11-20T21:31:42.6576329Z     Existing: "Fjärde advent i Galleria Trädgården - träffa tomten"
+2025-11-20T21:31:42.6576963Z     Date: 2025-12-21 | Venue: Galleria
+2025-11-20T21:31:42.8133626Z   ⊘ URL duplicate: https://visitvarberg.se/evenemang/tillfalle?eventId=NmJXAqnRa8FZVoarJjZv
+2025-11-20T21:31:42.9729470Z   ⊘ URL duplicate: https://visitvarberg.se/evenemang/tillfalle?eventId=n8o2nZ34r5SjZ6OaOngd
+2025-11-20T21:31:43.3062128Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:31:43.3062589Z     New: "Jullov på Stättared"
+2025-11-20T21:31:43.3062916Z     Existing: "Jullov på Stättared"
+2025-11-20T21:31:43.3063269Z     Date: 2025-12-27 | Venue: Stättareds
+2025-11-20T21:31:43.6204755Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:31:43.6205484Z     New: "Jullov på Stättared"
+2025-11-20T21:31:43.6206108Z     Existing: "Jullov på Stättared"
+2025-11-20T21:31:43.6206763Z     Date: 2025-12-28 | Venue: Stättareds
+2025-11-20T21:31:43.9972179Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:31:43.9972736Z     New: "Jullov på Stättared"
+2025-11-20T21:31:43.9973189Z     Existing: "Jullov på Stättared"
+2025-11-20T21:31:43.9973619Z     Date: 2025-12-29 | Venue: Stättareds
+2025-11-20T21:31:44.3997180Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:31:44.3997925Z     New: "Jullov på Stättared"
+2025-11-20T21:31:44.3998553Z     Existing: "Jullov på Stättared"
+2025-11-20T21:31:44.3999223Z     Date: 2025-12-30 | Venue: Stättareds
+2025-11-20T21:31:44.7902582Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:31:44.7903316Z     New: "Jullov på Stättared"
+2025-11-20T21:31:44.7903944Z     Existing: "Jullov på Stättared"
+2025-11-20T21:31:44.7904897Z     Date: 2026-01-02 | Venue: Stättareds
+2025-11-20T21:31:45.1457066Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:31:45.1457770Z     New: "Jullov på Stättared"
+2025-11-20T21:31:45.1458294Z     Existing: "Jullov på Stättared"
+2025-11-20T21:31:45.1458840Z     Date: 2026-01-03 | Venue: Stättareds
+2025-11-20T21:31:45.5035018Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:31:45.5035802Z     New: "Jullov på Stättared"
+2025-11-20T21:31:45.5036990Z     Existing: "Jullov på Stättared"
+2025-11-20T21:31:45.5037540Z     Date: 2026-01-04 | Venue: Stättareds
+2025-11-20T21:31:45.8146512Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:31:45.8147233Z     New: "Jullov på Stättared"
+2025-11-20T21:31:45.8147859Z     Existing: "Jullov på Stättared"
+2025-11-20T21:31:45.8148513Z     Date: 2026-01-05 | Venue: Stättareds
+2025-11-20T21:31:45.9787419Z   ⊘ URL duplicate: https://visitvarberg.se/evenemang/tillfalle?eventId=zP9vZ4oA98FBl63G3Kxo
+2025-11-20T21:31:46.1383130Z   ⊘ URL duplicate: https://visitvarberg.se/evenemang/tillfalle?eventId=ZM7GmDomRxU9JjGJQ05v
+2025-11-20T21:31:46.2934852Z   ⊘ URL duplicate: https://visitvarberg.se/evenemang/tillfalle?eventId=n8O7OXDzgliOkmqqdEXR
+2025-11-20T21:31:46.4592469Z   ⊘ URL duplicate: https://visitvarberg.se/evenemang/tillfalle?eventId=knVVyoe36vF04a0qAAry
+2025-11-20T21:31:46.7825352Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:31:46.7825747Z     New: "Jens Lekman"
+2025-11-20T21:31:46.7826096Z     Existing: "​Jens Lekman​"
+2025-11-20T21:31:46.7826496Z     Date: 2026-02-26 | Venue: Varbergs
+2025-11-20T21:31:47.1035814Z   ⊘ Fuzzy duplicate (100% match):
+2025-11-20T21:31:47.1036731Z     New: "Emil Gittansson Jensen- Vi måste hålla kontakten"
+2025-11-20T21:31:47.1037730Z     Existing: "​Emil Gittansson Jensen- Vi måste hålla kontakten​"
+2025-11-20T21:31:47.1038388Z     Date: 2026-03-12 | Venue: Varbergs
+2025-11-20T21:31:47.2615241Z   ⊘ URL duplicate: https://visitvarberg.se/evenemang/tillfalle?eventId=bN7XqZAB84tGz8yKrnj1
+2025-11-20T21:31:47.4376624Z   ⊘ URL duplicate: https://visitvarberg.se/evenemang/tillfalle?eventId=7JdMj1g3lbtr5gM4mB2E
+2025-11-20T21:31:47.5959897Z   ⊘ URL duplicate: https://visitvarberg.se/evenemang/tillfalle?eventId=q1ZZXEMydVfAKBOQlxM4
+2025-11-20T21:31:47.7506632Z   ⊘ URL duplicate: https://visitvarberg.se/evenemang/tillfalle?eventId=4J5BJR8MXBidxllP2GNO
+2025-11-20T21:31:47.9069815Z   ⊘ URL duplicate: https://visitvarberg.se/evenemang/tillfalle?eventId=DpDjyOa2DBfbqrJ8GxoP
+2025-11-20T21:31:47.9070894Z ✓ Efter databas-deduplicering: 0 nya events
+2025-11-20T21:31:47.9071540Z   📊 Rensade bort 337 dubletter
+2025-11-20T21:31:48.0832606Z 
+2025-11-20T21:31:48.0833918Z 🤖 Startar AI-kategorisering och kvalitetsbedömning...
+2025-11-20T21:31:48.0834969Z   📊 Startar AI-kategorisering...
+2025-11-20T21:31:48.4893967Z 📊 0 events grupperade i 0 unika eventnamn
+2025-11-20T21:31:48.4894939Z ✓ Kategorisering och kvalitetsbedömning klar: 0 events
+2025-11-20T21:31:48.4895286Z 
+2025-11-20T21:31:48.4895499Z 🏢 Matchning av arrangörer...
+2025-11-20T21:31:48.4895895Z   📊 Matchar arrangörer...
+2025-11-20T21:31:48.6758088Z 🔍 Visit Varberg-plattform detekterad - matchar 0 events till rätt arrangörer...
+2025-11-20T21:31:48.6758864Z ✓ Arrangörmatchning klar
+2025-11-20T21:31:48.6759107Z 
+2025-11-20T21:31:48.6759321Z 💾 Sparar till databas...
+2025-11-20T21:31:48.6759799Z   📊 Sparar events till databas...
+2025-11-20T21:31:48.8556522Z 
+2025-11-20T21:31:48.8557334Z 📊 Statistik:
+2025-11-20T21:31:48.8557967Z   - 0 auto-publicerade
+2025-11-20T21:31:48.8558614Z   - 0 behöver granskning
+2025-11-20T21:31:48.8559023Z   - 0 markerade som draft
+2025-11-20T21:31:48.8559604Z   - Genomsnittlig kvalitetspoäng: NaN/100
+2025-11-20T21:31:49.4955681Z 💾 Saved 327 duplicate logs to database
+2025-11-20T21:31:49.4956424Z   📊 Klar! 0 events importerade (0 auto-publicerade)
+2025-11-20T21:31:49.6826438Z 
+2025-11-20T21:31:49.6827098Z ✅ Import klar!
+2025-11-20T21:31:49.6827364Z 
+2025-11-20T21:31:49.6827388Z 
+2025-11-20T21:31:49.6827760Z   📊 Results for Visit Varberg:
+2025-11-20T21:31:49.6828272Z      • Imported: 0 new events
+2025-11-20T21:31:49.6828856Z      • Duplicates: 337 skipped
+2025-11-20T21:31:49.6829456Z      • Import time: 101.8s
+2025-11-20T21:31:49.8640738Z   ✅ Updated log entry with status: success
+2025-11-20T21:31:49.8641346Z 
+2025-11-20T21:31:49.8641818Z ============================================================
+2025-11-20T21:31:49.8642663Z 📊 FINAL SUMMARY
+2025-11-20T21:31:49.8643463Z ============================================================
+2025-11-20T21:31:49.8645010Z ✅ Successfully scraped: 2/4 sources
+2025-11-20T21:31:49.8645558Z 📥 Total events found: 387
+2025-11-20T21:31:49.8646024Z ➕ Total imported: 1
+2025-11-20T21:31:49.8646487Z 🔄 Total duplicates: 386
+2025-11-20T21:31:49.8647029Z ⏱️  Total time: 236.5s
+2025-11-20T21:31:49.8647707Z ⚠️  Failed scrapers: 2
+2025-11-20T21:31:49.8648580Z ============================================================
+2025-11-20T21:31:49.8649340Z ✅ Scraping complete!
+2025-11-20T21:31:49.8649525Z 
+2025-11-20T21:31:49.8649820Z 📧 Sending daily email report...
+2025-11-20T21:31:50.6348416Z ✅ Daily report sent to 1 recipient(s)
+2025-11-20T21:31:50.6348979Z    Recipients: isaketapper@gmail.com
+2025-11-20T21:31:50.6349582Z ✅ Email report sent successfully
+2025-11-20T21:31:50.6349872Z 
+2025-11-20T21:31:50.6729146Z Post job cleanup.
+2025-11-20T21:31:50.8280126Z Cache hit occurred on the primary key node-cache-Linux-x64-npm-c2f4abdb178402df8421acacf1f08714db15faed0d07c479131acf6e5be5953a, not saving cache.
+2025-11-20T21:31:50.8405284Z Post job cleanup.
+2025-11-20T21:31:50.9361125Z [command]/usr/bin/git version
+2025-11-20T21:31:50.9399880Z git version 2.51.2
+2025-11-20T21:31:50.9442760Z Temporarily overriding HOME='/home/runner/work/_temp/11bc9a77-d900-4673-996f-df7df928a2a9' before making global git config changes
+2025-11-20T21:31:50.9444147Z Adding repository directory to the temporary git global config as a safe directory
+2025-11-20T21:31:50.9448569Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/ivarberg-admin/ivarberg-admin
+2025-11-20T21:31:50.9489130Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2025-11-20T21:31:50.9520915Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2025-11-20T21:31:50.9748763Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2025-11-20T21:31:50.9769093Z http.https://github.com/.extraheader
+2025-11-20T21:31:50.9781159Z [command]/usr/bin/git config --local --unset-all http.https://github.com/.extraheader
+2025-11-20T21:31:50.9810715Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2025-11-20T21:31:51.0027752Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2025-11-20T21:31:51.0058726Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2025-11-20T21:31:51.0391256Z Cleaning up orphan processes

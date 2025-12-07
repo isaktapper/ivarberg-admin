@@ -21,7 +21,8 @@ import {
   AlertCircle,
   Globe,
   Mail,
-  Settings
+  Settings,
+  Star
 } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
@@ -40,6 +41,7 @@ const navigationGroups = [
     items: [
       { name: 'Alla events', href: '/events', icon: Calendar },
       { name: 'Granska Events', href: '/events/review', icon: CheckSquare, badge: true },
+      { name: 'Hero Featured', href: '/admin/hero-featured', icon: Star },
       { name: 'Tips', href: '/admin/tips', icon: AlertCircle, badge: true },
       { name: 'Dubletter', href: '/events/duplicates', icon: AlertCircle },
       { name: 'Scrapers', href: '/scrapers', icon: Download },
@@ -63,7 +65,7 @@ const navigationGroups = [
     ],
   },
   {
-    name: 'Övrigt',
+    name: 'Inställningar',
     icon: Settings,
     type: 'group' as const,
     items: [
@@ -114,6 +116,7 @@ export default function Navigation({
             (item.href === '/events/statistics' && pathname?.startsWith('/events/statistics')) ||
             (item.href === '/organizer-pages' && pathname?.startsWith('/organizer-pages')) ||
             (item.href === '/admin/tips' && pathname?.startsWith('/admin/tips')) ||
+            (item.href === '/admin/hero-featured' && pathname?.startsWith('/admin/hero-featured')) ||
             (item.href === '/admin/settings/notifications' && pathname?.startsWith('/admin/settings/notifications'))
           return isActive
         })
@@ -292,6 +295,7 @@ export default function Navigation({
                         (item.href === '/events/statistics' && pathname?.startsWith('/events/statistics')) ||
                         (item.href === '/organizer-pages' && pathname?.startsWith('/organizer-pages')) ||
                         (item.href === '/admin/tips' && pathname?.startsWith('/admin/tips')) ||
+                        (item.href === '/admin/hero-featured' && pathname?.startsWith('/admin/hero-featured')) ||
                         (item.href === '/admin/settings/notifications' && pathname?.startsWith('/admin/settings/notifications'))
                       
                       return (
@@ -433,6 +437,7 @@ export default function Navigation({
                     (item.href === '/events/statistics' && pathname?.startsWith('/events/statistics')) ||
                     (item.href === '/organizer-pages' && pathname?.startsWith('/organizer-pages')) ||
                     (item.href === '/admin/tips' && pathname?.startsWith('/admin/tips')) ||
+                    (item.href === '/admin/hero-featured' && pathname?.startsWith('/admin/hero-featured')) ||
                     (item.href === '/admin/settings/notifications' && pathname?.startsWith('/admin/settings/notifications'))
                   return isActive
                 })
@@ -466,6 +471,7 @@ export default function Navigation({
                             (item.href === '/events/statistics' && pathname?.startsWith('/events/statistics')) ||
                             (item.href === '/organizer-pages' && pathname?.startsWith('/organizer-pages')) ||
                             (item.href === '/admin/tips' && pathname?.startsWith('/admin/tips')) ||
+                            (item.href === '/admin/hero-featured' && pathname?.startsWith('/admin/hero-featured')) ||
                             (item.href === '/admin/settings/notifications' && pathname?.startsWith('/admin/settings/notifications'))
                           
                           return (

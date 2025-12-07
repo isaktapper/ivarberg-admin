@@ -1,0 +1,396 @@
+﻿2025-11-20T05:25:32.5668065Z Current runner version: '2.329.0'
+2025-11-20T05:25:32.5693498Z ##[group]Runner Image Provisioner
+2025-11-20T05:25:32.5694380Z Hosted Compute Agent
+2025-11-20T05:25:32.5694952Z Version: 20251016.436
+2025-11-20T05:25:32.5695737Z Commit: 8ab8ac8bfd662a3739dab9fe09456aba92132568
+2025-11-20T05:25:32.5696440Z Build Date: 2025-10-15T20:44:12Z
+2025-11-20T05:25:32.5697081Z ##[endgroup]
+2025-11-20T05:25:32.5697675Z ##[group]Operating System
+2025-11-20T05:25:32.5698459Z Ubuntu
+2025-11-20T05:25:32.5699014Z 24.04.3
+2025-11-20T05:25:32.5699507Z LTS
+2025-11-20T05:25:32.5700006Z ##[endgroup]
+2025-11-20T05:25:32.5700586Z ##[group]Runner Image
+2025-11-20T05:25:32.5701157Z Image: ubuntu-24.04
+2025-11-20T05:25:32.5701703Z Version: 20251112.124.1
+2025-11-20T05:25:32.5702799Z Included Software: https://github.com/actions/runner-images/blob/ubuntu24/20251112.124/images/ubuntu/Ubuntu2404-Readme.md
+2025-11-20T05:25:32.5704727Z Image Release: https://github.com/actions/runner-images/releases/tag/ubuntu24%2F20251112.124
+2025-11-20T05:25:32.5705781Z ##[endgroup]
+2025-11-20T05:25:32.5706968Z ##[group]GITHUB_TOKEN Permissions
+2025-11-20T05:25:32.5709196Z Contents: read
+2025-11-20T05:25:32.5709809Z Issues: write
+2025-11-20T05:25:32.5710407Z Metadata: read
+2025-11-20T05:25:32.5710943Z ##[endgroup]
+2025-11-20T05:25:32.5712946Z Secret source: Actions
+2025-11-20T05:25:32.5713782Z Prepare workflow directory
+2025-11-20T05:25:32.6026068Z Prepare all required actions
+2025-11-20T05:25:32.6063537Z Getting action download info
+2025-11-20T05:25:32.9143318Z Download action repository 'actions/checkout@v4' (SHA:34e114876b0b11c390a56381ad16ebd13914f8d5)
+2025-11-20T05:25:33.1885888Z Download action repository 'actions/setup-node@v4' (SHA:49933ea5288caeca8642d1e84afbd3f7d6820020)
+2025-11-20T05:25:33.3770841Z Download action repository 'actions/upload-artifact@v4' (SHA:ea165f8d65b6e75b540449e92b4886f43607fa02)
+2025-11-20T05:25:33.5695912Z Complete job name: scrape-events
+2025-11-20T05:25:33.6374419Z ##[group]Run actions/checkout@v4
+2025-11-20T05:25:33.6375340Z with:
+2025-11-20T05:25:33.6375805Z   repository: isaktapper/ivarberg-admin
+2025-11-20T05:25:33.6376521Z   token: ***
+2025-11-20T05:25:33.6376926Z   ssh-strict: true
+2025-11-20T05:25:33.6377353Z   ssh-user: git
+2025-11-20T05:25:33.6378076Z   persist-credentials: true
+2025-11-20T05:25:33.6378704Z   clean: true
+2025-11-20T05:25:33.6379144Z   sparse-checkout-cone-mode: true
+2025-11-20T05:25:33.6379643Z   fetch-depth: 1
+2025-11-20T05:25:33.6380055Z   fetch-tags: false
+2025-11-20T05:25:33.6380485Z   show-progress: true
+2025-11-20T05:25:33.6380948Z   lfs: false
+2025-11-20T05:25:33.6381340Z   submodules: false
+2025-11-20T05:25:33.6381765Z   set-safe-directory: true
+2025-11-20T05:25:33.6382529Z ##[endgroup]
+2025-11-20T05:25:33.7502200Z Syncing repository: isaktapper/ivarberg-admin
+2025-11-20T05:25:33.7504454Z ##[group]Getting Git version info
+2025-11-20T05:25:33.7505922Z Working directory is '/home/runner/work/ivarberg-admin/ivarberg-admin'
+2025-11-20T05:25:33.7508040Z [command]/usr/bin/git version
+2025-11-20T05:25:33.7590462Z git version 2.51.2
+2025-11-20T05:25:33.7617496Z ##[endgroup]
+2025-11-20T05:25:33.7634078Z Temporarily overriding HOME='/home/runner/work/_temp/731e9342-cb6e-4357-96df-9c13d3c0c09a' before making global git config changes
+2025-11-20T05:25:33.7636453Z Adding repository directory to the temporary git global config as a safe directory
+2025-11-20T05:25:33.7649047Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/ivarberg-admin/ivarberg-admin
+2025-11-20T05:25:33.7685715Z Deleting the contents of '/home/runner/work/ivarberg-admin/ivarberg-admin'
+2025-11-20T05:25:33.7689529Z ##[group]Initializing the repository
+2025-11-20T05:25:33.7694289Z [command]/usr/bin/git init /home/runner/work/ivarberg-admin/ivarberg-admin
+2025-11-20T05:25:33.7800161Z hint: Using 'master' as the name for the initial branch. This default branch name
+2025-11-20T05:25:33.7801461Z hint: is subject to change. To configure the initial branch name to use in all
+2025-11-20T05:25:33.7803017Z hint: of your new repositories, which will suppress this warning, call:
+2025-11-20T05:25:33.7804521Z hint:
+2025-11-20T05:25:33.7805527Z hint: 	git config --global init.defaultBranch <name>
+2025-11-20T05:25:33.7806476Z hint:
+2025-11-20T05:25:33.7807059Z hint: Names commonly chosen instead of 'master' are 'main', 'trunk' and
+2025-11-20T05:25:33.7808242Z hint: 'development'. The just-created branch can be renamed via this command:
+2025-11-20T05:25:33.7808963Z hint:
+2025-11-20T05:25:33.7809371Z hint: 	git branch -m <name>
+2025-11-20T05:25:33.7809843Z hint:
+2025-11-20T05:25:33.7810446Z hint: Disable this message with "git config set advice.defaultBranchName false"
+2025-11-20T05:25:33.7811980Z Initialized empty Git repository in /home/runner/work/ivarberg-admin/ivarberg-admin/.git/
+2025-11-20T05:25:33.7816757Z [command]/usr/bin/git remote add origin https://github.com/isaktapper/ivarberg-admin
+2025-11-20T05:25:33.7849847Z ##[endgroup]
+2025-11-20T05:25:33.7850608Z ##[group]Disabling automatic garbage collection
+2025-11-20T05:25:33.7853597Z [command]/usr/bin/git config --local gc.auto 0
+2025-11-20T05:25:33.7880956Z ##[endgroup]
+2025-11-20T05:25:33.7881634Z ##[group]Setting up auth
+2025-11-20T05:25:33.7887429Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2025-11-20T05:25:33.7917398Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2025-11-20T05:25:33.8275406Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2025-11-20T05:25:33.8306571Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2025-11-20T05:25:33.8526322Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2025-11-20T05:25:33.8556682Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2025-11-20T05:25:33.8786578Z [command]/usr/bin/git config --local http.https://github.com/.extraheader AUTHORIZATION: basic ***
+2025-11-20T05:25:33.8820038Z ##[endgroup]
+2025-11-20T05:25:33.8821308Z ##[group]Fetching the repository
+2025-11-20T05:25:33.8830200Z [command]/usr/bin/git -c protocol.version=2 fetch --no-tags --prune --no-recurse-submodules --depth=1 origin +572352a91d33aa761c1e5ea313b6f5e085bb99d2:refs/remotes/origin/main
+2025-11-20T05:25:34.1344718Z From https://github.com/isaktapper/ivarberg-admin
+2025-11-20T05:25:34.1346128Z  * [new ref]         572352a91d33aa761c1e5ea313b6f5e085bb99d2 -> origin/main
+2025-11-20T05:25:34.1377706Z ##[endgroup]
+2025-11-20T05:25:34.1380011Z ##[group]Determining the checkout info
+2025-11-20T05:25:34.1382191Z ##[endgroup]
+2025-11-20T05:25:34.1385905Z [command]/usr/bin/git sparse-checkout disable
+2025-11-20T05:25:34.1428597Z [command]/usr/bin/git config --local --unset-all extensions.worktreeConfig
+2025-11-20T05:25:34.1455442Z ##[group]Checking out the ref
+2025-11-20T05:25:34.1458955Z [command]/usr/bin/git checkout --progress --force -B main refs/remotes/origin/main
+2025-11-20T05:25:34.1628302Z Switched to a new branch 'main'
+2025-11-20T05:25:34.1630275Z branch 'main' set up to track 'origin/main'.
+2025-11-20T05:25:34.1639071Z ##[endgroup]
+2025-11-20T05:25:34.1672301Z [command]/usr/bin/git log -1 --format=%H
+2025-11-20T05:25:34.1693596Z 572352a91d33aa761c1e5ea313b6f5e085bb99d2
+2025-11-20T05:25:34.2000285Z ##[group]Run actions/setup-node@v4
+2025-11-20T05:25:34.2001419Z with:
+2025-11-20T05:25:34.2002188Z   node-version: 22
+2025-11-20T05:25:34.2003032Z   cache: npm
+2025-11-20T05:25:34.2003833Z   always-auth: false
+2025-11-20T05:25:34.2004710Z   check-latest: false
+2025-11-20T05:25:34.2005886Z   token: ***
+2025-11-20T05:25:34.2006663Z ##[endgroup]
+2025-11-20T05:25:34.3778533Z Found in cache @ /opt/hostedtoolcache/node/22.21.1/x64
+2025-11-20T05:25:34.3783220Z ##[group]Environment details
+2025-11-20T05:25:37.1966250Z node: v22.21.1
+2025-11-20T05:25:37.1967705Z npm: 10.9.4
+2025-11-20T05:25:37.1968227Z yarn: 1.22.22
+2025-11-20T05:25:37.1969507Z ##[endgroup]
+2025-11-20T05:25:37.1989288Z [command]/opt/hostedtoolcache/node/22.21.1/x64/bin/npm config get cache
+2025-11-20T05:25:37.5122042Z /home/runner/.npm
+2025-11-20T05:25:37.6670715Z Cache hit for: node-cache-Linux-x64-npm-c2f4abdb178402df8421acacf1f08714db15faed0d07c479131acf6e5be5953a
+2025-11-20T05:25:38.7104117Z Received 159383552 of 189303021 (84.2%), 151.8 MBs/sec
+2025-11-20T05:25:38.8972206Z Received 189303021 of 189303021 (100.0%), 152.1 MBs/sec
+2025-11-20T05:25:38.8973576Z Cache Size: ~181 MB (189303021 B)
+2025-11-20T05:25:38.9010112Z [command]/usr/bin/tar -xf /home/runner/work/_temp/be0eea01-0b95-4113-983a-f7b5a10ebdd8/cache.tzst -P -C /home/runner/work/ivarberg-admin/ivarberg-admin --use-compress-program unzstd
+2025-11-20T05:25:39.2412144Z Cache restored successfully
+2025-11-20T05:25:39.2782959Z Cache restored from key: node-cache-Linux-x64-npm-c2f4abdb178402df8421acacf1f08714db15faed0d07c479131acf6e5be5953a
+2025-11-20T05:25:39.2949153Z ##[group]Run npm ci
+2025-11-20T05:25:39.2949489Z [36;1mnpm ci[0m
+2025-11-20T05:25:39.2996924Z shell: /usr/bin/bash -e {0}
+2025-11-20T05:25:39.2997215Z ##[endgroup]
+2025-11-20T05:25:44.2435447Z npm warn deprecated string-similarity@4.0.4: Package no longer supported. Contact Support at https://www.npmjs.com/support for more info.
+2025-11-20T05:25:49.7922837Z 
+2025-11-20T05:25:49.7923610Z added 484 packages, and audited 485 packages in 10s
+2025-11-20T05:25:49.7924058Z 
+2025-11-20T05:25:49.7924365Z 163 packages are looking for funding
+2025-11-20T05:25:49.7924972Z   run `npm fund` for details
+2025-11-20T05:25:49.8005654Z 
+2025-11-20T05:25:49.8006305Z 3 vulnerabilities (2 moderate, 1 high)
+2025-11-20T05:25:49.8006704Z 
+2025-11-20T05:25:49.8007095Z To address issues that do not require attention, run:
+2025-11-20T05:25:49.8007631Z   npm audit fix
+2025-11-20T05:25:49.8008046Z 
+2025-11-20T05:25:49.8008397Z Some issues need review, and may require choosing
+2025-11-20T05:25:49.8009114Z a different dependency.
+2025-11-20T05:25:49.8009421Z 
+2025-11-20T05:25:49.8009641Z Run `npm audit` for details.
+2025-11-20T05:25:49.9236566Z ##[group]Run npx tsx scripts/run-scrapers.ts
+2025-11-20T05:25:49.9236961Z [36;1mnpx tsx scripts/run-scrapers.ts[0m
+2025-11-20T05:25:49.9270923Z shell: /usr/bin/bash -e {0}
+2025-11-20T05:25:49.9271180Z env:
+2025-11-20T05:25:49.9271624Z   NEXT_PUBLIC_SUPABASE_URL: ***
+2025-11-20T05:25:49.9273154Z   SUPABASE_SERVICE_ROLE_KEY: ***
+2025-11-20T05:25:49.9274058Z   OPENAI_API_KEY: ***
+2025-11-20T05:25:49.9274345Z   RESEND_API_KEY: ***
+2025-11-20T05:25:49.9274551Z ##[endgroup]
+2025-11-20T05:25:51.2089069Z 🚀 Starting iVarberg event scraping...
+2025-11-20T05:25:51.2089364Z 
+2025-11-20T05:25:51.2102994Z 📍 Running from: github-actions
+2025-11-20T05:25:51.2104251Z 🔗 Run URL: https://github.com/isaktapper/ivarberg-admin/actions/runs/19526625767
+2025-11-20T05:25:51.2105080Z 
+2025-11-20T05:25:51.2105743Z 📋 Found 4 active scrapers
+2025-11-20T05:25:51.2106130Z 
+2025-11-20T05:25:51.2106460Z 📅 Updating scraper schedules...
+2025-11-20T05:25:51.5695057Z    Next scheduled run: 2025-11-21T05:00:00.000Z (2025-11-21 05:00:00)
+2025-11-20T05:25:51.5695529Z 
+2025-11-20T05:25:53.8254677Z ============================================================
+2025-11-20T05:25:53.8255389Z 📡 Running: Arena Varberg
+2025-11-20T05:25:53.8255870Z 🔗 URL: https://arenavarberg.se/evenemang-varberg/
+2025-11-20T05:25:53.8256331Z ============================================================
+2025-11-20T05:25:53.8256561Z 
+2025-11-20T05:25:54.2605653Z   📝 Created log entry #117
+2025-11-20T05:25:56.4473878Z Found 18 event URLs to scrape
+2025-11-20T05:26:04.9619763Z Invalid image URL for Svansjön: "1"
+2025-11-20T05:26:04.9620463Z Could not find valid image for event: Svansjön
+2025-11-20T05:26:07.8106250Z Invalid image URL for Bengtsson & Bengtzing Showbiljett & Efterfesten: "1"
+2025-11-20T05:26:07.8107330Z Could not find valid image for event: Bengtsson & Bengtzing Showbiljett & Efterfesten
+2025-11-20T05:26:13.2854782Z Invalid image URL for Hipphipp Live!: "1"
+2025-11-20T05:26:13.2855593Z Could not find valid image for event: Hipphipp Live!
+2025-11-20T05:26:13.9984616Z Invalid image URL for Hipphipp Live!: "1"
+2025-11-20T05:26:13.9985486Z Could not find valid image for event: Hipphipp Live!
+2025-11-20T05:26:13.9991149Z   ✓ Found 18 events (20.2s)
+2025-11-20T05:26:13.9995053Z 
+2025-11-20T05:26:13.9995376Z 📦 Importerar 18 events...
+2025-11-20T05:26:13.9997567Z   📊 Hittade 18 events
+2025-11-20T05:26:14.1784618Z   📊 Rensar interna dubletter...
+2025-11-20T05:26:14.3471422Z ✓ Efter intern deduplicering: 18 unika events
+2025-11-20T05:26:14.3472140Z   📊 Kontrollerar mot databas... [0/18]
+2025-11-20T05:26:14.7061588Z   ⊘ URL duplicate: https://arenavarberg.se/evenemang/varbergsmorgon/
+2025-11-20T05:26:14.8462308Z   ⊘ URL duplicate: https://arenavarberg.se/evenemang/best-of-the-boss-the-bruce-springsteen-tribute/
+2025-11-20T05:26:15.0374105Z   ⊘ URL duplicate: https://arenavarberg.se/evenemang/pa-vart-vis/
+2025-11-20T05:26:15.1764345Z   ⊘ URL duplicate: https://arenavarberg.se/evenemang/hk-varberg/
+2025-11-20T05:26:15.3141204Z   ⊘ URL duplicate: https://arenavarberg.se/evenemang/tobbe-trollkarl-30-ars-jubileumsshow/
+2025-11-20T05:26:15.5055822Z   ⊘ URL duplicate: https://arenavarberg.se/evenemang/greczula/
+2025-11-20T05:26:15.6899191Z   ⊘ URL duplicate: https://arenavarberg.se/evenemang/swan-lake/
+2025-11-20T05:26:15.8224768Z   ⊘ URL duplicate: https://arenavarberg.se/evenemang/rydellquick/
+2025-11-20T05:26:15.9774534Z   ⊘ URL duplicate: https://arenavarberg.se/evenemang/storseans-med-martin-ohlson-medium/
+2025-11-20T05:26:16.1071144Z   ⊘ URL duplicate: https://arenavarberg.se/evenemang/bengtsson-bengtzing/
+2025-11-20T05:26:16.5348594Z   ⊘ URL duplicate: https://arenavarberg.se/evenemang/bjorn-gustafsson-live/
+2025-11-20T05:26:16.6690914Z   ⊘ URL duplicate: https://arenavarberg.se/evenemang/kikki-danielsson-avskedsturnen/
+2025-11-20T05:26:16.8047204Z   ⊘ URL duplicate: https://arenavarberg.se/evenemang/den-svenska-sangboken/
+2025-11-20T05:26:16.9436686Z   ⊘ URL duplicate: https://arenavarberg.se/evenemang/bara-hits-showen-om-mariann-grammofon/
+2025-11-20T05:26:17.0736274Z   ⊘ URL duplicate: https://arenavarberg.se/evenemang/haaks-live-2026/
+2025-11-20T05:26:17.2069846Z   ⊘ URL duplicate: https://arenavarberg.se/evenemang/hipphipp-live-952/
+2025-11-20T05:26:17.3407572Z   ⊘ URL duplicate: https://arenavarberg.se/evenemang/hipphipp-live/
+2025-11-20T05:26:17.3408764Z ✓ Efter databas-deduplicering: 1 nya events
+2025-11-20T05:26:17.3409415Z   📊 Rensade bort 17 dubletter
+2025-11-20T05:26:17.4716546Z 
+2025-11-20T05:26:17.4718195Z 🤖 Startar AI-kategorisering och kvalitetsbedömning...
+2025-11-20T05:26:17.4719229Z   📊 Startar AI-kategorisering... [0/1]
+2025-11-20T05:26:17.7615495Z 📊 1 events grupperade i 1 unika eventnamn
+2025-11-20T05:26:18.0240225Z   🤖 AI-kategoriserar: Bengtsson & Bengtzing Showbiljett & Efterfesten...
+2025-11-20T05:26:20.0093935Z      Raw AI response: {
+2025-11-20T05:26:20.0094620Z   "categories": ["Scen", "Nattliv", "Jul"],
+2025-11-20T05:26:20.0095091Z   "scores": {
+2025-11-20T05:26:20.0095411Z     "Scen": 0.9,
+2025-11-20T05:26:20.0095759Z     "Nattliv": 0.7,
+2025-11-20T05:26:20.0096101Z     "Jul": 0.6
+2025-11-20T05:26:20.0096411Z   }
+2025-11-20T05:26:20.0096674Z }...
+2025-11-20T05:26:20.0097485Z   ⚠️ Invalid combination detected: Nattliv + Jul
+2025-11-20T05:26:20.0098656Z      → Removed "Jul" to fix combination
+2025-11-20T05:26:20.0099377Z      → Scen, Nattliv (Scen: 90%, Nattliv: 70%)
+2025-11-20T05:26:20.0100718Z   🤖 AI categorized "Bengtsson & Bengtzing Showbiljett & Efterfesten": Scen, Nattliv (1 occasions)
+2025-11-20T05:26:22.0104359Z   ✓ Skippar moderation för betrodd källa: Arena Varberg
+2025-11-20T05:26:22.0106964Z   ⏳ Bengtsson & Bengtzing Showbiljett & Efterfesten... [2025-12-13]
+2025-11-20T05:26:22.0108315Z      Kategorier: Scen, Nattliv | Status: pending_approval | Score: 75/100
+2025-11-20T05:26:22.0109103Z      Problem: Bild saknas
+2025-11-20T05:26:22.0110483Z ✓ Kategorisering och kvalitetsbedömning klar: 1 events
+2025-11-20T05:26:22.0110922Z 
+2025-11-20T05:26:22.0111449Z 🏢 Matchning av arrangörer...
+2025-11-20T05:26:22.0112163Z   📊 Matchar arrangörer... [0/1]
+2025-11-20T05:26:22.1538616Z ✓ Arrangörmatchning klar
+2025-11-20T05:26:22.1538908Z 
+2025-11-20T05:26:22.1539182Z 💾 Sparar till databas...
+2025-11-20T05:26:22.1539748Z   📊 Sparar events till databas... [0/1]
+2025-11-20T05:26:23.0428503Z 
+2025-11-20T05:26:23.0429253Z 📊 Statistik:
+2025-11-20T05:26:23.0429689Z   - 0 auto-publicerade
+2025-11-20T05:26:23.0430185Z   - 1 behöver granskning
+2025-11-20T05:26:23.0430600Z   - 0 markerade som draft
+2025-11-20T05:26:23.0431187Z   - Genomsnittlig kvalitetspoäng: 75/100
+2025-11-20T05:26:23.4374768Z 💾 Saved 17 duplicate logs to database
+2025-11-20T05:26:23.4375547Z   📊 Klar! 1 events importerade (0 auto-publicerade)
+2025-11-20T05:26:23.5775413Z 
+2025-11-20T05:26:23.5775945Z ✅ Import klar!
+2025-11-20T05:26:23.5776207Z 
+2025-11-20T05:26:23.5776231Z 
+2025-11-20T05:26:23.5776572Z   📊 Results for Arena Varberg:
+2025-11-20T05:26:23.5777076Z      • Imported: 1 new events
+2025-11-20T05:26:23.5777490Z      • Duplicates: 17 skipped
+2025-11-20T05:26:23.5778162Z      • Import time: 9.6s
+2025-11-20T05:26:23.7241622Z   ✅ Updated log entry with status: success
+2025-11-20T05:26:23.7241955Z 
+2025-11-20T05:26:23.7242209Z ============================================================
+2025-11-20T05:26:23.7242726Z 📡 Running: Varbergs Teater
+2025-11-20T05:26:23.7243340Z 🔗 URL: https://varberg.se/kulturhuset-komedianten/kalender
+2025-11-20T05:26:23.7243921Z ============================================================
+2025-11-20T05:26:23.7244190Z 
+2025-11-20T05:26:23.8559067Z   📝 Created log entry #118
+2025-11-20T05:26:23.8563178Z 🎭 Startar scraping av Varbergs Teater via API...
+2025-11-20T05:26:24.2215059Z ❌ Fel vid API-scraping: TypeError: fetch failed
+2025-11-20T05:26:24.2215765Z     at node:internal/deps/undici/undici:14900:13
+2025-11-20T05:26:24.2216641Z     at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+2025-11-20T05:26:24.2218596Z     at async VarbergsTeaternScraper.fetchPage (/home/runner/work/ivarberg-admin/ivarberg-admin/src/lib/scrapers/varbergs-teatern-scraper.ts:94:22)
+2025-11-20T05:26:24.2219962Z     at async VarbergsTeaternScraper.scrape (/home/runner/work/ivarberg-admin/ivarberg-admin/src/lib/scrapers/varbergs-teatern-scraper.ts:35:29)
+2025-11-20T05:26:24.2221025Z     at async main (/home/runner/work/ivarberg-admin/ivarberg-admin/scripts/run-scrapers.ts:123:22) {
+2025-11-20T05:26:24.2221616Z   [cause]: AggregateError [ETIMEDOUT]: 
+2025-11-20T05:26:24.2222011Z       at internalConnectMultiple (node:net:1134:18)
+2025-11-20T05:26:24.2222424Z       at internalConnectMultiple (node:net:1210:5)
+2025-11-20T05:26:24.2222979Z       at Timeout.internalConnectMultipleTimeout (node:net:1742:5)
+2025-11-20T05:26:24.2223451Z       at listOnTimeout (node:internal/timers:590:11)
+2025-11-20T05:26:24.2223902Z       at process.processTimers (node:internal/timers:523:7) {
+2025-11-20T05:26:24.2224279Z     code: 'ETIMEDOUT',
+2025-11-20T05:26:24.2224559Z     [errors]: [ [Error], [Error] ]
+2025-11-20T05:26:24.2224835Z   }
+2025-11-20T05:26:24.2225033Z }
+2025-11-20T05:26:24.2225349Z   ❌ Error scraping Varbergs Teater:
+2025-11-20T05:26:24.2225645Z      fetch failed
+2025-11-20T05:26:24.2225927Z      Stack trace: TypeError: fetch failed
+2025-11-20T05:26:24.2226315Z          at node:internal/deps/undici/undici:14900:13
+2025-11-20T05:26:24.2226901Z          at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+2025-11-20T05:26:24.3516544Z   ⏭️  Continuing with next scraper...
+2025-11-20T05:26:24.3516994Z 
+2025-11-20T05:26:24.3517339Z ============================================================
+2025-11-20T05:26:24.3518247Z 📡 Running: Societén
+2025-11-20T05:26:24.3518925Z 🔗 URL: https://societen.se/kalender/
+2025-11-20T05:26:24.3519610Z ============================================================
+2025-11-20T05:26:24.3519929Z 
+2025-11-20T05:26:24.4853156Z   📝 Created log entry #119
+2025-11-20T05:26:24.4854529Z 🎭 Starting scrape of Societén...
+2025-11-20T05:26:25.3874271Z 📋 Found 1 event URLs
+2025-11-20T05:26:26.3813733Z   ✓ THE ARK KONSERT SOCIETETSPARKEN
+2025-11-20T05:26:26.3814444Z 🎉 Scraping complete! Found 1 events
+2025-11-20T05:26:26.3814937Z   ✓ Found 1 events (2.0s)
+2025-11-20T05:26:26.3815175Z 
+2025-11-20T05:26:26.3815406Z 📦 Importerar 1 events...
+2025-11-20T05:26:26.3815815Z   📊 Hittade 1 events
+2025-11-20T05:26:26.5525241Z   📊 Rensar interna dubletter...
+2025-11-20T05:26:26.7155281Z ✓ Efter intern deduplicering: 1 unika events
+2025-11-20T05:26:26.7155989Z   📊 Kontrollerar mot databas... [0/1]
+2025-11-20T05:26:26.9880564Z   ⊘ URL duplicate: https://societen.se/event/the-ark-konsert-societetsparken/
+2025-11-20T05:26:26.9881495Z ✓ Efter databas-deduplicering: 0 nya events
+2025-11-20T05:26:26.9882061Z   📊 Rensade bort 1 dubletter
+2025-11-20T05:26:27.1176851Z 
+2025-11-20T05:26:27.1178103Z 🤖 Startar AI-kategorisering och kvalitetsbedömning...
+2025-11-20T05:26:27.1178906Z   📊 Startar AI-kategorisering...
+2025-11-20T05:26:27.3798240Z 📊 0 events grupperade i 0 unika eventnamn
+2025-11-20T05:26:27.3799144Z ✓ Kategorisering och kvalitetsbedömning klar: 0 events
+2025-11-20T05:26:27.3799566Z 
+2025-11-20T05:26:27.3799841Z 🏢 Matchning av arrangörer...
+2025-11-20T05:26:27.3800347Z   📊 Matchar arrangörer...
+2025-11-20T05:26:27.5137141Z ✓ Arrangörmatchning klar
+2025-11-20T05:26:27.5137566Z 
+2025-11-20T05:26:27.5138179Z 💾 Sparar till databas...
+2025-11-20T05:26:27.5138931Z   📊 Sparar events till databas...
+2025-11-20T05:26:27.6463332Z 
+2025-11-20T05:26:27.6465725Z 📊 Statistik:
+2025-11-20T05:26:27.6466858Z   - 0 auto-publicerade
+2025-11-20T05:26:27.6467702Z   - 0 behöver granskning
+2025-11-20T05:26:27.6468381Z   - 0 markerade som draft
+2025-11-20T05:26:27.6469094Z   - Genomsnittlig kvalitetspoäng: NaN/100
+2025-11-20T05:26:27.7824577Z 💾 Saved 1 duplicate logs to database
+2025-11-20T05:26:27.7825420Z   📊 Klar! 0 events importerade (0 auto-publicerade)
+2025-11-20T05:26:27.9136092Z 
+2025-11-20T05:26:27.9136767Z ✅ Import klar!
+2025-11-20T05:26:27.9137014Z 
+2025-11-20T05:26:27.9137032Z 
+2025-11-20T05:26:27.9137644Z   📊 Results for Societén:
+2025-11-20T05:26:27.9138250Z      • Imported: 0 new events
+2025-11-20T05:26:27.9138575Z      • Duplicates: 1 skipped
+2025-11-20T05:26:27.9138877Z      • Import time: 1.5s
+2025-11-20T05:26:28.0484316Z   ✅ Updated log entry with status: success
+2025-11-20T05:26:28.0484822Z 
+2025-11-20T05:26:28.0485201Z ============================================================
+2025-11-20T05:26:28.0485967Z 📡 Running: Visit Varberg
+2025-11-20T05:26:28.0486832Z 🔗 URL: https://visitvarberg.se/evenemang?limit=500
+2025-11-20T05:26:28.0487694Z ============================================================
+2025-11-20T05:26:28.0488191Z 
+2025-11-20T05:26:28.1796706Z   📝 Created log entry #120
+2025-11-20T05:26:28.1798006Z 🎭 Starting scrape of Visit Varberg...
+2025-11-20T05:26:28.5388134Z Error scraping Visit Varberg: TypeError: fetch failed
+2025-11-20T05:26:28.5388905Z     at node:internal/deps/undici/undici:14900:13
+2025-11-20T05:26:28.5389797Z     at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+2025-11-20T05:26:28.5391233Z     at async VisitVarbergScraper.fetchHTML (/home/runner/work/ivarberg-admin/ivarberg-admin/src/lib/scrapers/base-scraper.ts:29:22)
+2025-11-20T05:26:28.5393033Z     at async VisitVarbergScraper.scrape (/home/runner/work/ivarberg-admin/ivarberg-admin/src/lib/scrapers/visit-varberg-scraper.ts:39:24)
+2025-11-20T05:26:28.5393907Z     at async main (/home/runner/work/ivarberg-admin/ivarberg-admin/scripts/run-scrapers.ts:123:22) {
+2025-11-20T05:26:28.5394409Z   [cause]: AggregateError [ETIMEDOUT]: 
+2025-11-20T05:26:28.5394753Z       at internalConnectMultiple (node:net:1134:18)
+2025-11-20T05:26:28.5395108Z       at internalConnectMultiple (node:net:1210:5)
+2025-11-20T05:26:28.5395515Z       at Timeout.internalConnectMultipleTimeout (node:net:1742:5)
+2025-11-20T05:26:28.5396021Z       at listOnTimeout (node:internal/timers:590:11)
+2025-11-20T05:26:28.5396896Z       at process.processTimers (node:internal/timers:523:7) {
+2025-11-20T05:26:28.5397210Z     code: 'ETIMEDOUT',
+2025-11-20T05:26:28.5397457Z     [errors]: [ [Error], [Error] ]
+2025-11-20T05:26:28.5397691Z   }
+2025-11-20T05:26:28.5398096Z }
+2025-11-20T05:26:28.5398548Z   ❌ Error scraping Visit Varberg:
+2025-11-20T05:26:28.5398805Z      fetch failed
+2025-11-20T05:26:28.5399060Z      Stack trace: TypeError: fetch failed
+2025-11-20T05:26:28.5399390Z          at node:internal/deps/undici/undici:14900:13
+2025-11-20T05:26:28.5399875Z          at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+2025-11-20T05:26:28.7152040Z   ⏭️  Continuing with next scraper...
+2025-11-20T05:26:28.7152439Z 
+2025-11-20T05:26:28.7152752Z ============================================================
+2025-11-20T05:26:28.7153231Z 📊 FINAL SUMMARY
+2025-11-20T05:26:28.7153568Z ============================================================
+2025-11-20T05:26:28.7154044Z ✅ Successfully scraped: 2/4 sources
+2025-11-20T05:26:28.7154402Z 📥 Total events found: 19
+2025-11-20T05:26:28.7154706Z ➕ Total imported: 1
+2025-11-20T05:26:28.7155012Z 🔄 Total duplicates: 18
+2025-11-20T05:26:28.7155310Z ⏱️  Total time: 37.5s
+2025-11-20T05:26:28.7155600Z ⚠️  Failed scrapers: 2
+2025-11-20T05:26:28.7155939Z ============================================================
+2025-11-20T05:26:28.7156299Z ✅ Scraping complete!
+2025-11-20T05:26:28.7156451Z 
+2025-11-20T05:26:28.7156698Z 📧 Sending daily email report...
+2025-11-20T05:26:29.4231143Z ✅ Daily report sent to 1 recipient(s)
+2025-11-20T05:26:29.4231684Z    Recipients: isaketapper@gmail.com
+2025-11-20T05:26:29.4232278Z ✅ Email report sent successfully
+2025-11-20T05:26:29.4232534Z 
+2025-11-20T05:26:29.4618613Z Post job cleanup.
+2025-11-20T05:26:29.6129799Z Cache hit occurred on the primary key node-cache-Linux-x64-npm-c2f4abdb178402df8421acacf1f08714db15faed0d07c479131acf6e5be5953a, not saving cache.
+2025-11-20T05:26:29.6250741Z Post job cleanup.
+2025-11-20T05:26:29.7177365Z [command]/usr/bin/git version
+2025-11-20T05:26:29.7213025Z git version 2.51.2
+2025-11-20T05:26:29.7256463Z Temporarily overriding HOME='/home/runner/work/_temp/045c68f3-9e71-4b6d-92b5-a0bd4e0c6165' before making global git config changes
+2025-11-20T05:26:29.7258166Z Adding repository directory to the temporary git global config as a safe directory
+2025-11-20T05:26:29.7263040Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/ivarberg-admin/ivarberg-admin
+2025-11-20T05:26:29.7297162Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2025-11-20T05:26:29.7328152Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2025-11-20T05:26:29.7552510Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2025-11-20T05:26:29.7572703Z http.https://github.com/.extraheader
+2025-11-20T05:26:29.7585220Z [command]/usr/bin/git config --local --unset-all http.https://github.com/.extraheader
+2025-11-20T05:26:29.7614960Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2025-11-20T05:26:29.7830981Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2025-11-20T05:26:29.7860661Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2025-11-20T05:26:29.8179316Z Cleaning up orphan processes

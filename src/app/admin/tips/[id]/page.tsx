@@ -71,77 +71,19 @@ export default function AdminTipDetailPage() {
 
     setConverting(true)
     try {
-      // Skapa event direkt i databasen (client-side)
-      const { generateUniqueEventId } = await import('@/lib/event-id-generator')
-      const { supabase } = await import('@/lib/supabase')
-      
-      // Generera unikt event ID
-      const eventId = await generateUniqueEventId(
-        tip.event_name,
-        `tip-${tip.id}`,
-        supabase
-      )
+      const response = await fetch(`/api/admin/tips/${params.id}/convert`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+      })
 
-      // Förbered categories
-      const categories = tip.categories && tip.categories.length > 0
-        ? tip.categories
-        : tip.category
-          ? [tip.category]
-          : ['Okategoriserad']
+      const data = await response.json()
 
-      const mainCategory = categories[0]
-
-      // Helper function för category scores
-      const generateCategoryScores = (cats: string[]) => {
-        return cats.reduce((scores, cat, index) => {
-          scores[cat] = 1.0 - (index * 0.1)
-          return scores
-        }, {} as Record<string, number>)
+      if (!response.ok || data.error) {
+        throw new Error(data.details || data.error || 'Failed to convert tip')
       }
 
-      // Skapa event
-      const { data: event, error: eventError } = await supabase
-        .from('events')
-        .insert([{
-          event_id: eventId,
-          name: tip.event_name,
-          date_time: tip.date_time || tip.event_date,
-          location: tip.event_location || '',
-          venue_name: tip.venue_name,
-          description: tip.event_description,
-          description_format: 'plaintext',
-          category: mainCategory,
-          categories: categories,
-          category_scores: generateCategoryScores(categories),
-          image_url: tip.image_url,
-          organizer_event_url: tip.website_url,
-          status: 'draft',
-          tags: ['tips', 'user-submitted'],
-          price: null,
-          organizer_id: null,
-          is_featured: false,
-          featured: false,
-          max_participants: null,
-          quality_score: null,
-          quality_issues: null,
-          auto_published: false
-        }])
-        .select()
-        .single()
-
-      if (eventError) throw eventError
-
-      // Uppdatera tip status
-      await supabase
-        .from('event_tips')
-        .update({
-          status: 'converted',
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', tip.id)
-
       alert('✅ Tips konverterat till event! Du kommer att tas till redigeringssidan.')
-      router.push(`/events/${event.id}/edit`)
+      router.push(`/events/${data.event.id}/edit`)
     } catch (error) {
       console.error('Error converting tip:', error)
       alert(`Fel vid konvertering av tips: ${error instanceof Error ? error.message : 'Okänt fel'}`)

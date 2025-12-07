@@ -34,8 +34,6 @@ export const eventSchema = z.object({
   price: z.string().optional().or(z.literal('')),
   image_url: z.string().url('Ogiltig URL').optional().or(z.literal('')),
   organizer_event_url: z.string().url('Ogiltig URL').optional().or(z.literal('')),
-  // Support både gamla och nya kategori-systemet
-  category: z.enum(eventCategories).optional(), // Deprecated: använd categories istället
   categories: z.array(z.enum(eventCategories)).min(1, 'Minst en kategori krävs').max(3, 'Max 3 kategorier'),
   organizer_id: z.number().optional(),
   featured: z.boolean(),

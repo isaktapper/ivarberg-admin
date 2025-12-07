@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { supabase } from '@/lib/supabase'
+import { supabaseAdmin } from '@/lib/supabase-server'
 import { generateUniqueEventId } from '@/lib/event-id-generator'
 
 /**
@@ -28,7 +28,7 @@ export async function POST(
   
   try {
     // Hämta tipset
-    const { data: tip, error: tipError } = await supabase
+    const { data: tip, error: tipError } = await supabaseAdmin
       .from('event_tips')
       .select('*')
       .eq('id', id)
@@ -54,7 +54,7 @@ export async function POST(
     const eventId = await generateUniqueEventId(
       tip.event_name,
       `tip-${tip.id}`,
-      supabase
+      supabaseAdmin
     )
 
     // Förbered categories
@@ -63,8 +63,6 @@ export async function POST(
       : tip.category
         ? [tip.category]
         : ['Okategoriserad']
-
-    const mainCategory = categories[0]
 
     // Skapa event från tips
     const eventData = {
@@ -75,7 +73,6 @@ export async function POST(
       venue_name: tip.venue_name,
       description: tip.event_description,
       description_format: 'plaintext' as const,
-      category: mainCategory,
       categories: categories,
       category_scores: generateCategoryScores(categories),
       image_url: tip.image_url,
@@ -92,7 +89,7 @@ export async function POST(
       auto_published: false
     }
 
-    const { data: event, error: eventError } = await supabase
+    const { data: event, error: eventError } = await supabaseAdmin
       .from('events')
       .insert([eventData])
       .select()
@@ -101,7 +98,7 @@ export async function POST(
     if (eventError) throw eventError
 
     // Uppdatera tip status till converted
-    const { error: updateError } = await supabase
+    const { error: updateError } = await supabaseAdmin
       .from('event_tips')
       .update({
         status: 'converted',

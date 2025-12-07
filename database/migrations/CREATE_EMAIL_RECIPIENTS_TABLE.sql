@@ -54,3 +54,7 @@ COMMENT ON COLUMN email_recipients.enabled IS 'Om mottagaren är aktiv och ska f
 -- INSERT INTO email_recipients (email, name, notification_types, enabled)
 -- VALUES ('din@email.com', 'Ditt Namn', ARRAY['daily_report'], true);
 
+
+
+
+
