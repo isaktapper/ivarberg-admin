@@ -1,6 +1,34 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { createServerClient } from '@supabase/ssr'
+import { cookies } from 'next/headers'
 import { supabaseAdmin } from '@/lib/supabase-server'
 import { generateUniqueEventId } from '@/lib/event-id-generator'
+
+/**
+ * Verify server-side authentication
+ */
+async function verifyAuth() {
+  const cookieStore = await cookies()
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        get(name: string) {
+          return cookieStore.get(name)?.value
+        },
+      },
+    }
+  )
+
+  const { data: { session }, error } = await supabase.auth.getSession()
+
+  if (!session || error) {
+    return null
+  }
+
+  return session
+}
 
 /**
  * Helper function för att generera category scores
@@ -25,8 +53,17 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params
-  
+
   try {
+    // Verify authentication
+    const session = await verifyAuth()
+    if (!session) {
+      return NextResponse.json(
+        { error: 'Unauthorized' },
+        { status: 401 }
+      )
+    }
+
     // Hämta tipset
     const { data: tip, error: tipError } = await supabaseAdmin
       .from('event_tips')

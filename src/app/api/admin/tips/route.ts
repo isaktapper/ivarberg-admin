@@ -1,5 +1,32 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { supabase } from '@/lib/supabase'
+import { createServerClient } from '@supabase/ssr'
+import { cookies } from 'next/headers'
+
+/**
+ * Verify server-side authentication
+ */
+async function verifyAuth() {
+  const cookieStore = await cookies()
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        get(name: string) {
+          return cookieStore.get(name)?.value
+        },
+      },
+    }
+  )
+
+  const { data: { session }, error } = await supabase.auth.getSession()
+
+  if (!session || error) {
+    return { session: null, supabase }
+  }
+
+  return { session, supabase }
+}
 
 /**
  * GET /api/admin/tips
@@ -7,6 +34,15 @@ import { supabase } from '@/lib/supabase'
  */
 export async function GET(request: NextRequest) {
   try {
+    // Verify authentication
+    const { session, supabase } = await verifyAuth()
+    if (!session) {
+      return NextResponse.json(
+        { error: 'Unauthorized' },
+        { status: 401 }
+      )
+    }
+
     const { searchParams } = new URL(request.url)
     const status = searchParams.get('status')
     const page = parseInt(searchParams.get('page') || '1')
@@ -54,6 +90,15 @@ export async function GET(request: NextRequest) {
  */
 export async function POST(request: NextRequest) {
   try {
+    // Verify authentication
+    const { session, supabase } = await verifyAuth()
+    if (!session) {
+      return NextResponse.json(
+        { error: 'Unauthorized' },
+        { status: 401 }
+      )
+    }
+
     const body = await request.json()
 
     const { data, error } = await supabase

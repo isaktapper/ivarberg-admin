@@ -1,5 +1,32 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { supabase } from '@/lib/supabase'
+import { createServerClient } from '@supabase/ssr'
+import { cookies } from 'next/headers'
+
+/**
+ * Verify server-side authentication
+ */
+async function verifyAuth() {
+  const cookieStore = await cookies()
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        get(name: string) {
+          return cookieStore.get(name)?.value
+        },
+      },
+    }
+  )
+
+  const { data: { session }, error } = await supabase.auth.getSession()
+
+  if (!session || error) {
+    return { session: null, supabase }
+  }
+
+  return { session, supabase }
+}
 
 /**
  * POST /api/admin/tips/:id/reject
@@ -10,8 +37,17 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params
-  
+
   try {
+    // Verify authentication
+    const { session, supabase } = await verifyAuth()
+    if (!session) {
+      return NextResponse.json(
+        { error: 'Unauthorized' },
+        { status: 401 }
+      )
+    }
+
     const body = await request.json()
     const reason = body.reason || 'No reason provided'
 
