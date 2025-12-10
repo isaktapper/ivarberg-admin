@@ -118,7 +118,7 @@ export class OrganizerMatcher {
   }
 
   /**
-   * Exakt match på organizer name
+   * Exakt match på organizer name eller alternative names
    */
   private async findByName(name: string): Promise<number | null> {
     const normalized = name.trim().toLowerCase();
@@ -128,15 +128,39 @@ export class OrganizerMatcher {
       return this.organizerCache.get(normalized)!;
     }
 
-    const { data } = await this.supabase
+    // 1. Försök exakt match på name
+    const { data: nameMatch } = await this.supabase
       .from('organizers')
       .select('id, name')
       .ilike('name', normalized)
       .single();
 
-    if (data) {
-      this.organizerCache.set(normalized, data.id);
-      return data.id;
+    if (nameMatch) {
+      this.organizerCache.set(normalized, nameMatch.id);
+      return nameMatch.id;
+    }
+
+    // 2. Försök matcha på alternative_names
+    const { data: altMatches } = await this.supabase
+      .from('organizers')
+      .select('id, name, alternative_names')
+      .not('alternative_names', 'is', null);
+
+    if (altMatches) {
+      for (const org of altMatches) {
+        // Kontrollera om någon av de alternativa namnen matchar
+        if (org.alternative_names && Array.isArray(org.alternative_names)) {
+          const match = org.alternative_names.some(
+            altName => altName.trim().toLowerCase() === normalized
+          );
+          
+          if (match) {
+            console.log(`  🔗 Matched "${name}" via alternative name for organizer "${org.name}" (ID: ${org.id})`);
+            this.organizerCache.set(normalized, org.id);
+            return org.id;
+          }
+        }
+      }
     }
 
     return null;
@@ -203,7 +227,7 @@ export class OrganizerMatcher {
     // Hämta alla organizers med venue_name
     const { data } = await this.supabase
       .from('organizers')
-      .select('id, name, venue_name')
+      .select('id, name, venue_name, alternative_names')
       .not('venue_name', 'is', null);
 
     if (!data || data.length === 0) return null;
@@ -231,6 +255,21 @@ export class OrganizerMatcher {
           id: org.id,
           confidence: nameSimilarity
         };
+      }
+
+      // Kolla mot alternativa namn
+      if (org.alternative_names && Array.isArray(org.alternative_names)) {
+        for (const altName of org.alternative_names) {
+          const altNameNormalized = this.normalizeVenueName(altName);
+          const altSimilarity = stringSimilarity.compareTwoStrings(normalized, altNameNormalized);
+
+          if (altSimilarity >= 0.80 && (!bestMatch || altSimilarity > bestMatch.confidence)) {
+            bestMatch = {
+              id: org.id,
+              confidence: altSimilarity
+            };
+          }
+        }
       }
     }
 

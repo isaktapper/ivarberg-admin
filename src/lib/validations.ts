@@ -49,6 +49,7 @@ export const organizerSchema = z.object({
   phone: z.string().optional(),
   email: z.string().email('Ogiltig e-postadress').optional().or(z.literal('')),
   website: z.string().url('Ogiltig URL').optional().or(z.literal('')),
+  alternative_names: z.array(z.string()).optional(), // Alternativa namn för matchning
 })
 
 export type EventFormData = z.infer<typeof eventSchema>

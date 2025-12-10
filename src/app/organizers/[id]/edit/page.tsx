@@ -9,7 +9,7 @@ import { organizerSchema, OrganizerFormData } from '@/lib/validations'
 import { Organizer } from '@/types/database'
 import ProtectedLayout from '@/components/ProtectedLayout'
 import GooglePlacesAutocomplete from '@/components/GooglePlacesAutocomplete'
-import { ArrowLeft, Save, AlertCircle } from 'lucide-react'
+import { ArrowLeft, Save, AlertCircle, X, Plus } from 'lucide-react'
 import Link from 'next/link'
 
 export default function EditOrganizerPage() {
@@ -39,6 +39,8 @@ export default function EditOrganizerPage() {
   const [selectedStatus, setSelectedStatus] = useState<'active' | 'pending' | 'archived'>('active')
   const [showPublishModal, setShowPublishModal] = useState(false)
   const [draftEventCount, setDraftEventCount] = useState(0)
+  const [alternativeNames, setAlternativeNames] = useState<string[]>([])
+  const [newAlternativeName, setNewAlternativeName] = useState('')
 
   useEffect(() => {
     if (organizer) {
@@ -49,8 +51,10 @@ export default function EditOrganizerPage() {
         phone: organizer.phone || '',
         email: organizer.email || '',
         website: organizer.website || '',
+        alternative_names: organizer.alternative_names || [],
       })
       setSelectedStatus(organizer.status)
+      setAlternativeNames(organizer.alternative_names || [])
     }
   }, [organizer, reset])
 
@@ -108,6 +112,7 @@ export default function EditOrganizerPage() {
         phone: data.phone || null,
         email: data.email || null,
         website: data.website || null,
+        alternative_names: alternativeNames.length > 0 ? alternativeNames : null,
         status: selectedStatus,
         needs_review: selectedStatus === 'pending', // Endast pending behöver review
         updated_at: new Date().toISOString(),
@@ -283,6 +288,72 @@ export default function EditOrganizerPage() {
                   {errors.website && (
                     <p className="mt-2 text-sm text-red-600">{errors.website.message}</p>
                   )}
+                </div>
+
+                {/* Alternative Names */}
+                <div className="sm:col-span-2">
+                  <label htmlFor="alternative_names" className="block text-sm font-medium text-gray-700">
+                    Alternativa namn
+                  </label>
+                  <p className="text-sm text-gray-500 mb-2">
+                    Lägg till alternativa namn som används vid matchning (ex: Sparbankshallen, Rotundan för Arena Varberg). Syns inte publikt.
+                  </p>
+                  
+                  {/* Lista med alternativa namn */}
+                  <div className="flex flex-wrap gap-2 mb-2">
+                    {alternativeNames.map((name, index) => (
+                      <div
+                        key={index}
+                        className="inline-flex items-center px-3 py-1 rounded-full text-sm bg-blue-100 text-blue-800"
+                      >
+                        <span>{name}</span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const newNames = alternativeNames.filter((_, i) => i !== index)
+                            setAlternativeNames(newNames)
+                          }}
+                          className="ml-2 text-blue-600 hover:text-blue-800"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Input för att lägga till nytt alternativt namn */}
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={newAlternativeName}
+                      onChange={(e) => setNewAlternativeName(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault()
+                          const trimmed = newAlternativeName.trim()
+                          if (trimmed && !alternativeNames.includes(trimmed)) {
+                            setAlternativeNames([...alternativeNames, trimmed])
+                            setNewAlternativeName('')
+                          }
+                        }
+                      }}
+                      className="flex-1 block border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                      placeholder="Skriv ett alternativt namn och tryck Enter"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const trimmed = newAlternativeName.trim()
+                        if (trimmed && !alternativeNames.includes(trimmed)) {
+                          setAlternativeNames([...alternativeNames, trimmed])
+                          setNewAlternativeName('')
+                        }
+                      }}
+                      className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                    >
+                      <Plus className="w-4 h-4" />
+                    </button>
+                  </div>
                 </div>
 
                 {/* Status */}

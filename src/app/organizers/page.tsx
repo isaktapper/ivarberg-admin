@@ -304,11 +304,13 @@ export default function OrganizersPage() {
       // 5. Uppdatera lokal state
       setOrganizers(organizers.filter(org => org.id !== organizerToMerge.id))
 
-      const summary = pageCount && pageCount > 0 
-        ? `Merge lyckades! ${eventCount} events och ${pageCount} organizer pages flyttades.`
-        : `Merge lyckades! ${eventCount} events flyttades.`
+      const pageInfo = sourcePage 
+        ? targetPage 
+          ? ' Source organizer page togs bort (target hade redan en page).'
+          : ' Organizer page flyttades till target.'
+        : ''
       
-      alert(summary)
+      alert(`Merge lyckades! ${eventCount || 0} events flyttades.${pageInfo}`)
       setShowMergeModal(false)
       setOrganizerToMerge(null)
       setTargetOrganizerId(null)

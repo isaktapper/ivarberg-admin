@@ -18,6 +18,7 @@ export interface Organizer {
   phone?: string
   email?: string
   website?: string
+  alternative_names?: string[] // Alternativa namn som används vid matchning (t.ex. ["Sparbankshallen", "Rotundan"])
   status: OrganizerStatus // Status: active, pending (väntar på godkännande), archived
   created_from_scraper: boolean // TRUE om auto-skapad av scraper
   needs_review: boolean // TRUE om arrangören behöver granskas
