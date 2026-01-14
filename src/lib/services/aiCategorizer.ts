@@ -1,7 +1,11 @@
 import OpenAI from 'openai';
+import { alertService } from './alert-service';
 
 // Lazy initialization - skapas först när den används
 let openai: OpenAI | null = null;
+
+// Track om vi redan har skickat alert för denna session (undvik spam)
+let quotaAlertSent = false;
 
 function getOpenAIClient(): OpenAI {
   if (!openai) {
@@ -212,8 +216,27 @@ Svara ENDAST med JSON i exakt detta format, inget annat.`
           console.log(`  ⏳ Rate limit hit (försök ${i + 1}/${retries}), väntar ${(waitTime/1000).toFixed(1)}s...`);
           await new Promise(resolve => setTimeout(resolve, waitTime));
         } else if (error.status === 429 && i === retries - 1) {
-          // Sista försöket - ge upp och returnera Okategoriserad
+          // Sista försöket - ge upp och skicka alert
           console.error(`  ❌ Rate limit exceeded efter ${retries} försök, fallback till Okategoriserad`);
+          
+          // Skicka alert endast en gång per session
+          if (!quotaAlertSent) {
+            quotaAlertSent = true;
+            const isQuotaError = error.message?.includes('quota') || error.message?.includes('billing');
+            if (isQuotaError) {
+              await alertService.openaiCreditsExhausted(error);
+            } else {
+              await alertService.alert({
+                severity: 'warning',
+                category: 'openai',
+                title: 'OpenAI Rate Limit',
+                message: 'OpenAI API har nått sin rate limit. Kategorisering kan vara långsammare.',
+                details: { error: error.message },
+                source: 'aiCategorizer'
+              });
+            }
+          }
+          
           throw new Error('Rate limit exceeded after max retries');
         } else {
           throw error; // Rethrow om det inte är 429

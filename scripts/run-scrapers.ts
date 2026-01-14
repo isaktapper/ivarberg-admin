@@ -1,6 +1,7 @@
 import { getScrapers } from '../src/lib/scrapers/scraper-registry';
 import { EventImporter } from '../src/lib/services/event-importer';
 import { createClient } from '@supabase/supabase-js';
+import { alertService } from '../src/lib/services/alert-service';
 
 // Note: Environment variables should be loaded BEFORE running this script.
 // For local development: npx tsx --env-file=.env.local scripts/run-scrapers.ts
@@ -277,13 +278,57 @@ async function main() {
   // Exit code: 0 if at least one scraper succeeded, 1 if all failed
   if (failedScrapers === scrapers.length && scrapers.length > 0) {
     console.error('💥 All scrapers failed!');
+    
+    // Skicka kritisk alert
+    await alertService.alert({
+      severity: 'critical',
+      category: 'scraper',
+      title: '🚨 Alla scrapers misslyckades!',
+      message: `Ingen av de ${scrapers.length} scraperna kunde köras. Kontrollera loggen.`,
+      details: { 
+        runUrl,
+        triggeredBy,
+        totalScrapers: scrapers.length
+      },
+      source: 'run-scrapers'
+    });
+    
     process.exit(1);
+  }
+  
+  // Skicka varning om flera scrapers misslyckades (men inte alla)
+  if (failedScrapers > 0 && failedScrapers < scrapers.length) {
+    await alertService.alert({
+      severity: 'warning',
+      category: 'scraper',
+      title: `⚠️ ${failedScrapers} scraper(s) misslyckades`,
+      message: `${failedScrapers} av ${scrapers.length} scrapers misslyckades. De andra körde OK.`,
+      details: { 
+        runUrl,
+        failedScrapers,
+        successfulScrapers: scrapers.length - failedScrapers
+      },
+      source: 'run-scrapers'
+    });
   }
 }
 
-main().catch((error) => {
+main().catch(async (error) => {
   console.error('\n💥 Fatal error:');
   console.error(error);
+  
+  // Skicka kritisk alert vid fatalt fel
+  await alertService.alert({
+    severity: 'critical',
+    category: 'system',
+    title: '🚨 Scraper-script kraschade!',
+    message: error instanceof Error ? error.message : String(error),
+    details: { 
+      stack: error instanceof Error ? error.stack : undefined 
+    },
+    source: 'run-scrapers'
+  });
+  
   process.exit(1);
 });
 

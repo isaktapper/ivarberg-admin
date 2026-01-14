@@ -88,3 +88,5 @@ När du nu kör Visit Varberg-scrapern kommer events med dessa namn automatiskt 
 ### Cache
 Matchningsresultat cachas automatiskt för att förbättra prestanda vid stora importer.
 
+
+
