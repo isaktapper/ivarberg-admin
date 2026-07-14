@@ -6,6 +6,7 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { supabase } from '@/lib/supabase'
 import { eventSchema, EventFormData, eventCategories, eventStatuses } from '@/lib/validations'
+import { EVENT_AREAS, resolveArea } from '@/lib/services/areaResolver'
 // Removed generateEventId import - we'll let Supabase handle this
 import { Organizer } from '@/types/database'
 import ProtectedLayout from '@/components/ProtectedLayout'
@@ -35,6 +36,7 @@ export default function NewEventPage() {
       date_time: '',
       location: '',
       venue_name: '',
+      area: '',
       price: '',
       image_url: '',
       organizer_event_url: '',
@@ -83,6 +85,7 @@ export default function NewEventPage() {
           category: data.categories?.[0] || data.category, // Behåll första kategorin som huvudkategori för bakåtkompatibilitet
           categories: data.categories,
           organizer_id: data.organizer_id || null,
+          area: data.area || resolveArea(data.location, data.venue_name),
           image_url: data.image_url || null,
           organizer_event_url: data.organizer_event_url || null,
           price: data.price || null,
@@ -229,6 +232,27 @@ export default function NewEventPage() {
                   )}
                   <p className="mt-1 text-xs text-gray-500">
                     När du väljer en plats fylls både platsnamn och adress i automatiskt
+                  </p>
+                </div>
+
+                {/* Area */}
+                <div>
+                  <label htmlFor="area" className="block text-sm font-medium text-gray-700">
+                    Område
+                  </label>
+                  <select
+                    {...register('area')}
+                    className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                  >
+                    <option value="">Auto (härleds från adressen)</option>
+                    {EVENT_AREAS.map((area) => (
+                      <option key={area} value={area}>
+                        {area}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="mt-1 text-xs text-gray-500">
+                    Lämna på Auto så härleds området från adress/platsnamn när eventet sparas
                   </p>
                 </div>
 

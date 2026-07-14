@@ -3,6 +3,7 @@ import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import { supabaseAdmin } from '@/lib/supabase-server'
 import { generateUniqueEventId } from '@/lib/event-id-generator'
+import { resolveArea } from '@/lib/services/areaResolver'
 
 /**
  * Verify server-side authentication
@@ -108,6 +109,7 @@ export async function POST(
       date_time: tip.date_time || tip.event_date,
       location: tip.event_location || '',
       venue_name: tip.venue_name,
+      area: resolveArea(tip.event_location, tip.venue_name),
       description: tip.event_description,
       description_format: 'plaintext' as const,
       categories: categories,

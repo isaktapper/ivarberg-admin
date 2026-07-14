@@ -6,6 +6,7 @@ export interface ScrapedEvent {
   date_time: string; // ISO 8601 format
   location: string;
   venue_name?: string;
+  area?: string; // Område i Varbergs kommun; sätts normalt automatiskt av event-importer via areaResolver
   price?: string;
   image_url?: string;
   organizer_event_url?: string; // Scraper-URL (används för deduplicering)

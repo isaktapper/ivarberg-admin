@@ -2,6 +2,7 @@ import { createClient } from '@supabase/supabase-js';
 import { ScrapedEvent, ScraperResult } from '../scrapers/types';
 import { generateUniqueEventId } from '../event-id-generator';
 import { aiCategorizer } from './aiCategorizer';
+import { resolveArea } from './areaResolver';
 import { eventQualityChecker } from './eventQualityChecker';
 import { organizerMatcher } from './organizerMatcher';
 import { progressLogger } from './progressLogger';
@@ -603,6 +604,7 @@ export class EventImporter {
       date_time: event.date_time,
       location: event.location,
       venue_name: event.venue_name,
+      area: event.area ?? resolveArea(event.location, event.venue_name),
       price: event.price,
       image_url: event.image_url,
       organizer_event_url: event.organizer_event_url,

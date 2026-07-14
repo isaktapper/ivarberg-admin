@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { EVENT_AREAS } from './services/areaResolver'
 
 export const eventCategories = [
   'Scen',
@@ -31,6 +32,7 @@ export const eventSchema = z.object({
   date_time: z.string().min(1, 'Datum och tid krävs'),
   location: z.string().min(1, 'Adress krävs'),
   venue_name: z.string().optional().or(z.literal('')), // Platsnamn
+  area: z.enum(EVENT_AREAS).optional().or(z.literal('')), // Område; tom sträng = härled automatiskt
   price: z.string().optional().or(z.literal('')),
   image_url: z.string().url('Ogiltig URL').optional().or(z.literal('')),
   organizer_event_url: z.string().url('Ogiltig URL').optional().or(z.literal('')),

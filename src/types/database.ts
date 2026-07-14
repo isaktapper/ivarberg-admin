@@ -36,6 +36,7 @@ export interface Event {
   date_time: string
   location: string
   venue_name?: string // Platsnamn (t.ex. "Varbergs Teater")
+  area?: string | null // Område i Varbergs kommun, härlett vid import (se areaResolver.ts). NULL = okänd plats
   price?: string
   image_url?: string
   organizer_event_url?: string
