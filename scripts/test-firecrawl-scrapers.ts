@@ -17,10 +17,10 @@
  *   --limit=N   max detaljsidor per källa (default: 10, skydd för credits)
  *   --no-db-skip   hämta även events som redan finns i databasen
  */
-import { createClient } from '@supabase/supabase-js';
 import { VisitVarbergFirecrawlScraper } from '../src/lib/scrapers/visit-varberg-firecrawl-scraper';
 import { VarbergsTeaternFirecrawlScraper } from '../src/lib/scrapers/varbergs-teatern-firecrawl-scraper';
 import { getFirecrawlFetchCount } from '../src/lib/scrapers/firecrawl-fetcher';
+import { loadKnownEventUrls } from '../src/lib/scrapers/known-urls';
 import { ScrapedEvent } from '../src/lib/scrapers/types';
 
 const args = process.argv.slice(2);
@@ -30,33 +30,7 @@ const skipDb = !args.includes('--no-db-skip');
 
 async function loadKnownUrls(pattern: string): Promise<Set<string>> {
   if (!skipDb) return new Set();
-
-  if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
-    console.warn('⚠️ Supabase-env saknas - kör utan databas-filter (alla events hämtas, upp till --limit)');
-    return new Set();
-  }
-
-  const supabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL,
-    process.env.SUPABASE_SERVICE_ROLE_KEY
-  );
-
-  const urls = new Set<string>();
-  const pageSize = 1000;
-  for (let from = 0; ; from += pageSize) {
-    const { data, error } = await supabase
-      .from('events')
-      .select('organizer_event_url')
-      .ilike('organizer_event_url', pattern)
-      .range(from, from + pageSize - 1);
-
-    if (error) throw new Error(`Kunde inte läsa kända URL:er: ${error.message}`);
-    for (const row of data ?? []) {
-      if (row.organizer_event_url) urls.add(row.organizer_event_url);
-    }
-    if (!data || data.length < pageSize) break;
-  }
-  return urls;
+  return loadKnownEventUrls(pattern);
 }
 
 function printSummary(name: string, events: ScrapedEvent[], skippedKnown: number) {

@@ -4,6 +4,15 @@ import { ArenaVarbergScraper } from './arena-varberg-scraper';
 import { VarbergsTeaternScraper } from './varbergs-teatern-scraper';
 import { VisitVarbergScraper } from './visit-varberg-scraper';
 import { SocietenScraper } from './societen-scraper';
+import { FallbackScraper } from './fallback-scraper';
+import { VarbergsTeaternFirecrawlScraper } from './varbergs-teatern-firecrawl-scraper';
+import { VisitVarbergFirecrawlScraper } from './visit-varberg-firecrawl-scraper';
+import { loadKnownEventUrls } from './known-urls';
+
+// Tak för hur många detaljsidor Firecrawl-fallbacken får hämta per körning.
+// Normalt är antalet nya events litet (databasen filtrerar bort kända URL:er),
+// detta skyddar mot credit-rusning om databas-filtret inte kan läsas.
+const FIRECRAWL_MAX_DETAIL_PAGES = 100;
 
 export const SCRAPER_CONFIGS: ScraperConfig[] = [
   {
@@ -44,9 +53,21 @@ export function getScrapers(): BaseScraper[] {
         case 'Arena Varberg':
           return new ArenaVarbergScraper(config);
         case 'Varbergs Teater':
-          return new VarbergsTeaternScraper(config);
+          // varberg.se blockerar GitHub Actions IP:n intermittent - Firecrawl som fallback
+          return new FallbackScraper(config, new VarbergsTeaternScraper(config), async () =>
+            new VarbergsTeaternFirecrawlScraper(config, {
+              knownUrls: await loadKnownEventUrls('%varberg.se/kulturhuset-komedianten%'),
+              maxDetailPages: FIRECRAWL_MAX_DETAIL_PAGES,
+            })
+          );
         case 'Visit Varberg':
-          return new VisitVarbergScraper(config);
+          // visitvarberg.se blockerar GitHub Actions IP:n intermittent - Firecrawl som fallback
+          return new FallbackScraper(config, new VisitVarbergScraper(config), async () =>
+            new VisitVarbergFirecrawlScraper(config, {
+              knownUrls: await loadKnownEventUrls('%visitvarberg.se%'),
+              maxDetailPages: FIRECRAWL_MAX_DETAIL_PAGES,
+            })
+          );
         case 'Societén':
           return new SocietenScraper(config);
         default:
