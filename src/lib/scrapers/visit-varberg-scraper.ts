@@ -89,7 +89,7 @@ export class VisitVarbergScraper extends BaseScraper {
   /**
    * Scrapa en event-sida och returnera alla occasions som separata events
    */
-  private async scrapeEventPage(url: string): Promise<ScrapedEvent[]> {
+  protected async scrapeEventPage(url: string): Promise<ScrapedEvent[]> {
     const html = await this.fetchHTML(url);
     const $ = cheerio.load(html);
 

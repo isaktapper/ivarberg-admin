@@ -1,0 +1,51 @@
+# TESTWORKFLOW: Kör Firecrawl-varianterna av de blockerade scrapersarna i dry run.
+# Helt frånkopplat från daily-scraper.yml - triggas ENDAST manuellt.
+# Ingenting skrivs till databasen.
+name: Test Firecrawl Scraper
+
+on:
+  workflow_dispatch:
+    inputs:
+      source:
+        description: 'Vilken källa som ska testas'
+        required: false
+        default: 'both'
+        type: choice
+        options:
+          - both
+          - visit-varberg
+          - teater
+      limit:
+        description: 'Max detaljsidor per källa (credit-skydd)'
+        required: false
+        default: '10'
+
+jobs:
+  test-firecrawl:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run Firecrawl scraper dry run
+        env:
+          FIRECRAWL_API_KEY: ${{ secrets.FIRECRAWL_API_KEY }}
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: pnpm tsx scripts/test-firecrawl-scrapers.ts -- --source=${{ inputs.source }} --limit=${{ inputs.limit }}

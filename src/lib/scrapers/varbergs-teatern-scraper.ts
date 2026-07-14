@@ -2,7 +2,7 @@ import { BaseScraper } from './base-scraper';
 import { ScrapedEvent } from './types';
 import * as cheerio from 'cheerio';
 
-interface VarbergTeaternAPIResponse {
+export interface VarbergTeaternAPIResponse {
   page: number;
   hits: number;
   hitsPerPage: number;
@@ -21,8 +21,8 @@ interface VarbergTeaternAPIResponse {
 }
 
 export class VarbergsTeaternScraper extends BaseScraper {
-  private baseUrl = 'https://varberg.se';
-  private apiUrl = 'https://varberg.se/kulturhuset-komedianten/kalender?sv.target=12.2b514d9b18a92e6fafcf397&sv.12.2b514d9b18a92e6fafcf397.route=/filter';
+  protected baseUrl = 'https://varberg.se';
+  protected apiUrl = 'https://varberg.se/kulturhuset-komedianten/kalender?sv.target=12.2b514d9b18a92e6fafcf397&sv.12.2b514d9b18a92e6fafcf397.route=/filter';
 
   async scrape(): Promise<ScrapedEvent[]> {
     const allEvents: ScrapedEvent[] = [];
@@ -90,7 +90,7 @@ export class VarbergsTeaternScraper extends BaseScraper {
     return allEvents;
   }
 
-  private async fetchPage(page: number): Promise<VarbergTeaternAPIResponse> {
+  protected async fetchPage(page: number): Promise<VarbergTeaternAPIResponse> {
     const response = await fetch(this.apiUrl, {
       method: 'POST',
       headers: {
@@ -129,7 +129,7 @@ export class VarbergsTeaternScraper extends BaseScraper {
     return JSON.parse(text);
   }
 
-  private async scrapeEventDetails(
+  protected async scrapeEventDetails(
     url: string,
     previewData: VarbergTeaternAPIResponse['events'][0]
   ): Promise<ScrapedEvent | null> {
