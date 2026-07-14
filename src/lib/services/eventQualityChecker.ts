@@ -1,8 +1,4 @@
-import OpenAI from 'openai';
-
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
+import { getOpenAIClient } from './openai-client';
 
 interface QualityAssessment {
   status: 'published' | 'pending_approval' | 'draft';
@@ -183,7 +179,7 @@ export class EventQualityChecker {
   private async makeModerationRequest(input: string, retries = 5): Promise<any> {
     for (let i = 0; i < retries; i++) {
       try {
-        const response = await openai.moderations.create({ input });
+        const response = await getOpenAIClient().moderations.create({ input });
         return response;
       } catch (error: any) {
         if (error.status === 429 && i < retries - 1) {

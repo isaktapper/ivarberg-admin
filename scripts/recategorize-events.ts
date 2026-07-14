@@ -19,6 +19,7 @@ dotenv.config({ path: path.resolve(process.cwd(), '.env.local') });
 // Nu kan vi importera moduler som använder env variables
 import { createClient } from '@supabase/supabase-js';
 import { aiCategorizer } from '../src/lib/services/aiCategorizer';
+import { shutdownAITelemetry } from '../src/lib/services/openai-client';
 
 interface Event {
   id: number;
@@ -316,8 +317,12 @@ async function main() {
     });
   } catch (error) {
     console.error('\n❌ Script failed:', error);
+    await shutdownAITelemetry();
     process.exit(1);
   }
+
+  // Flusha AI-telemetri (PostHog) innan processen avslutas
+  await shutdownAITelemetry();
 }
 
 // Kör scriptet

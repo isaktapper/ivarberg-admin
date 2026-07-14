@@ -1,6 +1,7 @@
 import { createClient } from '@supabase/supabase-js'
 import { extractMetadataAndContent } from '../src/lib/services/organizer-crawler'
 import { generateOrganizerContent } from '../src/lib/services/organizer-ai-generator'
+import { shutdownAITelemetry } from '../src/lib/services/openai-client'
 import * as dotenv from 'dotenv'
 
 // Load environment variables
@@ -169,12 +170,15 @@ if (pageIds.length === 0) {
 
 // Run the regeneration
 regeneratePageContent({ pageIds, dryRun })
-  .then(() => {
+  .then(async () => {
+    // Flusha AI-telemetri (PostHog) innan processen avslutas
+    await shutdownAITelemetry()
     console.log('\n✅ Script completed successfully')
     process.exit(0)
   })
-  .catch((error) => {
+  .catch(async (error) => {
     console.error('\n❌ Script failed:', error)
+    await shutdownAITelemetry()
     process.exit(1)
   })
 

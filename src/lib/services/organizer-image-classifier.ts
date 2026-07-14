@@ -1,8 +1,4 @@
-import OpenAI from 'openai'
-
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY
-})
+import { getOpenAIClient } from './openai-client'
 
 export interface ImageClassification {
   heroImage?: string
@@ -141,7 +137,7 @@ export async function classifyImagesWithAI(images: string[]): Promise<ImageClass
 
     for (const imageUrl of imagesToAnalyze) {
       try {
-        const response = await openai.chat.completions.create({
+        const response = await getOpenAIClient().chat.completions.create({
           model: 'gpt-4o-mini',
           messages: [
             {
@@ -160,7 +156,8 @@ export async function classifyImagesWithAI(images: string[]): Promise<ImageClass
               ]
             }
           ],
-          max_tokens: 10
+          max_tokens: 10,
+          posthogProperties: { feature: 'image-classification' }
         })
 
         const classification = response.choices[0]?.message?.content?.trim().toLowerCase()

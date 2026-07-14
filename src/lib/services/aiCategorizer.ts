@@ -1,20 +1,8 @@
-import OpenAI from 'openai';
 import { alertService } from './alert-service';
-
-// Lazy initialization - skapas först när den används
-let openai: OpenAI | null = null;
+import { getOpenAIClient } from './openai-client';
 
 // Track om vi redan har skickat alert för denna session (undvik spam)
 let quotaAlertSent = false;
-
-function getOpenAIClient(): OpenAI {
-  if (!openai) {
-    openai = new OpenAI({
-      apiKey: process.env.OPENAI_API_KEY,
-    });
-  }
-  return openai;
-}
 
 const CATEGORIES = [
   'Scen',
@@ -206,7 +194,8 @@ Svara ENDAST med JSON i exakt detta format, inget annat.`
           ],
           temperature: 0.2,
           max_tokens: 150,
-          response_format: { type: "json_object" }
+          response_format: { type: "json_object" },
+          posthogProperties: { feature: 'event-categorization' }
         });
         return response;
       } catch (error: any) {

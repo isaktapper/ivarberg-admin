@@ -2,6 +2,7 @@ import { getScrapers } from '../src/lib/scrapers/scraper-registry';
 import { EventImporter } from '../src/lib/services/event-importer';
 import { createClient } from '@supabase/supabase-js';
 import { alertService } from '../src/lib/services/alert-service';
+import { shutdownAITelemetry } from '../src/lib/services/openai-client';
 
 // Note: Environment variables should be loaded BEFORE running this script.
 // For local development: npx tsx --env-file=.env.local scripts/run-scrapers.ts
@@ -313,22 +314,28 @@ async function main() {
   }
 }
 
-main().catch(async (error) => {
-  console.error('\n💥 Fatal error:');
-  console.error(error);
-  
-  // Skicka kritisk alert vid fatalt fel
-  await alertService.alert({
-    severity: 'critical',
-    category: 'system',
-    title: '🚨 Scraper-script kraschade!',
-    message: error instanceof Error ? error.message : String(error),
-    details: { 
-      stack: error instanceof Error ? error.stack : undefined 
-    },
-    source: 'run-scrapers'
+main()
+  .then(async () => {
+    // Flusha AI-telemetri (PostHog) innan processen avslutas
+    await shutdownAITelemetry();
+  })
+  .catch(async (error) => {
+    console.error('\n💥 Fatal error:');
+    console.error(error);
+
+    // Skicka kritisk alert vid fatalt fel
+    await alertService.alert({
+      severity: 'critical',
+      category: 'system',
+      title: '🚨 Scraper-script kraschade!',
+      message: error instanceof Error ? error.message : String(error),
+      details: {
+        stack: error instanceof Error ? error.stack : undefined
+      },
+      source: 'run-scrapers'
+    });
+
+    await shutdownAITelemetry();
+    process.exit(1);
   });
-  
-  process.exit(1);
-});
 

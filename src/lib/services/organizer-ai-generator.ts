@@ -1,8 +1,4 @@
-import OpenAI from 'openai'
-
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY
-})
+import { getOpenAIClient } from './openai-client'
 
 export interface AIGeneratedContent {
   title: string
@@ -75,7 +71,7 @@ EXEMPEL PÅ DÅLIG TON (undvik dessa):
 Skriv på svenska. Var professionell, objektiv och informativ. Fokusera på SEO-värde och användarnytta.
 `
 
-    const response = await openai.chat.completions.create({
+    const response = await getOpenAIClient().chat.completions.create({
       model: 'gpt-4o-mini',
       messages: [
         {
@@ -88,7 +84,8 @@ Skriv på svenska. Var professionell, objektiv och informativ. Fokusera på SEO-
         }
       ],
       temperature: 0.7,
-      max_tokens: 1500
+      max_tokens: 1500,
+      posthogProperties: { feature: 'organizer-content', organizer: title }
     })
 
     const aiResponse = response.choices[0]?.message?.content
