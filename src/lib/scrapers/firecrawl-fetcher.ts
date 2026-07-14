@@ -25,16 +25,30 @@ export function getFirecrawlFetchCount(): number {
   return pageFetchCount;
 }
 
+/** Firecrawl kan ge tillfälliga 500-fel - försök igen en gång innan vi ger upp */
+async function withRetry<T>(label: string, fn: () => Promise<T>): Promise<T> {
+  try {
+    return await fn();
+  } catch (firstError) {
+    const msg = firstError instanceof Error ? firstError.message : String(firstError);
+    console.warn(`  ⚠️ Firecrawl-fel för ${label} (${msg.substring(0, 100)}), försöker igen om 3s...`);
+    await new Promise(resolve => setTimeout(resolve, 3000));
+    return fn();
+  }
+}
+
 /** Hämta en sidas fulla HTML via Firecrawl (motsvarar fetch + response.text()) */
 export async function fcFetchHTML(url: string): Promise<string> {
   // rawHtml = orörd HTML inkl. <script>-taggar - krävs eftersom vissa scrapers
   // (Visit Varberg) läser eventdata ur inline-JSON i script-taggar.
   // 'html'-formatet är rensat och saknar dessa.
-  const result = await getFirecrawl().scrape(url, {
-    formats: ['rawHtml'],
-    onlyMainContent: false,
-    timeout: 60000,
-  });
+  const result = await withRetry(url, () =>
+    getFirecrawl().scrape(url, {
+      formats: ['rawHtml'],
+      onlyMainContent: false,
+      timeout: 60000,
+    })
+  );
   pageFetchCount++;
 
   const html = (result as { rawHtml?: string }).rawHtml;
@@ -70,12 +84,14 @@ export async function fcPostForText(
 })()
 `;
 
-  const result = await getFirecrawl().scrape(pageUrl, {
-    formats: ['html'],
-    onlyMainContent: false,
-    actions: [{ type: 'executeJavascript', script }],
-    timeout: 60000,
-  });
+  const result = await withRetry(`POST ${apiUrl.substring(0, 60)}`, () =>
+    getFirecrawl().scrape(pageUrl, {
+      formats: ['html'],
+      onlyMainContent: false,
+      actions: [{ type: 'executeJavascript', script }],
+      timeout: 60000,
+    })
+  );
   pageFetchCount++;
 
   const returns = (result as { actions?: { javascriptReturns?: Array<{ value: unknown }> } })

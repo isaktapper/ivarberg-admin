@@ -3,7 +3,7 @@ import { ScrapedEvent } from './types';
 import * as cheerio from 'cheerio';
 
 export class SocietenScraper extends BaseScraper {
-  private baseUrl = 'https://societen.se';
+  protected baseUrl = 'https://societen.se';
 
   async scrape(): Promise<ScrapedEvent[]> {
     const events: ScrapedEvent[] = [];
@@ -67,7 +67,7 @@ export class SocietenScraper extends BaseScraper {
   /**
    * Scrapa en event-sida och returnera event-data
    */
-  private async scrapeEventPage(url: string): Promise<ScrapedEvent | null> {
+  protected async scrapeEventPage(url: string): Promise<ScrapedEvent | null> {
     const html = await this.fetchHTML(url);
     const $ = cheerio.load(html);
 

@@ -81,7 +81,7 @@ export class ArenaVarbergScraper extends BaseScraper {
     return events;
   }
   
-  private async scrapeEventPage(url: string): Promise<ScrapedEvent | null> {
+  protected async scrapeEventPage(url: string): Promise<ScrapedEvent | null> {
     try {
       const html = await this.fetchHTML(url);
       const $ = cheerio.load(html);

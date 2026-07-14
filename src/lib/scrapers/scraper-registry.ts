@@ -7,6 +7,8 @@ import { SocietenScraper } from './societen-scraper';
 import { FallbackScraper } from './fallback-scraper';
 import { VarbergsTeaternFirecrawlScraper } from './varbergs-teatern-firecrawl-scraper';
 import { VisitVarbergFirecrawlScraper } from './visit-varberg-firecrawl-scraper';
+import { ArenaVarbergFirecrawlScraper } from './arena-varberg-firecrawl-scraper';
+import { SocietenFirecrawlScraper } from './societen-firecrawl-scraper';
 import { loadKnownEventUrls } from './known-urls';
 
 // Tak för hur många detaljsidor Firecrawl-fallbacken får hämta per körning.
@@ -51,7 +53,13 @@ export function getScrapers(): BaseScraper[] {
     .map(config => {
       switch (config.name) {
         case 'Arena Varberg':
-          return new ArenaVarbergScraper(config);
+          // arenavarberg.se svarar HTTP 415 till vissa GitHub Actions IP:n - Firecrawl som fallback
+          return new FallbackScraper(config, new ArenaVarbergScraper(config), async () =>
+            new ArenaVarbergFirecrawlScraper(config, {
+              knownUrls: await loadKnownEventUrls('%arenavarberg.se%'),
+              maxDetailPages: FIRECRAWL_MAX_DETAIL_PAGES,
+            })
+          );
         case 'Varbergs Teater':
           // varberg.se blockerar GitHub Actions IP:n intermittent - Firecrawl som fallback
           return new FallbackScraper(config, new VarbergsTeaternScraper(config), async () =>
@@ -69,7 +77,13 @@ export function getScrapers(): BaseScraper[] {
             })
           );
         case 'Societén':
-          return new SocietenScraper(config);
+          // societen.se svarar HTTP 415 till vissa GitHub Actions IP:n - Firecrawl som fallback
+          return new FallbackScraper(config, new SocietenScraper(config), async () =>
+            new SocietenFirecrawlScraper(config, {
+              knownUrls: await loadKnownEventUrls('%societen.se%'),
+              maxDetailPages: FIRECRAWL_MAX_DETAIL_PAGES,
+            })
+          );
         default:
           throw new Error(`Unknown scraper: ${config.name}`);
       }
