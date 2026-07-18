@@ -101,9 +101,10 @@ Utöver de vanliga (Supabase, OpenAI, PostHog, Resend):
 
 ```env
 MAKE_WEBHOOK_URL=https://hook.eu2.make.com/...   # Make-webhook (krävs ej för --dry-run)
-ADMIN_BASE_URL=https://...                        # Publik URL till admin-appen
-INSTAGRAM_IMAGE_SECRET=...                        # HMAC-nyckel för /api/instagram-image
+MAKE_WEBHOOK_API_KEY=...                          # Valfri: om webhooken har API Key authentication
 ```
+
+Bilden konverteras till Instagram-godkänd JPEG med sharp och laddas upp till den publika Supabase Storage-bucketen `instagram-posts` (skapas automatiskt).
 
 ### Förutsättningar
 

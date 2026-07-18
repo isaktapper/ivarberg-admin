@@ -58,8 +58,6 @@ jobs:
           ALERT_EMAIL: ${{ secrets.ALERT_EMAIL }}
           MAKE_WEBHOOK_URL: ${{ secrets.MAKE_WEBHOOK_URL }}
           MAKE_WEBHOOK_API_KEY: ${{ secrets.MAKE_WEBHOOK_API_KEY }}
-          ADMIN_BASE_URL: ${{ secrets.ADMIN_BASE_URL }}
-          INSTAGRAM_IMAGE_SECRET: ${{ secrets.INSTAGRAM_IMAGE_SECRET }}
           FORCE_RUN: ${{ github.event.inputs.force || 'false' }}
           DRY_RUN: ${{ github.event.inputs.dry_run || 'false' }}
         run: pnpm tsx scripts/publish-instagram-post.ts

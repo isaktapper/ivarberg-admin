@@ -26,7 +26,7 @@ import {
   validateImage,
   reviewImages,
   generateCaption,
-  buildProxiedImageUrl,
+  uploadInstagramImage,
 } from '../src/lib/services/instagram-post-service';
 import { MakeWebhookPublisher } from '../src/lib/services/instagram-publisher';
 import { getPostHogClient, shutdownAITelemetry } from '../src/lib/services/openai-client';
@@ -49,8 +49,6 @@ async function main() {
   requireEnv('NEXT_PUBLIC_SUPABASE_URL');
   requireEnv('SUPABASE_SERVICE_ROLE_KEY');
   requireEnv('OPENAI_API_KEY');
-  requireEnv('ADMIN_BASE_URL');
-  requireEnv('INSTAGRAM_IMAGE_SECRET');
   if (!DRY_RUN) requireEnv('MAKE_WEBHOOK_URL');
 
   // Timvakt: workflowen kör både 06 och 07 UTC - bara körningen som
@@ -180,14 +178,18 @@ async function main() {
     .map((id) => eventById.get(id))
     .filter((e): e is Event => !!e);
   const caption = await generateCaption(primary, alsoEvents);
-  const proxiedImageUrl = buildProxiedImageUrl(primary.image_url!);
+
+  // Konvertera bilden till Instagram-godkänd JPEG och ladda upp till
+  // publik Supabase Storage (görs även i dry-run så URL:en kan granskas)
+  console.log('🖼️  Konverterar och laddar upp bilden till Supabase Storage...');
+  const publishedImageUrl = await uploadInstagramImage(supabase, primary.image_url!, postDate);
 
   console.log('\n' + '='.repeat(60));
   console.log('📋 POST-INNEHÅLL');
   console.log('='.repeat(60));
   console.log(`Primärt event: ${primary.name} (id ${primary.id})`);
   console.log(`Bild (original): ${primary.image_url}`);
-  console.log(`Bild (proxad):   ${proxiedImageUrl}`);
+  console.log(`Bild (publicerad): ${publishedImageUrl}`);
   console.log(`Också idag: ${alsoEvents.map((e) => e.name).join(' | ') || '(inga)'}`);
   console.log('-'.repeat(60));
   console.log(caption);
@@ -202,7 +204,7 @@ async function main() {
   console.log('🚀 Skickar till Make.com-webhook...');
   const publisher = new MakeWebhookPublisher();
   try {
-    await publisher.publish({ imageUrl: proxiedImageUrl, caption });
+    await publisher.publish({ imageUrl: publishedImageUrl, caption });
   } catch (error) {
     const errorMsg = error instanceof Error ? error.message : String(error);
     await supabase.from('instagram_posts').upsert(
@@ -212,7 +214,7 @@ async function main() {
         also_event_ids: alsoEvents.map((e) => e.id),
         caption,
         image_url: primary.image_url,
-        proxied_image_url: proxiedImageUrl,
+        proxied_image_url: publishedImageUrl,
         status: 'failed',
         error: errorMsg,
         candidates_count: ranking.primaryCandidates.length,
@@ -230,7 +232,7 @@ async function main() {
       also_event_ids: alsoEvents.map((e) => e.id),
       caption,
       image_url: primary.image_url,
-      proxied_image_url: proxiedImageUrl,
+      proxied_image_url: publishedImageUrl,
       status: 'published',
       error: null,
       candidates_count: ranking.primaryCandidates.length,

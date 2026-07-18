@@ -12,7 +12,6 @@
  * Därför skickas booking_url/event_website/organizer_event_url aldrig med
  * i prompterna, och sanitizeCaption() stryker rader med URL:er/domäner.
  */
-import { createHmac } from 'crypto'
 import sharp from 'sharp'
 import { SupabaseClient } from '@supabase/supabase-js'
 import { Event } from '@/types/database'
@@ -63,26 +62,17 @@ export function getStockholmDateString(now: Date = new Date()): string {
   return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`
 }
 
-/** UTC-timestamp (ms) för midnatt i Europe/Stockholm på det datum `now` infaller lokalt */
-function stockholmMidnightUtcMs(now: Date): number {
-  const { year, month, day } = stockholmParts(now)
-  const utcMidnight = Date.UTC(year, month - 1, day, 0, 0, 0)
-  // Offset: vad visar Stockholm-klockan vid midnatt UTC samma datum? (CET=+1, CEST=+2)
-  const probeParts = stockholmParts(new Date(utcMidnight))
-  let offsetHours = probeParts.hour
-  if (probeParts.day !== day) offsetHours -= 24
-  return utcMidnight - offsetHours * 3600_000
-}
-
 /**
- * UTC-gränser (ISO-strängar) för dagens kalenderdag i Europe/Stockholm.
- * Hanterar sommartidsomställning korrekt (23/25-timmarsdygn).
+ * Gränser för dagens kalenderdag i Europe/Stockholm som NAIVA lokaltidssträngar.
+ *
+ * OBS: events.date_time lagras som timestamp UTAN tidszon i svensk lokaltid
+ * (t.ex. "2026-07-17T22:30:00"), så filtreringen måste ske med naiva strängar -
+ * UTC-baserade gränser drar in gårdagskvällens event och tappar dagens sena.
  */
 export function getStockholmDayRange(now: Date = new Date()): { start: string; end: string } {
-  const startMs = stockholmMidnightUtcMs(now)
-  // 30h efter lokal midnatt är alltid inne i nästa lokala dag, även vid DST-skiften
-  const endMs = stockholmMidnightUtcMs(new Date(startMs + 30 * 3600_000))
-  return { start: new Date(startMs).toISOString(), end: new Date(endMs).toISOString() }
+  const today = getStockholmDateString(now)
+  const tomorrow = getStockholmDateString(new Date(now.getTime() + 24 * 3600_000))
+  return { start: `${today}T00:00:00`, end: `${tomorrow}T00:00:00` }
 }
 
 // ============ Datahämtning ============
@@ -144,14 +134,15 @@ function daysAgoDateString(days: number): string {
 
 // ============ Steg 1: Ranking ============
 
-/** "HH:MM", eller null för midnatt (00:00 = heldagsevent/okänd tid) */
+/**
+ * "HH:MM", eller null för midnatt (00:00 = heldagsevent/okänd tid).
+ * date_time är naiv svensk lokaltid ("2026-07-18T19:30:00") - läs tiden
+ * direkt ur strängen i stället för att Date-parsa (som tolkar i körmiljöns
+ * tidszon och blir fel på t.ex. GitHub Actions-runners i UTC).
+ */
 function formatTime(dateTime: string): string | null {
-  const time = new Date(dateTime).toLocaleTimeString('sv-SE', {
-    timeZone: 'Europe/Stockholm',
-    hour: '2-digit',
-    minute: '2-digit',
-  })
-  return time === '00:00' ? null : time
+  const time = dateTime.substring(11, 16)
+  return !time || time === '00:00' ? null : time
 }
 
 /**
@@ -510,15 +501,86 @@ Svara ENDAST med captionen, ingen annan text.`
   return caption
 }
 
-// ============ Proxad bild-URL ============
+// ============ Bildkonvertering + uppladdning ============
 
-/** Bygg den publika /api/instagram-image-URL som skickas till Make/Instagram */
-export function buildProxiedImageUrl(imageUrl: string): string {
-  const baseUrl = process.env.ADMIN_BASE_URL
-  const secret = process.env.INSTAGRAM_IMAGE_SECRET
-  if (!baseUrl) throw new Error('Missing ADMIN_BASE_URL environment variable')
-  if (!secret) throw new Error('Missing INSTAGRAM_IMAGE_SECRET environment variable')
+const STORAGE_BUCKET = 'instagram-posts'
+// Instagrams tillåtna aspect ratios för foto-poster
+const MIN_RATIO = 4 / 5 // 0.8 (porträtt)
+const MAX_RATIO = 1.91 // (landskap)
+const TARGET_WIDTH = 1080
 
-  const sig = createHmac('sha256', secret).update(imageUrl).digest('hex')
-  return `${baseUrl.replace(/\/$/, '')}/api/instagram-image?url=${encodeURIComponent(imageUrl)}&sig=${sig}`
+/**
+ * Hämta eventbilden, konvertera till Instagram-godkänd JPEG (max 1080px,
+ * ratio clampad till 4:5-1.91:1) och ladda upp till en publik Supabase
+ * Storage-bucket. Returnerar den publika URL som skickas till Make/Instagram.
+ */
+export async function uploadInstagramImage(
+  supabase: SupabaseClient,
+  imageUrl: string,
+  postDate: string
+): Promise<string> {
+  const response = await fetch(imageUrl, {
+    headers: {
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+    },
+    signal: AbortSignal.timeout(20000),
+  })
+  if (!response.ok) {
+    throw new Error(`Kunde inte hämta bilden (${response.status}): ${imageUrl}`)
+  }
+  const sourceBuffer = Buffer.from(await response.arrayBuffer())
+
+  const metadata = await sharp(sourceBuffer).metadata()
+  let width = metadata.width ?? 0
+  let height = metadata.height ?? 0
+  // EXIF-orientering 5-8 = bilden är roterad 90°, bredd/höjd byter plats
+  if ((metadata.orientation ?? 1) >= 5) {
+    ;[width, height] = [height, width]
+  }
+  if (!width || !height) {
+    throw new Error('Kunde inte läsa bildens dimensioner')
+  }
+  const ratio = width / height
+
+  // .rotate() utan argument applicerar EXIF-orienteringen före resize
+  let pipeline = sharp(sourceBuffer, { failOn: 'error' }).rotate()
+  if (ratio < MIN_RATIO) {
+    // För hög (t.ex. lång affisch) → croppa till 4:5
+    pipeline = pipeline.resize({
+      width: TARGET_WIDTH,
+      height: Math.round(TARGET_WIDTH / MIN_RATIO), // 1350
+      fit: 'cover',
+      position: sharp.strategy.attention,
+    })
+  } else if (ratio > MAX_RATIO) {
+    // För bred (panorama) → croppa till 1.91:1
+    pipeline = pipeline.resize({
+      width: TARGET_WIDTH,
+      height: Math.round(TARGET_WIDTH / MAX_RATIO), // 565
+      fit: 'cover',
+      position: sharp.strategy.attention,
+    })
+  } else {
+    pipeline = pipeline.resize({ width: TARGET_WIDTH, withoutEnlargement: true })
+  }
+  const jpegBuffer = await pipeline.jpeg({ quality: 85, mozjpeg: true }).toBuffer()
+
+  // Skapa bucketen om den inte finns (publik läsning krävs för Instagram)
+  const { error: bucketError } = await supabase.storage.createBucket(STORAGE_BUCKET, {
+    public: true,
+  })
+  if (bucketError && !/already exists/i.test(bucketError.message)) {
+    throw new Error(`Kunde inte skapa storage-bucket: ${bucketError.message}`)
+  }
+
+  const path = `${postDate}.jpg`
+  const { error: uploadError } = await supabase.storage
+    .from(STORAGE_BUCKET)
+    .upload(path, jpegBuffer, { contentType: 'image/jpeg', upsert: true })
+  if (uploadError) {
+    throw new Error(`Kunde inte ladda upp bilden: ${uploadError.message}`)
+  }
+
+  const { data } = supabase.storage.from(STORAGE_BUCKET).getPublicUrl(path)
+  return data.publicUrl
 }
