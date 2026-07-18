@@ -191,6 +191,23 @@ export interface HeroFeaturedEvent {
   event?: Event
 }
 
+export type InstagramPostStatus = 'published' | 'skipped' | 'failed'
+
+export interface InstagramPost {
+  id: number
+  post_date: string // Kalenderdag i Europe/Stockholm (YYYY-MM-DD)
+  event_id?: number | null // Primärt event (postens bild)
+  also_event_ids?: number[] // Event listade under "Det händer också"
+  caption?: string | null
+  image_url?: string | null // Original-URL från events.image_url
+  proxied_image_url?: string | null // /api/instagram-image-URL som skickades till Make
+  status: InstagramPostStatus
+  error?: string | null
+  candidates_count?: number | null
+  posted_at?: string | null
+  created_at: string
+}
+
 export interface Database {
   public: {
     Tables: {
@@ -235,6 +252,11 @@ export interface Database {
         Row: HeroFeaturedEvent
         Insert: Omit<HeroFeaturedEvent, 'id' | 'created_at' | 'updated_at' | 'event'>
         Update: Partial<Omit<HeroFeaturedEvent, 'id' | 'created_at' | 'updated_at' | 'event'>>
+      }
+      instagram_posts: {
+        Row: InstagramPost
+        Insert: Omit<InstagramPost, 'id' | 'created_at'>
+        Update: Partial<Omit<InstagramPost, 'id' | 'created_at'>>
       }
     }
   }

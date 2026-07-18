@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "eslint",
     "scrape": "tsx --env-file=.env.local scripts/run-scrapers.ts",
+    "instagram-post": "tsx --env-file=.env.local scripts/publish-instagram-post.ts",
     "regenerate-pages": "tsx --env-file=.env.local scripts/regenerate-page-content.ts"
   },
   "dependencies": {
@@ -42,6 +43,7 @@
     "react-hook-form": "^7.64.0",
     "recharts": "^3.5.1",
     "resend": "^6.5.0",
+    "sharp": "^0.35.3",
     "tailwind-merge": "^3.3.1",
     "ua-parser-js": "^2.0.6",
     "xlsx": "^0.18.5",

@@ -79,6 +79,44 @@ Se [GITHUB_ACTIONS_SETUP.md](../docs/GITHUB_ACTIONS_SETUP.md) för mer info.
 
 ---
 
+## Publish Instagram Post
+
+Daglig automatisk Instagram-post: "Det här händer i Varberg idag". AI väljer dagens bästa event (text-ranking + vision-granskning av bilder), genererar en svensk caption och skickar `{image_url, caption}` till en Make.com-webhook som postar till Instagram for Business. Alla AI-anrop mäts i PostHog (features: `instagram-event-ranking`, `instagram-image-review`, `instagram-caption`).
+
+### Användning
+
+```bash
+# Dry run (genererar posten men skickar inget, skapar ingen DB-rad)
+pnpm instagram-post -- --dry-run --force
+
+# Skarp körning (kringgår timvakten)
+pnpm instagram-post -- --force
+```
+
+`--force` kringgår timvakten (scriptet kör annars bara kl 08 Europe/Stockholm).
+
+### Environment Variables
+
+Utöver de vanliga (Supabase, OpenAI, PostHog, Resend):
+
+```env
+MAKE_WEBHOOK_URL=https://hook.eu2.make.com/...   # Make-webhook (krävs ej för --dry-run)
+ADMIN_BASE_URL=https://...                        # Publik URL till admin-appen
+INSTAGRAM_IMAGE_SECRET=...                        # HMAC-nyckel för /api/instagram-image
+```
+
+### Förutsättningar
+
+- Migrationen `database/migrations/CREATE_INSTAGRAM_POSTS_TABLE.sql` körd i Supabase
+- Make.com-scenario: "Webhooks: Custom webhook" → "Instagram for Business: Create a Photo Post" (Photo URL ← `image_url`, Caption ← `caption`)
+- Instagram Business/Creator-konto kopplat till en Facebook-sida
+
+### GitHub Actions
+
+Körs automatiskt kl 08:00 svensk tid via `.github/workflows/daily-instagram-post.yml` (dubbla cron-tider 06+07 UTC; scriptets timvakt hanterar sommar-/vintertid). `instagram_posts`-tabellen ger idempotens (max en post per dag) och 7-dagars variationshistorik så samma event inte featuras flera dagar i rad.
+
+---
+
 ## Regenerate Page Content
 
 Script för att regenerera AI-innehåll för befintliga arrangörssidor med den förbättrade prompten (tredje person, använder arrangörens namn).
