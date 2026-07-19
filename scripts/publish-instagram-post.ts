@@ -51,11 +51,13 @@ async function main() {
   requireEnv('OPENAI_API_KEY');
   if (!DRY_RUN) requireEnv('MAKE_WEBHOOK_URL');
 
-  // Timvakt: workflowen kör både 06 och 07 UTC - bara körningen som
-  // motsvarar kl 08 svensk tid ska fortsätta (DST-hantering)
+  // Timvakt: workflowen kör både 06 och 07 UTC - körningar som motsvarar
+  // kl 08-09 svensk tid får fortsätta (DST-hantering). Fönstret är två
+  // timmar för att GitHub-cron ofta är försenad och ibland droppar en
+  // körning helt; idempotenskollen nedan förhindrar ändå dubbelposter.
   const hour = getStockholmHour();
-  if (hour !== POSTING_HOUR && !FORCE) {
-    console.log(`⏭️  Klockan är ${hour} i Stockholm (inte ${POSTING_HOUR}) - hoppar över. Använd --force för att kringgå.`);
+  if ((hour < POSTING_HOUR || hour > POSTING_HOUR + 1) && !FORCE) {
+    console.log(`⏭️  Klockan är ${hour} i Stockholm (utanför ${POSTING_HOUR}-${POSTING_HOUR + 1}) - hoppar över. Använd --force för att kringgå.`);
     return;
   }
 
