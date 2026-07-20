@@ -1,8 +1,10 @@
 /**
  * Daglig automatisk Instagram-post: "Det här händer i Varberg idag"
  *
- * Körs av GitHub Actions kl 06:00 + 07:00 UTC (timvakten släpper bara
- * igenom kl 08:00 Europe/Stockholm, oavsett sommar-/vintertid).
+ * Körs av GitHub Actions via flera cron-tider (GitHub-cron är opålitlig:
+ * försenas ofta 1-2 h och droppas ibland). Timvakten släpper igenom
+ * kl 08-11 Europe/Stockholm; idempotenskollen hindrar dubbelposter och
+ * en körning efter fönstret larmar om dagens post aldrig gick ut.
  *
  * Flöde:
  *   1. Timvakt + idempotenskoll (en post per dag)
@@ -35,6 +37,7 @@ import { alertService } from '../src/lib/services/alert-service';
 const DRY_RUN = process.argv.includes('--dry-run') || process.env.DRY_RUN === 'true';
 const FORCE = process.argv.includes('--force') || process.env.FORCE_RUN === 'true';
 const POSTING_HOUR = 8; // Europe/Stockholm
+const POSTING_WINDOW_END = 11; // sista timmen (inklusive) då en försenad cron får posta
 
 function requireEnv(name: string): string {
   const value = process.env[name];
@@ -50,16 +53,6 @@ async function main() {
   requireEnv('SUPABASE_SERVICE_ROLE_KEY');
   requireEnv('OPENAI_API_KEY');
   if (!DRY_RUN) requireEnv('MAKE_WEBHOOK_URL');
-
-  // Timvakt: workflowen kör både 06 och 07 UTC - körningar som motsvarar
-  // kl 08-09 svensk tid får fortsätta (DST-hantering). Fönstret är två
-  // timmar för att GitHub-cron ofta är försenad och ibland droppar en
-  // körning helt; idempotenskollen nedan förhindrar ändå dubbelposter.
-  const hour = getStockholmHour();
-  if ((hour < POSTING_HOUR || hour > POSTING_HOUR + 1) && !FORCE) {
-    console.log(`⏭️  Klockan är ${hour} i Stockholm (utanför ${POSTING_HOUR}-${POSTING_HOUR + 1}) - hoppar över. Använd --force för att kringgå.`);
-    return;
-  }
 
   const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -78,6 +71,31 @@ async function main() {
 
   if (existing) {
     console.log(`✅ Redan postat idag (${postDate}, rad #${existing.id}) - avslutar.`);
+    return;
+  }
+
+  // Timvakt: GitHub-cron försenas ofta med 1-2 timmar och droppar ibland
+  // körningar helt, så fönstret är brett (08-11 Stockholm) och workflowen
+  // har flera cron-tider som backup. Idempotenskollen ovan hindrar dubbletter.
+  const hour = getStockholmHour();
+  if (hour < POSTING_HOUR && !FORCE) {
+    console.log(`⏭️  Klockan är ${hour} i Stockholm (före ${POSTING_HOUR}) - hoppar över. Använd --force för att kringgå.`);
+    return;
+  }
+  if (hour > POSTING_WINDOW_END && !FORCE) {
+    // För sent att posta OCH inget har postats idag - det här betyder att
+    // alla dagens cron-försök missade fönstret. Larma istället för att
+    // tyst avsluta med grön status.
+    console.error(`🚨 Klockan är ${hour} i Stockholm och ingen post har publicerats ${postDate} - dagens post missades.`);
+    await alertService.alert({
+      severity: 'critical',
+      category: 'api',
+      title: '🚨 Dagens Instagram-post missades',
+      message: `Cron-körningen nådde skriptet först kl ${hour} (fönstret är ${POSTING_HOUR}-${POSTING_WINDOW_END}) och ingen post publicerades ${postDate}. Kör workflowen manuellt med force=true för att posta i efterhand.`,
+      details: { post_date: postDate, stockholm_hour: hour },
+      source: 'publish-instagram-post',
+    });
+    process.exitCode = 1;
     return;
   }
 

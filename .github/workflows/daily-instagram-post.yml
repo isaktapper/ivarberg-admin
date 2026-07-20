@@ -2,12 +2,17 @@ name: Daily Instagram Post
 
 on:
   schedule:
-    # Kl 08:00 svensk tid oavsett sommar-/vintertid:
-    # 06:00 UTC = 08:00 CEST (sommartid), 07:00 UTC = 08:00 CET (vintertid).
-    # Scriptets timvakt släpper bara igenom körningen där Stockholm-klockan är 08,
-    # och instagram_posts-tabellen (UNIQUE post_date) stoppar ev. dubbletter.
-    - cron: '0 6 * * *'
-    - cron: '0 7 * * *'
+    # GitHub-cron är opålitlig: körningar på hel timme (minut 0) försenas
+    # ofta 1-2 h eller droppas helt (19 jul kördes 06:00-cronen först 08:15 UTC).
+    # Därför: udda minuter + flera försök. Scriptets timvakt släpper igenom
+    # kl 08-11 Europe/Stockholm och instagram_posts (UNIQUE post_date)
+    # stoppar dubbletter, så extra försök är ofarliga.
+    # Sommartid (CEST=UTC+2): 08:10, 09:10, 09:40, 10:40 lokal tid.
+    # Vintertid (CET=UTC+1):  07:10 (skippas), 08:10, 08:40, 09:40.
+    - cron: '10 6 * * *'
+    - cron: '10 7 * * *'
+    - cron: '40 7 * * *'
+    - cron: '40 8 * * *'
   workflow_dispatch:  # Tillåter manuell körning från GitHub Actions UI
     inputs:
       force:
