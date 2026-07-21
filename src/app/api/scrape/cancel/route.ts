@@ -99,16 +99,45 @@ export async function POST(request: NextRequest) {
 }
 
 /**
+ * En scrape tar max ~5 min (maxDuration = 300 på /api/scrape). En running-rad
+ * äldre än så är en död process - t.ex. en avbruten/timeoutad GitHub Actions-
+ * körning som aldrig hann uppdatera sin status. Utan städning ligger raden
+ * kvar som 'running' för evigt och UI:t visar permanent "Kör scraping".
+ */
+const STALE_RUNNING_MINUTES = 15;
+
+/**
  * GET /api/scrape/cancel
- * 
- * Hämta status för pågående scraping processer
+ *
+ * Hämta status för pågående scraping processer.
+ * Självläkande: markerar döda running-rader som failed innan räkningen.
  */
 export async function GET() {
   try {
+    const now = Date.now();
+    const staleCutoff = new Date(now - STALE_RUNNING_MINUTES * 60 * 1000).toISOString();
+
+    // Städa döda processer först
+    const { error: staleError } = await supabase
+      .from('scraper_logs')
+      .update({
+        status: 'failed',
+        completed_at: new Date(now).toISOString(),
+        errors: [`Processen rapporterade aldrig klart - automatiskt markerad som failed efter ${STALE_RUNNING_MINUTES} min`]
+      })
+      .eq('status', 'running')
+      .lt('started_at', staleCutoff);
+
+    if (staleError) {
+      // Logga men fortsätt - räkningen nedan filtrerar ändå bort gamla rader
+      console.error('Error cleaning stale running logs:', staleError);
+    }
+
     const { data: runningLogs, error } = await supabase
       .from('scraper_logs')
       .select('id, scraper_name, started_at, events_found, events_imported')
       .eq('status', 'running')
+      .gte('started_at', staleCutoff)
       .order('started_at', { ascending: false });
 
     if (error) {
