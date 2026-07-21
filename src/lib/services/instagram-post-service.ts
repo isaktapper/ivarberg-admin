@@ -34,6 +34,21 @@ export interface RankingResult {
 export interface RecentlyFeatured {
   recentPrimaryIds: Map<number, string> // event_id -> post_date (senaste)
   recentMentionIds: Map<number, string> // primär ELLER också-listad -> post_date
+  recentPrimaryNames: Map<string, string> // normaliserat eventnamn -> post_date
+}
+
+/**
+ * Normalisera eventnamn för dubblettjämförelse. Återkommande event (t.ex.
+ * en utställning som pågår flera dagar) får ETT event-id PER DAG av
+ * scrapern, så id-jämförelse räcker inte - samma namn inom 7 dagar måste
+ * också blockeras (19 jul postades id 6985, 21 jul id 6986 - samma event).
+ */
+export function normalizeEventName(name: string): string {
+  return name
+    .toLowerCase()
+    .replace(/["'"''`´]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
 }
 
 // ============ Tid/datum (Europe/Stockholm, via Intl - ingen extra dependency) ============
@@ -124,7 +139,24 @@ export async function getRecentlyFeatured(supabase: SupabaseClient): Promise<Rec
       recentMentionIds.set(id, row.post_date)
     }
   }
-  return { recentPrimaryIds, recentMentionIds }
+
+  // Slå upp namnen på nyligen primära event: återkommande event får nya
+  // id:n varje dag, så dubbletter måste även blockeras på namn.
+  const recentPrimaryNames = new Map<string, string>()
+  if (recentPrimaryIds.size > 0) {
+    const { data: namedEvents, error: nameError } = await supabase
+      .from('events')
+      .select('id, name')
+      .in('id', [...recentPrimaryIds.keys()])
+    if (nameError) {
+      throw new Error(`Kunde inte hämta namn för Instagram-historik: ${nameError.message}`)
+    }
+    for (const e of namedEvents || []) {
+      recentPrimaryNames.set(normalizeEventName(e.name), recentPrimaryIds.get(e.id)!)
+    }
+  }
+
+  return { recentPrimaryIds, recentMentionIds, recentPrimaryNames }
 }
 
 /** Datum X dagar bakåt (Stockholm) som YYYY-MM-DD, för lookback-jämförelser */
@@ -199,17 +231,19 @@ export async function rankEvents(
     return !!date && date >= alsoCutoff
   }
 
-  // Variationsregel: event som varit primärt senaste 7 dagarna utesluts ur primärkandidaturen
-  const primaryEligible = events.filter((e) => !recentlyFeatured.recentPrimaryIds.has(e.id))
+  // Variationsregel: event som varit primärt senaste 7 dagarna utesluts ur
+  // primärkandidaturen - både på id OCH på namn (återkommande event får
+  // nya id:n varje dag av scrapern).
+  const lastFeatured = (e: Event) =>
+    recentlyFeatured.recentPrimaryIds.get(e.id) ||
+    recentlyFeatured.recentPrimaryNames.get(normalizeEventName(e.name)) ||
+    ''
+  const primaryEligible = events.filter((e) => !lastFeatured(e))
   // Fallback (lugn dag med bara långkörare): tillåt alla, minst nyligen visade först
   const primaryPool =
     primaryEligible.length > 0
       ? primaryEligible
-      : [...events].sort((a, b) => {
-          const aDate = recentlyFeatured.recentPrimaryIds.get(a.id) || ''
-          const bDate = recentlyFeatured.recentPrimaryIds.get(b.id) || ''
-          return aDate.localeCompare(bDate)
-        })
+      : [...events].sort((a, b) => lastFeatured(a).localeCompare(lastFeatured(b)))
 
   if (primaryEligible.length === 0 && events.length > 0) {
     console.warn('  ⚠️ Alla dagens event har varit primära senaste 7 dagarna - använder minst nyligen visade')
@@ -224,10 +258,21 @@ ${eventList}
 
 Ranka eventen efter hur bra de skulle fungera i ett Instagram-inlägg för en lokal eventguide.
 
-Bedömningskriterier:
-- Brett publikintresse (konserter, festivaler, marknader > nischade möten)
+VIKTIGAST - prioritetsordning för HUVUDEVENT (coolast först). Välj alltid från en högre nivå om det finns ett event där med bild:
+1. Konserter & livemusik
+2. Festivaler & större evenemang
+3. Nattliv, klubb & DJ
+4. Teater, show & standup
+5. Sportmatcher & tävlingar
+6. Mat- & dryckesevent, marknader
+7. Film, bio & föreläsningar
+8. Konst & utställningar
+9. Barn- & familjeaktiviteter, djur & natur
+10. Guidade visningar & vandringar
+
+Övriga bedömningskriterier:
 - Visuell potential (har_bild: ja är ett stort plus - bilden blir inläggets foto)
-- Speciella/unika event > vardagliga återkommande aktiviteter
+- Speciella/unika event (engångstillfällen) > pågående långkörare (utställningar som visas många dagar i rad)
 - Event med nyligen_visad_pa_instagram: ja ska HELST INTE väljas till "also_today" - variera innehållet
 
 Välj:
