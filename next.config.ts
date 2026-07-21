@@ -8,11 +8,18 @@ const nextConfig: NextConfig = {
     ignoreBuildErrors: true,
   },
   // sharp (native binärer) måste följa med serverless-funktionen på Vercel -
-  // annars kraschar funktionen vid kallstart (fungerar lokalt/CI där hela
-  // node_modules finns). Cron-routen använder sharp via instagram-post-service.
+  // annars ERR_DLOPEN_FAILED (libvips saknas) vid kallstart. OBS: globben
+  // måste peka på de RIKTIGA paketkatalogerna i .pnpm - ett brett
+  // '.pnpm/**/node_modules/@img/**' drar med pnpm:s symlänkar och får
+  // Vercel att avvisa paketet ("invalid deployment package ... symlinked
+  // directories"). Utvärderas vid build på Vercel (linux-x64).
   serverExternalPackages: ['sharp'],
   outputFileTracingIncludes: {
-    '/api/cron/instagram-post': ['./node_modules/.pnpm/**/node_modules/@img/**'],
+    '/api/cron/instagram-post': [
+      './node_modules/.pnpm/sharp@*/node_modules/sharp/**',
+      './node_modules/.pnpm/@img+sharp-linux-x64@*/node_modules/@img/sharp-linux-x64/**',
+      './node_modules/.pnpm/@img+sharp-libvips-linux-x64@*/node_modules/@img/sharp-libvips-linux-x64/**',
+    ],
   },
 };
 
