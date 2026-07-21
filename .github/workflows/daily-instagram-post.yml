@@ -2,16 +2,21 @@ name: Daily Instagram Post
 
 on:
   schedule:
-    # GitHub-cron är opålitlig: körningar på hel timme (minut 0) försenas
-    # ofta 1-2 h eller droppas helt (19 jul kördes 06:00-cronen först 08:15 UTC).
-    # Därför: udda minuter + flera försök. Scriptets timvakt släpper igenom
-    # kl 08-11 Europe/Stockholm och instagram_posts (UNIQUE post_date)
-    # stoppar dubbletter, så extra försök är ofarliga.
-    # Sommartid (CEST=UTC+2): 08:10, 09:10, 09:40, 10:40 lokal tid.
-    # Vintertid (CET=UTC+1):  07:10 (skippas), 08:10, 08:40, 09:40.
+    # GitHub-cron är konsekvent 2-3 h försenad för det här repot (uppmätt på
+    # daily-scraper 17-21 jul: cron 05:00 UTC kör 06:57-07:54 UTC). Strategin
+    # är därför samma som scraperns - acceptera förseningen - men eftersom
+    # postningstiden spelar roll schemaläggs cronen TIDIGT så att den efter
+    # försening landar i timvaktens fönster (08-12 Europe/Stockholm).
+    # Skriptet skippar tyst körningar före 08, idempotenskollen
+    # (instagram_posts UNIQUE post_date) stoppar dubbletter, och en körning
+    # efter 12 utan dagens post larmar. Många försök är alltså ofarliga.
+    # Schemalagd tid + typisk försening ≈ 08-11 svensk tid året runt:
+    - cron: '40 3 * * *'
+    - cron: '20 4 * * *'
+    - cron: '50 4 * * *'
+    - cron: '20 5 * * *'
     - cron: '10 6 * * *'
     - cron: '10 7 * * *'
-    - cron: '40 7 * * *'
     - cron: '40 8 * * *'
   workflow_dispatch:  # Tillåter manuell körning från GitHub Actions UI
     inputs:

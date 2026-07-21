@@ -3,7 +3,7 @@
  *
  * Körs av GitHub Actions via flera cron-tider (GitHub-cron är opålitlig:
  * försenas ofta 1-2 h och droppas ibland). Timvakten släpper igenom
- * kl 08-11 Europe/Stockholm; idempotenskollen hindrar dubbelposter och
+ * kl 08-12 Europe/Stockholm; idempotenskollen hindrar dubbelposter och
  * en körning efter fönstret larmar om dagens post aldrig gick ut.
  *
  * Flöde:
@@ -37,7 +37,7 @@ import { alertService } from '../src/lib/services/alert-service';
 const DRY_RUN = process.argv.includes('--dry-run') || process.env.DRY_RUN === 'true';
 const FORCE = process.argv.includes('--force') || process.env.FORCE_RUN === 'true';
 const POSTING_HOUR = 8; // Europe/Stockholm
-const POSTING_WINDOW_END = 11; // sista timmen (inklusive) då en försenad cron får posta
+const POSTING_WINDOW_END = 12; // sista timmen (inklusive) då en försenad cron får posta
 
 function requireEnv(name: string): string {
   const value = process.env[name];
@@ -74,9 +74,9 @@ async function main() {
     return;
   }
 
-  // Timvakt: GitHub-cron försenas ofta med 1-2 timmar och droppar ibland
-  // körningar helt, så fönstret är brett (08-11 Stockholm) och workflowen
-  // har flera cron-tider som backup. Idempotenskollen ovan hindrar dubbletter.
+  // Timvakt: GitHub-cron är konsekvent 2-3 h försenad för det här repot,
+  // så workflowen schemalägger många tidiga cron-försök och fönstret är
+  // brett (08-12 Stockholm). Idempotenskollen ovan hindrar dubbletter.
   const hour = getStockholmHour();
   if (hour < POSTING_HOUR && !FORCE) {
     console.log(`⏭️  Klockan är ${hour} i Stockholm (före ${POSTING_HOUR}) - hoppar över. Använd --force för att kringgå.`);
