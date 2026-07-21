@@ -2,22 +2,16 @@ name: Daily Instagram Post
 
 on:
   schedule:
-    # GitHub-cron är konsekvent 2-3 h försenad för det här repot (uppmätt på
-    # daily-scraper 17-21 jul: cron 05:00 UTC kör 06:57-07:54 UTC). Strategin
-    # är därför samma som scraperns - acceptera förseningen - men eftersom
-    # postningstiden spelar roll schemaläggs cronen TIDIGT så att den efter
-    # försening landar i timvaktens fönster (08-12 Europe/Stockholm).
-    # Skriptet skippar tyst körningar före 08, idempotenskollen
-    # (instagram_posts UNIQUE post_date) stoppar dubbletter, och en körning
-    # efter 12 utan dagens post larmar. Många försök är alltså ofarliga.
-    # Schemalagd tid + typisk försening ≈ 08-11 svensk tid året runt:
-    - cron: '40 3 * * *'
+    # BACKUP-trigger: primär körning är Vercel cron (/api/cron/instagram-post,
+    # se vercel.json) som är punktlig. GitHub-cron är konsekvent 2-3 h
+    # försenad för det här repot, så tiderna nedan är valda så att de EFTER
+    # försening landar i timvaktens fönster (08-12 Europe/Stockholm) och
+    # fångar upp dagen om Vercel-cronen fallerat. Idempotenskollen
+    # (instagram_posts UNIQUE post_date) gör extra försök ofarliga, och en
+    # körning efter kl 12 utan dagens post larmar.
     - cron: '20 4 * * *'
-    - cron: '50 4 * * *'
     - cron: '20 5 * * *'
-    - cron: '10 6 * * *'
     - cron: '10 7 * * *'
-    - cron: '40 8 * * *'
   workflow_dispatch:  # Tillåter manuell körning från GitHub Actions UI
     inputs:
       force:

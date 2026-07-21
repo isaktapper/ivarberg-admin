@@ -159,6 +159,27 @@ export async function getRecentlyFeatured(supabase: SupabaseClient): Promise<Rec
   return { recentPrimaryIds, recentMentionIds, recentPrimaryNames }
 }
 
+/**
+ * Öppningsraderna från de senaste 7 publicerade captionsen. Skickas till
+ * caption-prompten så att inledningen (och dess emoji) varieras dag för dag.
+ */
+export async function getRecentCaptionOpenings(supabase: SupabaseClient): Promise<string[]> {
+  const { data, error } = await supabase
+    .from('instagram_posts')
+    .select('caption')
+    .eq('status', 'published')
+    .order('post_date', { ascending: false })
+    .limit(7)
+
+  if (error) {
+    console.warn(`  ⚠️ Kunde inte hämta caption-historik: ${error.message}`)
+    return []
+  }
+  return (data || [])
+    .map((row) => (row.caption || '').split('\n')[0].trim())
+    .filter(Boolean)
+}
+
 /** Datum X dagar bakåt (Stockholm) som YYYY-MM-DD, för lookback-jämförelser */
 function daysAgoDateString(days: number): string {
   return getStockholmDateString(new Date(Date.now() - days * 24 * 3600_000))
@@ -467,14 +488,23 @@ export function sanitizeCaption(caption: string): { caption: string; hadViolatio
   return { caption: lines.join('\n').trim(), hadViolations }
 }
 
-/** Steg 3: Generera den svenska captionen */
-export async function generateCaption(primary: Event, alsoEvents: Event[]): Promise<string> {
+/** Steg 3: Generera den svenska captionen (med variation mot senaste dagarnas öppningar) */
+export async function generateCaption(
+  primary: Event,
+  alsoEvents: Event[],
+  recentOpenings: string[] = []
+): Promise<string> {
   const alsoList = alsoEvents
     .map((e) => {
       const time = formatTime(e.date_time)
       return `- ${e.name} (${e.venue_name || e.location}${time ? `, kl ${time}` : ''})`
     })
     .join('\n')
+
+  const recentOpeningsBlock =
+    recentOpenings.length > 0
+      ? `\nDE SENASTE DAGARNAS ÖPPNINGSRADER (skriv något som känns ANNORLUNDA än alla dessa - annan formulering OCH annan emoji):\n${recentOpenings.map((o) => `- ${o}`).join('\n')}\n`
+      : ''
 
   const prompt = `Skriv en Instagram-caption för dagens inlägg från en lokal eventguide för Varberg.
 
@@ -483,10 +513,10 @@ ${eventSummary(primary, false)}
 
 ÖVRIGA EVENT IDAG:
 ${alsoList || '(inga)'}
-
+${recentOpeningsBlock}
 Struktur (följ exakt):
-1. Öppningsrad: "Det här händer i Varberg idag! 🎉" (eller nära variant)
-2. 1-2 entusiastiska meningar om huvudeventet (namn, plats, tid)
+1. Öppningsrad: kort och catchig, budskapet "det här händer i Varberg idag" - men VARIERA formuleringen. Låt gärna huvudeventet färga tonen och välj emoji som matchar eventets karaktär (konsert 🎸🎶, teater/show 🎭, konst 🎨, mat 🍴, marknad 🛍️, sport ⚽, utomhus/sommar ☀️🌊, kvällsevent ✨🌙 osv). Använd INTE 🎉 som slentrianval.
+2. 1-2 entusiastiska meningar om huvudeventet (namn, plats, tid) - variera även här, börja inte alltid med eventnamnet
 3. Om det finns övriga event: raden "Det händer också:" följt av punktlista (en rad per event: namn, plats, kl tid)
 4. Avslutning: "Vill du se allt som händer idag? Gå in på iVarberg 👉 länk i bio"
 5. 3-5 relevanta svenska hashtags (t.ex. #varberg #ivarberg + eventrelevanta)
@@ -514,7 +544,7 @@ Svara ENDAST med captionen, ingen annan text.`
           },
           { role: 'user', content: prompt },
         ],
-        temperature: 0.7,
+        temperature: 0.9,
         max_tokens: 800,
         posthogProperties: { feature: 'instagram-caption' },
       }),
