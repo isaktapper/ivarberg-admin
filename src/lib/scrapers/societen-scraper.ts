@@ -176,7 +176,20 @@ export class SocietenScraper extends BaseScraper {
     let price: string | undefined;
     const priceMatch = descriptionHtml.match(/(\d+\s*kr|Gratis|FRI ENTRÉ)/i);
     if (priceMatch) {
-      price = priceMatch[1];
+      const value = priceMatch[1];
+      // Gratis-träffar kräver kontrollerad kontext: "gratis för medlemmar" eller
+      // "barn gratis" gäller inte alla besökare och får inte sparas som "Gratis"
+      if (!/\d/.test(value)) {
+        const idx = priceMatch.index ?? 0;
+        const context = descriptionHtml
+          .slice(Math.max(0, idx - 60), idx + value.length + 60)
+          .toLowerCase();
+        if (!/(medlem|barn|ungdom|student|pension[äa]r|under\s*\d)/.test(context)) {
+          price = value;
+        }
+      } else {
+        price = value;
+      }
     }
 
     // STEG 6: Metadata för arrangörsidentifiering

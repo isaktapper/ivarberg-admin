@@ -7,6 +7,7 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { supabase } from '@/lib/supabase'
 import { eventSchema, EventFormData, eventCategories, eventStatuses } from '@/lib/validations'
 import { EVENT_AREAS, EventArea, resolveArea } from '@/lib/services/areaResolver'
+import { resolveIsFree } from '@/lib/services/priceResolver'
 import { Event, Organizer } from '@/types/database'
 import ProtectedLayout from '@/components/ProtectedLayout'
 import GooglePlacesAutocomplete from '@/components/GooglePlacesAutocomplete'
@@ -53,6 +54,7 @@ export default function EditEventPage() {
         venue_name: event.venue_name || '',
         area: (event.area as EventArea) || '',
         price: event.price || '',
+        is_free: event.is_free === true ? 'free' : event.is_free === false ? 'paid' : 'auto',
         image_url: event.image_url || '',
         organizer_event_url: event.organizer_event_url || '',
         categories: event.categories || [],
@@ -115,6 +117,10 @@ export default function EditEventPage() {
         venue_name: data.venue_name || null,
         area: data.area || resolveArea(data.location, data.venue_name),
         price: data.price || null,
+        is_free:
+          data.is_free === 'free' ? true :
+          data.is_free === 'paid' ? false :
+          resolveIsFree(data.price),
         image_url: data.image_url || null,
         organizer_event_url: data.organizer_event_url || null,
         categories: data.categories || ['Okategoriserad'], // Använd categories (plural)
@@ -377,6 +383,25 @@ export default function EditEventPage() {
                   {errors.price && (
                     <p className="mt-2 text-sm text-red-600">{errors.price.message}</p>
                   )}
+                </div>
+
+                {/* Gratis-status (styr "Gratis"-badge på publika sidan) */}
+                <div>
+                  <label htmlFor="is_free" className="block text-sm font-medium text-gray-700">
+                    Gratis-status
+                  </label>
+                  <select
+                    id="is_free"
+                    {...register('is_free')}
+                    className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                  >
+                    <option value="auto">Härled automatiskt från pris</option>
+                    <option value="free">Gratis</option>
+                    <option value="paid">Kostar</option>
+                  </select>
+                  <p className="mt-1 text-xs text-gray-500">
+                    &quot;Gratis&quot; visar en gratis-badge publikt. Vid automatisk härledning visas badge endast när priset entydigt är gratis.
+                  </p>
                 </div>
 
                 {/* Max Participants */}

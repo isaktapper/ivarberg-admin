@@ -8,6 +8,7 @@ export interface ScrapedEvent {
   venue_name?: string;
   area?: string; // Område i Varbergs kommun; sätts normalt automatiskt av event-importer via areaResolver
   price?: string;
+  is_free?: boolean | null; // true = säkert gratis, false = säkert kostar, null/undefined = härleds av event-importer via priceResolver
   image_url?: string;
   organizer_event_url?: string; // Scraper-URL (används för deduplicering)
   event_website?: string; // Arrangörens event-sida (visas för användaren, används av Visit Varberg)

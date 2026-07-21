@@ -119,6 +119,7 @@ export async function POST(
       status: 'draft' as const, // Väntar på admin approval
       tags: ['tips', 'user-submitted'],
       price: null,
+      is_free: null, // Okänt - tips innehåller ingen prisinfo
       organizer_id: null,
       is_featured: false,
       featured: false,

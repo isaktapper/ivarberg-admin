@@ -38,6 +38,7 @@ export interface Event {
   venue_name?: string // Platsnamn (t.ex. "Varbergs Teater")
   area?: string | null // Område i Varbergs kommun, härlett vid import (se areaResolver.ts). NULL = okänd plats
   price?: string
+  is_free?: boolean | null // true = säkert gratis, false = säkert kostar, null = okänt (se priceResolver.ts)
   image_url?: string
   organizer_event_url?: string
   event_website?: string // Arrangörens event-sida (visas för användaren)

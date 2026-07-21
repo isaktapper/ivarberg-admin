@@ -3,6 +3,7 @@ import { ScrapedEvent, ScraperResult } from '../scrapers/types';
 import { generateUniqueEventId } from '../event-id-generator';
 import { aiCategorizer } from './aiCategorizer';
 import { resolveArea } from './areaResolver';
+import { resolveIsFree } from './priceResolver';
 import { eventQualityChecker } from './eventQualityChecker';
 import { organizerMatcher } from './organizerMatcher';
 import { progressLogger } from './progressLogger';
@@ -606,6 +607,9 @@ export class EventImporter {
       venue_name: event.venue_name,
       area: event.area ?? resolveArea(event.location, event.venue_name),
       price: event.price,
+      // Scrapers med pålitlig källa (Visit Varbergs isFree-flagga) sätter is_free
+      // själva; övriga härleds konservativt från prissträngen (null = okänt)
+      is_free: event.is_free !== undefined ? event.is_free : resolveIsFree(event.price),
       image_url: event.image_url,
       organizer_event_url: event.organizer_event_url,
       event_website: event.event_website, // Arrangörens event-sida (UI)

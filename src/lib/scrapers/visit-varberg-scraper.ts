@@ -1,5 +1,6 @@
 import { BaseScraper } from './base-scraper';
 import { ScrapedEvent } from './types';
+import { resolveIsFree } from '../services/priceResolver';
 import * as cheerio from 'cheerio';
 
 interface VisitVarbergEventData {
@@ -17,7 +18,7 @@ interface VisitVarbergEventData {
   }>;
   website?: string;
   bookingLink?: string;
-  price?: string;
+  price?: string | number; // Visit Varberg skickar ibland tal, ibland sträng
   email?: string;
   phone?: string;
   isFree?: boolean;
@@ -94,12 +95,13 @@ export class VisitVarbergScraper extends BaseScraper {
     const $ = cheerio.load(html);
 
     // STEG 1: Extrahera JSON-data från AppRegistry.registerInitialState
-    let eventData: VisitVarbergEventData | null = null;
+    // (tilldelning sker i callback - separat variabel så att TS kan narrowa eventData nedan)
+    let foundEventData: VisitVarbergEventData | null = null;
 
     $('script').each((_, scriptTag) => {
       // Skip om vi redan hittat event-data
-      if (eventData) return;
-      
+      if (foundEventData) return;
+
       const scriptContent = $(scriptTag).html();
       if (scriptContent && scriptContent.includes('AppRegistry.registerInitialState')) {
         // Regex för att extrahera JSON-objektet
@@ -107,17 +109,19 @@ export class VisitVarbergScraper extends BaseScraper {
         if (match && match[1]) {
           try {
             const parsed = JSON.parse(match[1]);
-            
+
             // Kontrollera om detta är event-datan (har name och dates)
             if (parsed.name && parsed.dates && Array.isArray(parsed.dates)) {
-              eventData = parsed;
+              foundEventData = parsed;
             }
-          } catch (e) {
+          } catch {
             // Tyst skippa fel - detta är förmodligen inte event-datan
           }
         }
       }
     });
+
+    const eventData = foundEventData as VisitVarbergEventData | null;
 
     if (!eventData) {
       console.warn(`No event data found in ${url}`);
@@ -144,11 +148,16 @@ export class VisitVarbergScraper extends BaseScraper {
     const image_url = eventData.photos?.[0]?.url;
 
     // STEG 5: Hantera pris
+    // isFree-flaggan sätts av arrangören i Visit Varbergs system - pålitlig källa
     let price: string | undefined;
+    let is_free: boolean | null = null;
     if (eventData.isFree) {
       price = 'Gratis';
+      is_free = true;
     } else if (eventData.price) {
-      price = eventData.price;
+      // price kan vara ett tal i Visit Varbergs JSON (t.ex. 485)
+      price = String(eventData.price);
+      is_free = resolveIsFree(eventData.price);
     }
 
     // STEG 6: Extrahera metadata för arrangörsidentifiering
@@ -168,6 +177,7 @@ export class VisitVarbergScraper extends BaseScraper {
       description,
       image_url,
       price,
+      is_free,
       organizer_event_url: url, // Visit Varberg URL (unik - används för deduplicering)
       event_website: eventData.website, // Arrangörens event-sida (visas för användaren)
       booking_url: eventData.bookingLink, // Länk till biljettsida

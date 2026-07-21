@@ -34,6 +34,7 @@ export const eventSchema = z.object({
   venue_name: z.string().optional().or(z.literal('')), // Platsnamn
   area: z.enum(EVENT_AREAS).optional().or(z.literal('')), // Område; tom sträng = härled automatiskt
   price: z.string().optional().or(z.literal('')),
+  is_free: z.enum(['auto', 'free', 'paid']).optional(), // auto = härled från pris (priceResolver)
   image_url: z.string().url('Ogiltig URL').optional().or(z.literal('')),
   organizer_event_url: z.string().url('Ogiltig URL').optional().or(z.literal('')),
   categories: z.array(z.enum(eventCategories)).min(1, 'Minst en kategori krävs').max(3, 'Max 3 kategorier'),
