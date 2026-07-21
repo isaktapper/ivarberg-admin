@@ -9,6 +9,8 @@ import { VarbergsTeaternFirecrawlScraper } from './varbergs-teatern-firecrawl-sc
 import { VisitVarbergFirecrawlScraper } from './visit-varberg-firecrawl-scraper';
 import { ArenaVarbergFirecrawlScraper } from './arena-varberg-firecrawl-scraper';
 import { SocietenFirecrawlScraper } from './societen-firecrawl-scraper';
+import { VarbergsBoisScraper } from './varbergs-bois-scraper';
+import { VarbergsBoisFirecrawlScraper } from './varbergs-bois-firecrawl-scraper';
 import { loadKnownEventUrls } from './known-urls';
 
 // Tak för hur många detaljsidor Firecrawl-fallbacken får hämta per körning.
@@ -44,6 +46,13 @@ export const SCRAPER_CONFIGS: ScraperConfig[] = [
     enabled: true,
     organizerId: 49,
     defaultCategory: 'Nattliv' // Default kategori för Societén events
+  },
+  {
+    name: 'Varbergs BoIS',
+    url: 'https://varbergsbois.ebiljett.nu/List/Events',
+    enabled: true,
+    organizerId: 148,
+    defaultCategory: 'Sport' // Fotbollsmatcher på Påskbergsvallen
   }
 ];
 
@@ -83,6 +92,13 @@ export function getScrapers(): BaseScraper[] {
               knownUrls: await loadKnownEventUrls('%societen.se%'),
               maxDetailPages: FIRECRAWL_MAX_DETAIL_PAGES,
             })
+          );
+        case 'Varbergs BoIS':
+          // ebiljett.nu (AXS) har Cloudflare-bot-skydd som blockerar direkta anrop
+          // - Firecrawl-varianten är i praktiken alltid den som kör.
+          // Allt läses från en enda listsida, så knownUrls behövs inte.
+          return new FallbackScraper(config, new VarbergsBoisScraper(config), async () =>
+            new VarbergsBoisFirecrawlScraper(config)
           );
         default:
           throw new Error(`Unknown scraper: ${config.name}`);

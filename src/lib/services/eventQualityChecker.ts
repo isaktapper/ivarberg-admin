@@ -8,7 +8,7 @@ interface QualityAssessment {
 }
 
 // Betrodda organisatörer som kan auto-publiceras
-const TRUSTED_ORGANIZERS = [5, 6, 7]; // Arena Varberg (5), Varbergs Teater (6), Visit Varberg (7)
+const TRUSTED_ORGANIZERS = [5, 6, 7, 148]; // Arena Varberg (5), Varbergs Teater (6), Visit Varberg (7), Varbergs BoIS (148)
 
 export class EventQualityChecker {
   
@@ -73,7 +73,7 @@ export class EventQualityChecker {
     }
 
     // 6. Innehållskontroll med OpenAI Moderation API (skippa för betrodda källor)
-    const isTrustedSource = source && ['Visit Varberg', 'Arena Varberg', 'Varbergs Teater'].includes(source);
+    const isTrustedSource = source && ['Visit Varberg', 'Arena Varberg', 'Varbergs Teater', 'Varbergs BoIS'].includes(source);
     let contentCheck = { safe: true, issues: [] as string[] };
     
     if (!isTrustedSource) {

@@ -36,6 +36,7 @@ export interface ScraperConfig {
   url: string;
   enabled: boolean;
   organizerId: number;
+  defaultCategory?: EventCategory;
 }
 
 export interface ScraperResult {
