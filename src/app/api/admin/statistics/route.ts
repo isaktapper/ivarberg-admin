@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import { NextRequest, NextResponse } from 'next/server';
+import { fetchAllRows } from '@/lib/supabase-fetch-all';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -14,39 +15,43 @@ export async function GET(request: NextRequest) {
   const organizerId = searchParams.get('organizerId');
 
   try {
-    // Bygg query - använd separat query eftersom foreign key kan saknas
-    let query = supabase
-      .from('event_audit_log')
-      .select('*')
-      .order('created_at', { ascending: false });
+    // Hämta alla loggar paginerat - Supabase cappar annars vid 1000 rader
+    // och totalsiffran fastnar på "1000"
+    const auditData = await fetchAllRows<any>((from, to) => {
+      let query = supabase
+        .from('event_audit_log')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .order('id', { ascending: false });
 
-    // Applicera filter
-    if (startDate) {
-      query = query.gte('created_at', startDate);
-    }
-    if (endDate) {
-      query = query.lte('created_at', endDate);
-    }
-    if (action && action !== 'all') {
-      query = query.eq('action', action);
-    }
+      if (startDate) {
+        query = query.gte('created_at', startDate);
+      }
+      if (endDate) {
+        query = query.lte('created_at', endDate);
+      }
+      if (action && action !== 'all') {
+        query = query.eq('action', action);
+      }
 
-    const { data: auditData, error } = await query;
+      return query.range(from, to);
+    });
 
-    if (error) throw error;
+    // Filtrera på organisatör: hämta organisatörens event-id:n direkt
+    // (istället för .in() med tusentals id:n som slår i URL-gränsen)
+    let data = auditData;
 
-    // Hämta events separat om vi behöver filtrera på organisatör
-    let data = auditData || [];
-    
     if (organizerId && data.length > 0) {
-      const eventIds = data.map(log => log.event_id).filter(Boolean);
-      const { data: eventsData } = await supabase
-        .from('events')
-        .select('event_id, organizer_id')
-        .in('event_id', eventIds)
-        .eq('organizer_id', parseInt(organizerId));
-      
-      const allowedEventIds = new Set(eventsData?.map(e => e.event_id) || []);
+      const eventsData = await fetchAllRows<{ event_id: string }>((from, to) =>
+        supabase
+          .from('events')
+          .select('event_id')
+          .eq('organizer_id', parseInt(organizerId))
+          .order('id', { ascending: true })
+          .range(from, to)
+      );
+
+      const allowedEventIds = new Set(eventsData.map(e => e.event_id));
       data = data.filter(log => allowedEventIds.has(log.event_id));
     }
 

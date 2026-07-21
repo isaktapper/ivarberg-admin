@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
+import { fetchAllRows } from '@/lib/supabase-fetch-all'
 import { Event, EventStatus, EventCategory, Organizer } from '@/types/database'
 import ProtectedLayout from '@/components/ProtectedLayout'
 import OrganizerSearchableDropdown from '@/components/OrganizerSearchableDropdown'
@@ -82,15 +83,21 @@ export default function EventsPage() {
 
   const fetchEvents = async () => {
     try {
-      const { data, error } = await supabase
-        .from('events')
-        .select(`
-          *,
-          organizer:organizers(name)
-        `)
-        .order('created_at', { ascending: false })
+      // Paginerad hämtning - Supabase cappar vid 1000 rader per query,
+      // vilket gjorde att äldre events saknades i listan och totalsiffran
+      // fastnade på 1000
+      const data = await fetchAllRows<Event>((from, to) =>
+        supabase
+          .from('events')
+          .select(`
+            *,
+            organizer:organizers(name)
+          `)
+          .order('created_at', { ascending: false })
+          .order('id', { ascending: false })
+          .range(from, to)
+      )
 
-      if (error) throw error
       setEvents(data || [])
     } catch (error) {
       console.error('Error fetching events:', error)

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
+import { fetchAllRows } from '@/lib/supabase-fetch-all'
 import { ScraperLog, ScraperSchedule } from '@/types/database'
 import ProtectedLayout from '@/components/ProtectedLayout'
 import { useAuth } from '@/contexts/AuthContext'
@@ -37,6 +38,7 @@ export default function ScrapersPage() {
   const [scrapers, setScrapers] = useState<ScraperInfo[]>([])
   const [schedules, setSchedules] = useState<ScraperSchedule[]>([])
   const [logs, setLogs] = useState<ScraperLog[]>([])
+  const [logTotals, setLogTotals] = useState({ found: 0, imported: 0, duplicates: 0, runs: 0 })
   const [loading, setLoading] = useState(true)
   const [running, setRunning] = useState(false)
   const [selectedScraper, setSelectedScraper] = useState<string>('all')
@@ -163,10 +165,32 @@ export default function ScrapersPage() {
 
       if (error) throw error
       setLogs(data || [])
-      
-      // Kontrollera om det finns pågående scrapers i databasen
-      const hasRunningScrapers = (data || []).some(log => log.status === 'running')
+
+      // Kontrollera om det finns pågående scrapers i databasen.
+      // Ignorera rader äldre än 15 min - de är döda processer (t.ex.
+      // avbrutna GitHub Actions-körningar) som aldrig uppdaterade sin status.
+      const staleCutoff = Date.now() - 15 * 60 * 1000
+      const hasRunningScrapers = (data || []).some(
+        log => log.status === 'running' && new Date(log.started_at).getTime() > staleCutoff
+      )
       setRunning(hasRunningScrapers)
+
+      // Summeringskorten ska räkna ALLA körningar, inte bara de 50 senaste
+      // som visas i historiken (och Supabase cappar ändå vid 1000 rader/query)
+      const allLogs = await fetchAllRows<Pick<ScraperLog, 'events_found' | 'events_imported' | 'duplicates_skipped'>>(
+        (from, to) =>
+          supabase
+            .from('scraper_logs')
+            .select('events_found, events_imported, duplicates_skipped')
+            .order('id', { ascending: true })
+            .range(from, to)
+      )
+      setLogTotals({
+        found: allLogs.reduce((sum, log) => sum + (log.events_found || 0), 0),
+        imported: allLogs.reduce((sum, log) => sum + (log.events_imported || 0), 0),
+        duplicates: allLogs.reduce((sum, log) => sum + (log.duplicates_skipped || 0), 0),
+        runs: allLogs.length,
+      })
     } catch (error) {
       console.error('Error fetching logs:', error)
     }
@@ -627,7 +651,7 @@ export default function ScrapersPage() {
               <div className="ml-3">
                 <p className="text-sm font-medium text-gray-500">Totalt hittade</p>
                 <p className="text-xl font-semibold text-gray-900">
-                  {logs.reduce((sum, log) => sum + log.events_found, 0)}
+                  {logTotals.found}
                 </p>
               </div>
             </div>
@@ -641,7 +665,7 @@ export default function ScrapersPage() {
               <div className="ml-3">
                 <p className="text-sm font-medium text-gray-500">Totalt importerade</p>
                 <p className="text-xl font-semibold text-gray-900">
-                  {logs.reduce((sum, log) => sum + log.events_imported, 0)}
+                  {logTotals.imported}
                 </p>
               </div>
             </div>
@@ -655,7 +679,7 @@ export default function ScrapersPage() {
               <div className="ml-3">
                 <p className="text-sm font-medium text-gray-500">Dubbletter</p>
                 <p className="text-xl font-semibold text-gray-900">
-                  {logs.reduce((sum, log) => sum + log.duplicates_skipped, 0)}
+                  {logTotals.duplicates}
                 </p>
               </div>
             </div>
@@ -669,7 +693,7 @@ export default function ScrapersPage() {
               <div className="ml-3">
                 <p className="text-sm font-medium text-gray-500">Totalt körningar</p>
                 <p className="text-xl font-semibold text-gray-900">
-                  {logs.length}
+                  {logTotals.runs}
                 </p>
               </div>
             </div>
@@ -683,9 +707,9 @@ export default function ScrapersPage() {
             className="w-full px-6 py-4 flex items-center justify-between hover:bg-gray-50 transition-colors"
           >
             <div className="flex items-center space-x-2">
-              <h2 className="text-lg font-medium text-gray-900">Fullständig körningshistorik</h2>
+              <h2 className="text-lg font-medium text-gray-900">Körningshistorik</h2>
               <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600">
-                {logs.length} körningar
+                {logs.length} senaste av {logTotals.runs} körningar
               </span>
             </div>
             {historyCollapsed ? (

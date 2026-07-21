@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import { NextRequest, NextResponse } from 'next/server';
+import { fetchAllRows } from '@/lib/supabase-fetch-all';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -15,14 +16,17 @@ export async function GET(request: NextRequest) {
 
     // ==================== SCRAPER STATS ====================
     
-    // Hämta alla scraper logs för senaste 30 dagarna
-    const { data: scraperLogs, error: scraperError } = await supabase
-      .from('scraper_logs')
-      .select('*')
-      .gte('started_at', thirtyDaysAgo.toISOString())
-      .order('started_at', { ascending: true });
-
-    if (scraperError) throw scraperError;
+    // Hämta alla scraper logs för senaste 30 dagarna (paginerat - Supabase
+    // cappar annars vid 1000 rader)
+    const scraperLogs = await fetchAllRows<any>((from, to) =>
+      supabase
+        .from('scraper_logs')
+        .select('*')
+        .gte('started_at', thirtyDaysAgo.toISOString())
+        .order('started_at', { ascending: true })
+        .order('id', { ascending: true })
+        .range(from, to)
+    );
 
     // Beräkna scraper statistik per scraper
     const scraperStats: Record<string, {
@@ -132,12 +136,15 @@ export async function GET(request: NextRequest) {
 
     // ==================== EVENT STATS ====================
 
-    // Hämta alla events
-    const { data: events, error: eventsError } = await supabase
-      .from('events')
-      .select('id, status, date_time, categories, organizer_id, created_at, quality_score, image_url, description');
-
-    if (eventsError) throw eventsError;
+    // Hämta alla events (paginerat - Supabase cappar annars vid 1000 rader,
+    // vilket gav fel totalsiffror när databasen växte förbi det)
+    const events = await fetchAllRows<any>((from, to) =>
+      supabase
+        .from('events')
+        .select('id, status, date_time, categories, organizer_id, created_at, quality_score, image_url, description')
+        .order('id', { ascending: true })
+        .range(from, to)
+    );
 
     // Hämta organizers för namn
     const { data: organizers } = await supabase

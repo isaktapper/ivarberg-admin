@@ -31,32 +31,32 @@ export default function Dashboard() {
 
   const fetchDashboardData = async () => {
     try {
-      // Fetch events statistics
-      const { data: events, error: eventsError } = await supabase
-        .from('events')
-        .select('status')
+      // Räkna med count-queries - att hämta rader och räkna .length
+      // cappas av Supabase vid 1000 rader och ger fel siffror
+      const countEvents = (status?: string) => {
+        let query = supabase.from('events').select('*', { count: 'exact', head: true })
+        if (status) query = query.eq('status', status)
+        return query
+      }
 
-      if (eventsError) throw eventsError
+      const [total, published, draft, pending, organizers] = await Promise.all([
+        countEvents(),
+        countEvents('published'),
+        countEvents('draft'),
+        countEvents('pending_approval'),
+        supabase.from('organizers').select('*', { count: 'exact', head: true }),
+      ])
 
-      // Fetch organizers count
-      const { count: organizersCount, error: organizersError } = await supabase
-        .from('organizers')
-        .select('*', { count: 'exact', head: true })
-
-      if (organizersError) throw organizersError
-
-      // Calculate statistics
-      const totalEvents = events?.length || 0
-      const publishedEvents = events?.filter(e => e.status === 'published').length || 0
-      const draftEvents = events?.filter(e => e.status === 'draft').length || 0
-      const pendingEvents = events?.filter(e => e.status === 'pending_approval').length || 0
+      for (const result of [total, published, draft, pending, organizers]) {
+        if (result.error) throw result.error
+      }
 
       setStats({
-        totalEvents,
-        publishedEvents,
-        draftEvents,
-        pendingEvents,
-        totalOrganizers: organizersCount || 0,
+        totalEvents: total.count || 0,
+        publishedEvents: published.count || 0,
+        draftEvents: draft.count || 0,
+        pendingEvents: pending.count || 0,
+        totalOrganizers: organizers.count || 0,
       })
     } catch (error) {
       console.error('Error fetching dashboard data:', error)

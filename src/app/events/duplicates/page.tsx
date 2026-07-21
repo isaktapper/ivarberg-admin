@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
+import { fetchAllRows } from '@/lib/supabase-fetch-all'
 import ProtectedLayout from '@/components/ProtectedLayout'
 import { AlertCircle, ExternalLink, Eye, Filter, Trash2 } from 'lucide-react'
 import Link from 'next/link'
@@ -113,13 +114,17 @@ export default function DuplicatesPage() {
     
     try {
       // Fetch all published events (we only care about duplicates in production)
-      const { data: events, error } = await supabase
-        .from('events')
-        .select('*')
-        .eq('status', 'published')
-        .order('date_time', { ascending: true })
-
-      if (error) throw error
+      // Paginerat - Supabase cappar vid 1000 rader, vilket gjorde att
+      // dubblettjämförelsen missade events bortom de första 1000
+      const events = await fetchAllRows<Event>((from, to) =>
+        supabase
+          .from('events')
+          .select('*')
+          .eq('status', 'published')
+          .order('date_time', { ascending: true })
+          .order('id', { ascending: true })
+          .range(from, to)
+      )
 
       const duplicatePairs: PotentialDuplicate[] = []
       const processedPairs = new Set<string>()

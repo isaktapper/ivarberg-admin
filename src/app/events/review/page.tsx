@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
+import { fetchAllRows } from '@/lib/supabase-fetch-all'
 import { Event, EventCategory } from '@/types/database'
 import ProtectedLayout from '@/components/ProtectedLayout'
 import { 
@@ -47,16 +48,20 @@ export default function EventReviewPage() {
 
   const fetchPendingEvents = async () => {
     try {
-      const { data, error } = await supabase
-        .from('events')
-        .select(`
-          *,
-          organizer:organizers(name)
-        `)
-        .in('status', ['draft', 'pending_approval'])
-        .order('created_at', { ascending: false })
+      // Paginerat - Supabase cappar vid 1000 rader per query
+      const data = await fetchAllRows<Event>((from, to) =>
+        supabase
+          .from('events')
+          .select(`
+            *,
+            organizer:organizers(name)
+          `)
+          .in('status', ['draft', 'pending_approval'])
+          .order('created_at', { ascending: false })
+          .order('id', { ascending: false })
+          .range(from, to)
+      )
 
-      if (error) throw error
       setEvents(data || [])
     } catch (error) {
       console.error('Error fetching events:', error)

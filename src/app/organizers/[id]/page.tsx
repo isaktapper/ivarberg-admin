@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
+import { fetchAllRows } from '@/lib/supabase-fetch-all'
 import { Organizer, Event, OrganizerPage } from '@/types/database'
 import ProtectedLayout from '@/components/ProtectedLayout'
 import { 
@@ -58,13 +59,17 @@ export default function OrganizerDetailPage() {
 
   const fetchOrganizerEvents = async (organizerId: number) => {
     try {
-      const { data, error } = await supabase
-        .from('events')
-        .select('*')
-        .eq('organizer_id', organizerId)
-        .order('date_time', { ascending: false })
+      // Paginerat - Supabase cappar vid 1000 rader per query
+      const data = await fetchAllRows<Event>((from, to) =>
+        supabase
+          .from('events')
+          .select('*')
+          .eq('organizer_id', organizerId)
+          .order('date_time', { ascending: false })
+          .order('id', { ascending: false })
+          .range(from, to)
+      )
 
-      if (error) throw error
       setEvents(data || [])
     } catch (error) {
       console.error('Error fetching organizer events:', error)

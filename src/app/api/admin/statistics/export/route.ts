@@ -1,6 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
 import { NextRequest, NextResponse } from 'next/server';
 import * as XLSX from 'xlsx';
+import { fetchAllRows } from '@/lib/supabase-fetch-all';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -9,23 +10,29 @@ const supabase = createClient(
 
 export async function GET(request: NextRequest) {
   try {
-    // Hämta audit log data
-    const { data: auditData, error } = await supabase
-      .from('event_audit_log')
-      .select('*')
-      .order('created_at', { ascending: false });
+    // Hämta audit log data (paginerat - Supabase cappar vid 1000 rader,
+    // vilket trunkerade exporten)
+    const auditData = await fetchAllRows<any>((from, to) =>
+      supabase
+        .from('event_audit_log')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .order('id', { ascending: false })
+        .range(from, to)
+    );
 
-    if (error) throw error;
-
-    // Hämta events separat för att få organisatör info
-    const eventIds = auditData?.map(log => log.event_id).filter(Boolean) || [];
-    const { data: eventsData } = await supabase
-      .from('events')
-      .select('event_id, organizer_id, venue_name, category, organizers(name)')
-      .in('event_id', eventIds);
+    // Hämta alla events för organisatör-info (paginerat istället för .in()
+    // med tusentals id:n som slår i URL-gränsen)
+    const eventsData = await fetchAllRows<any>((from, to) =>
+      supabase
+        .from('events')
+        .select('event_id, organizer_id, venue_name, category, organizers(name)')
+        .order('id', { ascending: true })
+        .range(from, to)
+    );
 
     // Skapa lookup map
-    const eventsMap = new Map(eventsData?.map(e => [e.event_id, e]) || []);
+    const eventsMap = new Map(eventsData.map(e => [e.event_id, e]));
 
     // Formatera data för Excel
     const excelData = (auditData || []).map(log => {
