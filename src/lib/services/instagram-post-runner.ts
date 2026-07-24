@@ -32,6 +32,7 @@ import {
   uploadInstagramSlides,
   MAX_SLIDES,
   MAX_VISION_CANDIDATES,
+  MAX_ALSO_COUNT,
 } from './instagram-post-service'
 import { MakeWebhookPublisher } from './instagram-publisher'
 import { getPostHogClient } from './openai-client'
@@ -165,13 +166,17 @@ export async function runDailyInstagramPost(
     // 3. Bildkvalitet + vision-rankning -> välj 1-5 slides (kvadratiska)
     console.log('🖼️  Steg 2/3: Kvalitetsbedömer och granskar bilder...')
 
-    // Kandidatpool i prioritetsordning: primärkandidater först, sedan
-    // "också"-listan. Dedupe på normaliserat namn (återkommande event får
-    // nya id:n varje dag av scrapern). imageUrl = originalbilden, utan
-    // ImageKits banner-transformation.
+    // Kandidatpool i prioritetsordning: primärkandidater, "också"-listan,
+    // och därefter dagens övriga event med bild - rankingens listor är
+    // optimerade för captionen, inte bildkvalitet, så bra bilder utanför
+    // dem ska ändå kunna bli slides. Dedupe på normaliserat namn
+    // (återkommande event får nya id:n varje dag av scrapern).
+    // imageUrl = originalbilden, utan ImageKits banner-transformation.
+    const rankedPoolIds = new Set([...ranking.primaryCandidates, ...ranking.alsoToday])
+    const extraIds = events.filter((e) => !rankedPoolIds.has(e.id)).map((e) => e.id)
     const pool: { event: Event; imageUrl: string }[] = []
     const poolNames = new Set<string>()
-    for (const id of [...ranking.primaryCandidates, ...ranking.alsoToday]) {
+    for (const id of [...rankedPoolIds, ...extraIds]) {
       const event = eventById.get(id)
       if (!event?.image_url) continue
       const name = normalizeEventName(event.name)
@@ -289,12 +294,23 @@ export async function runDailyInstagramPost(
 
     console.log(`   🏆 Primärt event: ${primary.name} (${slides.length} slide${slides.length > 1 ? 's' : ''})\n`)
 
-    // 4. Caption (med öppningshistorik för variation)
+    // 4. Caption (med öppningshistorik för variation). Event som fått en
+    // slide ska alltid nämnas i captionen - därefter fylls listan på med
+    // rankingens "också"-val upp till taket.
     console.log('✍️  Steg 3/3: Genererar caption...')
-    const alsoEvents = ranking.alsoToday
-      .filter((id) => id !== primary!.id)
-      .map((id) => eventById.get(id))
-      .filter((e): e is Event => !!e)
+    const alsoSeen = new Set<string>([normalizeEventName(primary.name)])
+    const alsoEvents: Event[] = []
+    for (const e of [
+      ...slides.slice(1).map((s) => s.event),
+      ...ranking.alsoToday.map((id) => eventById.get(id)).filter((e): e is Event => !!e),
+    ]) {
+      if (alsoEvents.length >= MAX_ALSO_COUNT) break
+      if (e.id === primary.id) continue
+      const name = normalizeEventName(e.name)
+      if (alsoSeen.has(name)) continue
+      alsoSeen.add(name)
+      alsoEvents.push(e)
+    }
     const recentOpenings = await getRecentCaptionOpenings(supabase)
     const caption = await generateCaption(primary, alsoEvents, recentOpenings)
 

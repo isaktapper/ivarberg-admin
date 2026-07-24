@@ -23,7 +23,7 @@ const MAX_CAPTION_LENGTH = 2200
 const PRIMARY_LOOKBACK_DAYS = 7 // Event som varit primärt inom X dagar får inte bli det igen
 const ALSO_LOOKBACK_DAYS = 2 // Event som nämnts inom X dagar undviks i "också"-listan
 const MIN_ALSO_COUNT = 3
-const MAX_ALSO_COUNT = 6
+export const MAX_ALSO_COUNT = 6
 
 // Karusell: min 1, max 5 slides per post
 export const MAX_SLIDES = 5
