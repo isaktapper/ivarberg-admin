@@ -23,6 +23,8 @@ export interface Organizer {
   created_from_scraper: boolean // TRUE om auto-skapad av scraper
   needs_review: boolean // TRUE om arrangören behöver granskas
   scraper_source?: string // Namnet på scrapern som skapade arrangören
+  enriched_at?: string | null // När arrangören senast berikades automatiskt (crawl + AI). NULL = aldrig
+  enrichment_note?: string | null // AI-notering från senaste berikningen
   created_at: string
   updated_at: string
 }
@@ -197,11 +199,13 @@ export type InstagramPostStatus = 'published' | 'skipped' | 'failed'
 export interface InstagramPost {
   id: number
   post_date: string // Kalenderdag i Europe/Stockholm (YYYY-MM-DD)
-  event_id?: number | null // Primärt event (postens bild)
+  event_id?: number | null // Primärt event (slide 1)
   also_event_ids?: number[] // Event listade under "Det händer också"
   caption?: string | null
-  image_url?: string | null // Original-URL från events.image_url
-  proxied_image_url?: string | null // /api/instagram-image-URL som skickades till Make
+  image_url?: string | null // Slide 1:s original-URL från events.image_url
+  proxied_image_url?: string | null // Slide 1:s publicerade Storage-URL
+  slide_event_ids?: number[] // Event-id:n per slide i publiceringsordning (index 0 = primärt)
+  slide_image_urls?: string[] // Publika Storage-URL:er per slide, samma ordning
   status: InstagramPostStatus
   error?: string | null
   candidates_count?: number | null

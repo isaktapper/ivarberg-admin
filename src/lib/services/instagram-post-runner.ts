@@ -9,8 +9,10 @@
  * Flöde:
  *   1. Idempotenskoll (en post per dag) + timvakt (08-12 Europe/Stockholm)
  *   2. Hämta dagens publicerade event
- *   3. AI: ranka event -> granska bilder (vision) -> generera caption
- *   4. Skicka { image_url, caption } till Make.com-webhook som postar
+ *   3. AI: ranka event -> kvalitetsbedöm + granska bilder -> välj 1-5 slides
+ *      (slide 1 = primärt event med bäst bild) -> generera caption
+ *   4. Skicka { image_urls, caption } till Make.com-webhook som postar
+ *      (karusell vid >= 2 bilder, enbildspost annars)
  *   5. Logga i instagram_posts + PostHog
  */
 import { createClient } from '@supabase/supabase-js'
@@ -23,10 +25,13 @@ import {
   getRecentCaptionOpenings,
   normalizeEventName,
   rankEvents,
-  validateImage,
+  assessImageQuality,
+  originalImageUrl,
   reviewImages,
   generateCaption,
-  uploadInstagramImage,
+  uploadInstagramSlides,
+  MAX_SLIDES,
+  MAX_VISION_CANDIDATES,
 } from './instagram-post-service'
 import { MakeWebhookPublisher } from './instagram-publisher'
 import { getPostHogClient } from './openai-client'
@@ -48,7 +53,8 @@ export interface InstagramRunResult {
   eventId?: number
   eventName?: string
   caption?: string
-  imageUrl?: string
+  imageUrl?: string // första sliden (bakåtkompat för cron-route/CLI-output)
+  imageUrls?: string[] // alla slides i publiceringsordning
 }
 
 function requireEnv(name: string): string {
@@ -87,8 +93,14 @@ export async function runDailyInstagramPost(
       .maybeSingle()
 
     if (existing) {
-      console.log(`✅ Redan postat idag (${postDate}, rad #${existing.id}) - avslutar.`)
-      return { ok: true, status: 'already-posted', postDate }
+      if (dryRun) {
+        // Dry-run skickar/loggar inget, så den är ofarlig att köra för
+        // granskning även efter att dagens post redan gått ut
+        console.log(`ℹ️  Redan postat idag (${postDate}, rad #${existing.id}) - fortsätter ändå (dry-run).`)
+      } else {
+        console.log(`✅ Redan postat idag (${postDate}, rad #${existing.id}) - avslutar.`)
+        return { ok: true, status: 'already-posted', postDate }
+      }
     }
 
     // Timvakt: cron-triggers (särskilt GitHub) kan vara timmar försenade,
@@ -150,33 +162,70 @@ export async function runDailyInstagramPost(
     console.log(`   Primärkandidater: ${ranking.primaryCandidates.map((id) => eventById.get(id)?.name).join(' | ')}`)
     console.log(`   Också idag: ${ranking.alsoToday.length} event\n`)
 
-    // 3. Bildvalidering + vision-granskning
-    console.log('🖼️  Steg 2/3: Validerar och granskar bilder...')
-    const validCandidates: { event: Event; imageUrl: string }[] = []
-    for (const id of ranking.primaryCandidates) {
+    // 3. Bildkvalitet + vision-rankning -> välj 1-5 slides (kvadratiska)
+    console.log('🖼️  Steg 2/3: Kvalitetsbedömer och granskar bilder...')
+
+    // Kandidatpool i prioritetsordning: primärkandidater först, sedan
+    // "också"-listan. Dedupe på normaliserat namn (återkommande event får
+    // nya id:n varje dag av scrapern). imageUrl = originalbilden, utan
+    // ImageKits banner-transformation.
+    const pool: { event: Event; imageUrl: string }[] = []
+    const poolNames = new Set<string>()
+    for (const id of [...ranking.primaryCandidates, ...ranking.alsoToday]) {
       const event = eventById.get(id)
       if (!event?.image_url) continue
-      if (await validateImage(event.image_url)) {
-        validCandidates.push({ event, imageUrl: event.image_url })
-        console.log(`   ✓ ${event.name}`)
-      } else {
-        console.log(`   ✗ ${event.name} (bild ej användbar)`)
+      const name = normalizeEventName(event.name)
+      if (poolNames.has(name)) continue
+      poolNames.add(name)
+      pool.push({ event, imageUrl: originalImageUrl(event.image_url) })
+    }
+
+    // Programmatisk gate: upplösning + närhet till 1:1 (kvadrat-croppen får
+    // inte förstöra bilden). Parallellt - poolen är liten.
+    const assessed = await Promise.all(
+      pool.map(async (c) => ({ ...c, quality: await assessImageQuality(c.imageUrl) }))
+    )
+    for (const c of assessed) {
+      const q = c.quality
+      const mark = q.ok ? '✓' : q.relaxedOk ? '~' : '✗'
+      console.log(
+        `   ${mark} ${c.event.name} (${q.width}x${q.height}, retention ${q.retention.toFixed(2)}${q.reason ? ` → ${q.reason}` : ''})`
+      )
+    }
+    const strictPass = assessed.filter((c) => c.quality.ok)
+    const relaxedOnly = assessed.filter((c) => !c.quality.ok && c.quality.relaxedOk)
+
+    // Vision-rankning av strikt godkända bilder (ett anrop). Kraschar den
+    // används programmatisk ordning i stället för att avbryta posten.
+    let rankedIds: number[] = []
+    if (strictPass.length > 0) {
+      try {
+        const review = await reviewImages(strictPass.slice(0, MAX_VISION_CANDIDATES))
+        const unusable = new Set(review.unusableEventIds)
+        rankedIds = review.rankedEventIds
+        for (const c of strictPass) {
+          if (!rankedIds.includes(c.event.id) && !unusable.has(c.event.id)) {
+            rankedIds.push(c.event.id)
+          }
+        }
+      } catch (error) {
+        console.warn(
+          '   ⚠️ Vision-granskningen misslyckades - använder programmatisk ordning:',
+          error instanceof Error ? error.message : error
+        )
+        rankedIds = strictPass.map((c) => c.event.id)
       }
     }
 
+    // Slide 1 = bäst rankade primärkandidat (respekterar 7-dagarsregeln)
+    const primaryCandidateIds = new Set(ranking.primaryCandidates)
     let primary: Event | null = null
-    if (validCandidates.length > 0) {
-      const review = await reviewImages(validCandidates)
-      if (review.bestEventId !== null) {
-        primary = eventById.get(review.bestEventId) ?? null
-      } else {
-        // Vision underkände alla - ta första som inte flaggats oanvändbar
-        const fallback = validCandidates.find((c) => !review.unusableEventIds.includes(c.event.id))
-        primary = fallback?.event ?? null
-      }
+    const primaryId = rankedIds.find((id) => primaryCandidateIds.has(id))
+    if (primaryId !== undefined) {
+      primary = eventById.get(primaryId) ?? null
     }
 
-    // Fallback-kedja: prova övriga event med bild (enbart programmatisk validering)
+    // Fallback-kedja: prova övriga event med bild (enbart programmatisk gate)
     if (!primary) {
       console.log('   ⚠️ Ingen av toppkandidaterna hade användbar bild - provar övriga event...')
       const tried = new Set(ranking.primaryCandidates)
@@ -188,11 +237,24 @@ export async function runDailyInstagramPost(
           !recentlyFeatured.recentPrimaryNames.has(normalizeEventName(e.name))
       )
       for (const event of remaining) {
-        if (await validateImage(event.image_url!)) {
+        const known = assessed.find((c) => c.event.id === event.id)
+        const quality = known?.quality ?? (await assessImageQuality(originalImageUrl(event.image_url!)))
+        if (quality.ok) {
           primary = event
           break
         }
       }
+    }
+
+    // Sista utväg före skip: relaxed-kvalitet duger för en enbildspost
+    // (attention-croppen hittar oftast motivet även i t.ex. 16:9)
+    let relaxedFallback = false
+    if (!primary && relaxedOnly.length > 0) {
+      primary = relaxedOnly[0].event // poolordning = prioritetsordning
+      relaxedFallback = true
+      console.warn(
+        `   ⚠️ Ingen bild klarade strikta kvalitetsgaten - enbildspost med relaxed-kvalitet: ${primary.name}`
+      )
     }
 
     if (!primary) {
@@ -208,7 +270,24 @@ export async function runDailyInstagramPost(
       return { ok: true, status: 'skipped', postDate, reason: 'Inga event med användbar bild' }
     }
 
-    console.log(`   🏆 Primärt event: ${primary.name}\n`)
+    // Slides 2-N: resterande strikt godkända event i kvalitetsordning
+    // (aldrig relaxed), minus namn-dubbletter av slide 1, max MAX_SLIDES
+    const assessedById = new Map(assessed.map((c) => [c.event.id, c]))
+    const slides: { event: Event; imageUrl: string }[] = [
+      { event: primary, imageUrl: assessedById.get(primary.id)?.imageUrl ?? originalImageUrl(primary.image_url!) },
+    ]
+    if (!relaxedFallback) {
+      const primaryName = normalizeEventName(primary.name)
+      for (const id of rankedIds) {
+        if (slides.length >= MAX_SLIDES) break
+        if (id === primary.id) continue
+        const candidate = assessedById.get(id)
+        if (!candidate || normalizeEventName(candidate.event.name) === primaryName) continue
+        slides.push({ event: candidate.event, imageUrl: candidate.imageUrl })
+      }
+    }
+
+    console.log(`   🏆 Primärt event: ${primary.name} (${slides.length} slide${slides.length > 1 ? 's' : ''})\n`)
 
     // 4. Caption (med öppningshistorik för variation)
     console.log('✍️  Steg 3/3: Genererar caption...')
@@ -219,17 +298,21 @@ export async function runDailyInstagramPost(
     const recentOpenings = await getRecentCaptionOpenings(supabase)
     const caption = await generateCaption(primary, alsoEvents, recentOpenings)
 
-    // Konvertera bilden till Instagram-godkänd JPEG och ladda upp till
-    // publik Supabase Storage (görs även i dry-run så URL:en kan granskas)
-    console.log('🖼️  Konverterar och laddar upp bilden till Supabase Storage...')
-    const publishedImageUrl = await uploadInstagramImage(supabase, primary.image_url!, postDate)
+    // Croppa slides till kvadratisk 1080x1080 JPEG och ladda upp till
+    // publik Supabase Storage (görs även i dry-run så URL:erna kan granskas)
+    console.log('🖼️  Konverterar och laddar upp bilder till Supabase Storage...')
+    const uploadedSlides = await uploadInstagramSlides(supabase, slides, postDate)
+    const slideImageUrls = uploadedSlides.map((s) => s.url)
+    const slideEventIds = uploadedSlides.map((s) => s.event.id)
 
     console.log('\n' + '='.repeat(60))
     console.log('📋 POST-INNEHÅLL')
     console.log('='.repeat(60))
     console.log(`Primärt event: ${primary.name} (id ${primary.id})`)
-    console.log(`Bild (original): ${primary.image_url}`)
-    console.log(`Bild (publicerad): ${publishedImageUrl}`)
+    console.log(`Slides (${uploadedSlides.length}):`)
+    uploadedSlides.forEach((s, i) => {
+      console.log(`  ${i + 1}. ${s.event.name} → ${s.url}`)
+    })
     console.log(`Också idag: ${alsoEvents.map((e) => e.name).join(' | ') || '(inga)'}`)
     console.log('-'.repeat(60))
     console.log(caption)
@@ -240,7 +323,8 @@ export async function runDailyInstagramPost(
       eventId: primary.id,
       eventName: primary.name,
       caption,
-      imageUrl: publishedImageUrl,
+      imageUrl: slideImageUrls[0],
+      imageUrls: slideImageUrls,
     }
 
     if (dryRun) {
@@ -252,7 +336,7 @@ export async function runDailyInstagramPost(
     console.log('🚀 Skickar till Make.com-webhook...')
     const publisher = new MakeWebhookPublisher()
     try {
-      await publisher.publish({ imageUrl: publishedImageUrl, caption })
+      await publisher.publish({ imageUrls: slideImageUrls, caption })
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error)
       await supabase.from('instagram_posts').upsert(
@@ -262,7 +346,9 @@ export async function runDailyInstagramPost(
           also_event_ids: alsoEvents.map((e) => e.id),
           caption,
           image_url: primary.image_url,
-          proxied_image_url: publishedImageUrl,
+          proxied_image_url: slideImageUrls[0],
+          slide_event_ids: slideEventIds,
+          slide_image_urls: slideImageUrls,
           status: 'failed',
           error: errorMsg,
           candidates_count: ranking.primaryCandidates.length,
@@ -280,7 +366,9 @@ export async function runDailyInstagramPost(
         also_event_ids: alsoEvents.map((e) => e.id),
         caption,
         image_url: primary.image_url,
-        proxied_image_url: publishedImageUrl,
+        proxied_image_url: slideImageUrls[0],
+        slide_event_ids: slideEventIds,
+        slide_image_urls: slideImageUrls,
         status: 'published',
         error: null,
         candidates_count: ranking.primaryCandidates.length,
@@ -301,6 +389,7 @@ export async function runDailyInstagramPost(
         event_name: primary.name,
         candidates_count: ranking.primaryCandidates.length,
         also_count: alsoEvents.length,
+        slide_count: slideImageUrls.length,
         caption_length: caption.length,
       },
     })

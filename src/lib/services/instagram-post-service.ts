@@ -24,7 +24,20 @@ const PRIMARY_LOOKBACK_DAYS = 7 // Event som varit primärt inom X dagar får in
 const ALSO_LOOKBACK_DAYS = 2 // Event som nämnts inom X dagar undviks i "också"-listan
 const MIN_ALSO_COUNT = 3
 const MAX_ALSO_COUNT = 6
-const MIN_IMAGE_WIDTH = 640
+
+// Karusell: min 1, max 5 slides per post
+export const MAX_SLIDES = 5
+export const MAX_VISION_CANDIDATES = 8 // tak på bilder i vision-anropet
+
+// Bildkvalitet: alla slides croppas till kvadrat, så källbilden måste vara
+// nära 1:1 (retention = min(w,h)/max(w,h) = andel av långsidan som överlever
+// croppen). 4:5=0.8, 4:3=0.75, 3:2=0.667 klarar strikta gaten; 16:9=0.5625
+// gör det inte. Relaxed-nivån släpper in 16:9 som sista utväg för slide 1.
+const MIN_CROP_RETENTION = 0.65
+const RELAXED_CROP_RETENTION = 0.55
+// Kortaste sida styr uppskalningen till 1080x1080: 800 → max ~1.35x
+const MIN_SOURCE_SIDE = 800
+const RELAXED_SOURCE_SIDE = 640
 
 export interface RankingResult {
   primaryCandidates: number[] // Event-id:n i prioritetsordning (bäst först)
@@ -119,7 +132,7 @@ export async function getRecentlyFeatured(supabase: SupabaseClient): Promise<Rec
 
   const { data, error } = await supabase
     .from('instagram_posts')
-    .select('post_date, event_id, also_event_ids, status')
+    .select('post_date, event_id, also_event_ids, slide_event_ids, status')
     .gte('post_date', sinceDate)
     .eq('status', 'published')
     .order('post_date', { ascending: true })
@@ -136,6 +149,11 @@ export async function getRecentlyFeatured(supabase: SupabaseClient): Promise<Rec
       recentMentionIds.set(row.event_id, row.post_date)
     }
     for (const id of row.also_event_ids || []) {
+      recentMentionIds.set(id, row.post_date)
+    }
+    // Event som fått en foto-slide räknas som "sedda" minst lika starkt
+    // som ett textomnämnande (endast slide 1 räknas som primärt)
+    for (const id of row.slide_event_ids || []) {
       recentMentionIds.set(id, row.post_date)
     }
   }
@@ -378,8 +396,49 @@ Svara ENDAST med JSON:
 
 // ============ Steg 2: Bildvalidering + vision-granskning ============
 
-/** Programmatisk validering: nåbar, avkodbar, tillräckligt stor */
-export async function validateImage(imageUrl: string): Promise<boolean> {
+/**
+ * ImageKit-URL:er (ik.imagekit.io, som eventbilderna serveras via) har en
+ * ?tr=...w-1440,h-660-transformation som beskär ALLA bilder till banner -
+ * det är den croppen som gjorde gamla posterna 16:9-fula. Stryk
+ * transformationen så att kvalitetsbedömning, vision-granskning och
+ * kvadrat-crop utgår från originalbilden (dimensionerna i filnamnet,
+ * t.ex. w-1536h-1811, är originalets).
+ */
+export function originalImageUrl(imageUrl: string): string {
+  try {
+    const url = new URL(imageUrl)
+    if (url.hostname === 'ik.imagekit.io') {
+      url.searchParams.delete('tr')
+    }
+    return url.toString()
+  } catch {
+    return imageUrl
+  }
+}
+
+export interface ImageQualityResult {
+  ok: boolean // klarar strikta gaten (slide-duglig)
+  relaxedOk: boolean // klarar minst relaxed-gaten (endast primär-fallback)
+  width: number
+  height: number
+  retention: number // min(w,h)/max(w,h) - andel som överlever kvadrat-crop
+  reason?: 'unreachable' | 'too-small' | 'too-elongated'
+}
+
+/**
+ * Programmatisk kvalitetsbedömning: nåbar, avkodbar, tillräcklig upplösning
+ * och nära nog 1:1 för att kvadrat-croppen inte ska förstöra bilden.
+ */
+export async function assessImageQuality(imageUrl: string): Promise<ImageQualityResult> {
+  const failed = (reason: ImageQualityResult['reason'], width = 0, height = 0, retention = 0): ImageQualityResult => ({
+    ok: false,
+    relaxedOk: false,
+    width,
+    height,
+    retention,
+    reason,
+  })
+
   try {
     const response = await fetch(imageUrl, {
       headers: {
@@ -387,29 +446,58 @@ export async function validateImage(imageUrl: string): Promise<boolean> {
       },
       signal: AbortSignal.timeout(15000),
     })
-    if (!response.ok) return false
+    if (!response.ok) return failed('unreachable')
 
     const buffer = Buffer.from(await response.arrayBuffer())
     const metadata = await sharp(buffer).metadata()
-    const width = metadata.width ?? 0
-    const height = metadata.height ?? 0
-    if (width < MIN_IMAGE_WIDTH || height < 300) return false
-    return true
+    let width = metadata.width ?? 0
+    let height = metadata.height ?? 0
+    // EXIF-orientering 5-8 = bilden är roterad 90°, bredd/höjd byter plats
+    if ((metadata.orientation ?? 1) >= 5) {
+      ;[width, height] = [height, width]
+    }
+    if (!width || !height) return failed('unreachable')
+
+    const shortSide = Math.min(width, height)
+    const retention = shortSide / Math.max(width, height)
+
+    if (shortSide < RELAXED_SOURCE_SIDE) return failed('too-small', width, height, retention)
+    if (retention < RELAXED_CROP_RETENTION) return failed('too-elongated', width, height, retention)
+
+    const strictOk = shortSide >= MIN_SOURCE_SIDE && retention >= MIN_CROP_RETENTION
+    return {
+      ok: strictOk,
+      relaxedOk: true,
+      width,
+      height,
+      retention,
+      reason: strictOk ? undefined : shortSide < MIN_SOURCE_SIDE ? 'too-small' : 'too-elongated',
+    }
   } catch (error) {
-    console.warn(`  ⚠️ Bildvalidering misslyckades för ${imageUrl}:`, error instanceof Error ? error.message : error)
-    return false
+    console.warn(`  ⚠️ Bildbedömning misslyckades för ${imageUrl}:`, error instanceof Error ? error.message : error)
+    return failed('unreachable')
   }
 }
 
+export interface ImageReviewResult {
+  bestEventId: number | null
+  rankedEventIds: number[] // alla användbara kandidater i kvalitetsordning (bäst först)
+  unusableEventIds: number[]
+}
+
 /**
- * Steg 2: Vision-granska kandidaternas bilder och välj den bästa.
- * Ett enda multimodalt anrop med alla (för-validerade) bilder.
+ * Steg 2: Vision-granska kandidaternas bilder och ranka dem efter kvalitet.
+ * Ett enda multimodalt anrop med alla (för-validerade) bilder. Rankningen
+ * styr både valet av primärt event (slide 1) och ordningen på övriga slides.
  */
 export async function reviewImages(
   candidates: { event: Event; imageUrl: string }[]
-): Promise<{ bestEventId: number | null; unusableEventIds: number[] }> {
-  if (candidates.length === 0) return { bestEventId: null, unusableEventIds: [] }
-  if (candidates.length === 1) return { bestEventId: candidates[0].event.id, unusableEventIds: [] }
+): Promise<ImageReviewResult> {
+  if (candidates.length === 0) return { bestEventId: null, rankedEventIds: [], unusableEventIds: [] }
+  if (candidates.length === 1) {
+    const id = candidates[0].event.id
+    return { bestEventId: id, rankedEventIds: [id], unusableEventIds: [] }
+  }
 
   const imageContent = candidates.flatMap((c, i) => [
     { type: 'text' as const, text: `Bild ${i + 1} (event_id ${c.event.id}, "${c.event.name}"):` },
@@ -426,22 +514,22 @@ export async function reviewImages(
             content: [
               {
                 type: 'text',
-                text: `Granska dessa eventbilder för ett Instagram-inlägg för en lokal eventguide. Välj den bild som fungerar BÄST som inläggets huvudbild.
+                text: `Granska dessa eventbilder för ett Instagram-karusellinlägg för en lokal eventguide. Rangordna ALLA bilder efter hur bra de fungerar i inlägget (bäst först) - den bästa blir första sliden.
 
 Kriterier:
 - Skarp och visuellt tilltalande (inte suddig, mörk eller lågupplöst)
 - Inte en placeholder, logotyp eller ren textskylt
 - Eventaffischer med text är OK, men riktiga foton föredras om kvaliteten är jämförbar
-- Flagga bilder som är helt oanvändbara (trasiga, oigenkännliga, placeholder)
+- Flagga bilder som är helt oanvändbara (trasiga, oigenkännliga, placeholder) - de ska inte med i quality_order
 
 Svara ENDAST med JSON:
-{ "best_event_id": <id>, "unusable_event_ids": [<id>, ...] }`,
+{ "best_event_id": <id>, "quality_order": [<id>, <id>, ...], "unusable_event_ids": [<id>, ...] }`,
               },
               ...imageContent,
             ],
           },
         ],
-        max_tokens: 100,
+        max_tokens: 200,
         response_format: { type: 'json_object' },
         posthogProperties: { feature: 'instagram-image-review' },
       }),
@@ -464,7 +552,26 @@ Svara ENDAST med JSON:
   if (bestEventId !== null && unusableEventIds.includes(bestEventId)) {
     bestEventId = null
   }
-  return { bestEventId, unusableEventIds }
+
+  // Kvalitetsordning: whitelist-validera, dedupa och stryk oanvändbara.
+  // Kandidater som modellen utelämnat läggs sist i inmatningsordning
+  // (defensivt - de ska hellre bli sena slides än försvinna helt).
+  const unusable = new Set(unusableEventIds)
+  const rankedEventIds: number[] = []
+  const seen = new Set<number>()
+  const pushRanked = (id: number) => {
+    if (validIds.has(id) && !unusable.has(id) && !seen.has(id)) {
+      seen.add(id)
+      rankedEventIds.push(id)
+    }
+  }
+  if (bestEventId !== null) pushRanked(bestEventId)
+  for (const id of parsed.quality_order || []) {
+    if (typeof id === 'number') pushRanked(id)
+  }
+  for (const c of candidates) pushRanked(c.event.id)
+
+  return { bestEventId, rankedEventIds, unusableEventIds }
 }
 
 // ============ Steg 3: Caption ============
@@ -579,20 +686,19 @@ Svara ENDAST med captionen, ingen annan text.`
 // ============ Bildkonvertering + uppladdning ============
 
 const STORAGE_BUCKET = 'instagram-posts'
-// Instagrams tillåtna aspect ratios för foto-poster
-const MIN_RATIO = 4 / 5 // 0.8 (porträtt)
-const MAX_RATIO = 1.91 // (landskap)
-const TARGET_WIDTH = 1080
+const SQUARE_SIZE = 1080 // Instagram-nativ 1:1
 
 /**
- * Hämta eventbilden, konvertera till Instagram-godkänd JPEG (max 1080px,
- * ratio clampad till 4:5-1.91:1) och ladda upp till en publik Supabase
- * Storage-bucket. Returnerar den publika URL som skickas till Make/Instagram.
+ * Hämta eventbilden, croppa till kvadratisk 1080x1080 JPEG och ladda upp
+ * till en publik Supabase Storage-bucket som `{postDate}-{slideIndex}.jpg`.
+ * Kvalitetsgaten (assessImageQuality) har redan sorterat bort bilder som
+ * skulle croppas för hårt. Returnerar den publika URL:en.
  */
 export async function uploadInstagramImage(
   supabase: SupabaseClient,
   imageUrl: string,
-  postDate: string
+  postDate: string,
+  slideIndex: number // 1-baserat
 ): Promise<string> {
   const response = await fetch(imageUrl, {
     headers: {
@@ -605,40 +711,18 @@ export async function uploadInstagramImage(
   }
   const sourceBuffer = Buffer.from(await response.arrayBuffer())
 
-  const metadata = await sharp(sourceBuffer).metadata()
-  let width = metadata.width ?? 0
-  let height = metadata.height ?? 0
-  // EXIF-orientering 5-8 = bilden är roterad 90°, bredd/höjd byter plats
-  if ((metadata.orientation ?? 1) >= 5) {
-    ;[width, height] = [height, width]
-  }
-  if (!width || !height) {
-    throw new Error('Kunde inte läsa bildens dimensioner')
-  }
-  const ratio = width / height
-
-  // .rotate() utan argument applicerar EXIF-orienteringen före resize
-  let pipeline = sharp(sourceBuffer, { failOn: 'error' }).rotate()
-  if (ratio < MIN_RATIO) {
-    // För hög (t.ex. lång affisch) → croppa till 4:5
-    pipeline = pipeline.resize({
-      width: TARGET_WIDTH,
-      height: Math.round(TARGET_WIDTH / MIN_RATIO), // 1350
+  // .rotate() utan argument applicerar EXIF-orienteringen före resize.
+  // attention-strategin croppar mot bildens mest intressanta region.
+  const jpegBuffer = await sharp(sourceBuffer, { failOn: 'error' })
+    .rotate()
+    .resize({
+      width: SQUARE_SIZE,
+      height: SQUARE_SIZE,
       fit: 'cover',
       position: sharp.strategy.attention,
     })
-  } else if (ratio > MAX_RATIO) {
-    // För bred (panorama) → croppa till 1.91:1
-    pipeline = pipeline.resize({
-      width: TARGET_WIDTH,
-      height: Math.round(TARGET_WIDTH / MAX_RATIO), // 565
-      fit: 'cover',
-      position: sharp.strategy.attention,
-    })
-  } else {
-    pipeline = pipeline.resize({ width: TARGET_WIDTH, withoutEnlargement: true })
-  }
-  const jpegBuffer = await pipeline.jpeg({ quality: 85, mozjpeg: true }).toBuffer()
+    .jpeg({ quality: 85, mozjpeg: true })
+    .toBuffer()
 
   // Skapa bucketen om den inte finns (publik läsning krävs för Instagram)
   const { error: bucketError } = await supabase.storage.createBucket(STORAGE_BUCKET, {
@@ -648,7 +732,7 @@ export async function uploadInstagramImage(
     throw new Error(`Kunde inte skapa storage-bucket: ${bucketError.message}`)
   }
 
-  const path = `${postDate}.jpg`
+  const path = `${postDate}-${slideIndex}.jpg`
   const { error: uploadError } = await supabase.storage
     .from(STORAGE_BUCKET)
     .upload(path, jpegBuffer, { contentType: 'image/jpeg', upsert: true })
@@ -658,4 +742,43 @@ export async function uploadInstagramImage(
 
   const { data } = supabase.storage.from(STORAGE_BUCKET).getPublicUrl(path)
   return data.publicUrl
+}
+
+/**
+ * Ladda upp alla slides för dagens post. Rensar först gamla filer med samma
+ * datumprefix (stale slides från tidigare försök + legacy `{postDate}.jpg`) -
+ * upsert kan skriva över men aldrig krympa mängden filer.
+ *
+ * Slide 1 är obligatorisk (fel kastas vidare); fel på slide 2+ loggas och
+ * den sliden släpps så att posten ändå går ut med färre bilder.
+ */
+export async function uploadInstagramSlides(
+  supabase: SupabaseClient,
+  slides: { event: Event; imageUrl: string }[],
+  postDate: string
+): Promise<{ event: Event; url: string }[]> {
+  const { data: existingFiles } = await supabase.storage
+    .from(STORAGE_BUCKET)
+    .list('', { search: postDate })
+  const stalePaths = (existingFiles || [])
+    .map((f) => f.name)
+    .filter((name) => name.startsWith(postDate))
+  if (stalePaths.length > 0) {
+    await supabase.storage.from(STORAGE_BUCKET).remove(stalePaths)
+  }
+
+  const uploaded: { event: Event; url: string }[] = []
+  for (const [i, slide] of slides.entries()) {
+    try {
+      const url = await uploadInstagramImage(supabase, slide.imageUrl, postDate, uploaded.length + 1)
+      uploaded.push({ event: slide.event, url })
+    } catch (error) {
+      if (i === 0) throw error // primära slidens bild är obligatorisk
+      console.warn(
+        `  ⚠️ Slide "${slide.event.name}" kunde inte laddas upp - hoppar över:`,
+        error instanceof Error ? error.message : error
+      )
+    }
+  }
+  return uploaded
 }

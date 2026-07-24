@@ -2,12 +2,15 @@
  * Publicering av Instagram-poster via extern transport.
  *
  * Nuvarande transport: Make.com custom webhook. Make-scenariot tar emot
- * { image_url, caption } och postar till Instagram for Business.
- * Interfacet gör det enkelt att byta transport senare.
+ * { image_urls, image_url, caption } och postar till Instagram for Business -
+ * karusell vid >= 2 bilder, enbildspost annars (Graph API kräver minst 2
+ * barn för en karusell, så scenariot behöver en router på antalet).
+ * image_url = första bilden, behålls för bakåtkompatibilitet tills
+ * Make-scenariot uppdaterats. Interfacet gör det enkelt att byta transport.
  */
 
 export interface InstagramPostPayload {
-  imageUrl: string // Publikt nåbar JPEG-URL (via /api/instagram-image)
+  imageUrls: string[] // 1-5 publika JPEG-URL:er (Supabase Storage); [0] = primär slide
   caption: string
 }
 
@@ -31,8 +34,12 @@ export class MakeWebhookPublisher implements InstagramPublisher {
   }
 
   async publish(post: InstagramPostPayload): Promise<void> {
+    if (post.imageUrls.length === 0) {
+      throw new Error('InstagramPostPayload kräver minst en bild-URL')
+    }
     const body = JSON.stringify({
-      image_url: post.imageUrl,
+      image_urls: post.imageUrls,
+      image_url: post.imageUrls[0], // bakåtkompat tills Make-scenariot hanterar image_urls
       caption: post.caption,
     })
 

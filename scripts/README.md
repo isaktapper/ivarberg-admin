@@ -81,7 +81,11 @@ Se [GITHUB_ACTIONS_SETUP.md](../docs/GITHUB_ACTIONS_SETUP.md) för mer info.
 
 ## Publish Instagram Post
 
-Daglig automatisk Instagram-post: "Det här händer i Varberg idag". AI väljer dagens bästa event (text-ranking + vision-granskning av bilder), genererar en svensk caption och skickar `{image_url, caption}` till en Make.com-webhook som postar till Instagram for Business. Alla AI-anrop mäts i PostHog (features: `instagram-event-ranking`, `instagram-image-review`, `instagram-caption`).
+Daglig automatisk Instagram-post: "Det här händer i Varberg idag". AI rankar dagens event (text-ranking + vision-granskning av bilder) och bygger en **karusell med 1-5 kvadratiska bilder** - slide 1 är det primära eventet med bästa bilden, övriga slides är dagens andra event vars bilder klarar kvalitetsgaten. En svensk caption genereras och `{image_urls, image_url, caption}` skickas till en Make.com-webhook som postar till Instagram for Business (`image_url` = första sliden, bakåtkompatibilitet). Alla AI-anrop mäts i PostHog (features: `instagram-event-ranking`, `instagram-image-review`, `instagram-caption`).
+
+Bildkvalitetsgate (programmatisk, före vision-granskningen): källbilden måste vara nära 1:1 (retention = kortsida/långsida ≥ 0.65, dvs. 4:5/4:3/3:2 ok men inte 16:9) och ha kortaste sida ≥ 800 px, eftersom alla slides croppas till 1080×1080. Om ingen bild klarar strikta gaten postas en enbildspost med relaxed-krav (retention ≥ 0.55, kortsida ≥ 640) som sista utväg.
+
+OBS: eventbilder som serveras via ImageKit (`ik.imagekit.io`) har en `?tr=...w-1440,h-660`-transformation som beskär allt till banner - pipelinen stryker den (`originalImageUrl()`) så att bedömning och crop utgår från originalbilden.
 
 ### Användning
 
@@ -104,17 +108,19 @@ MAKE_WEBHOOK_URL=https://hook.eu2.make.com/...   # Make-webhook (krävs ej för 
 MAKE_WEBHOOK_API_KEY=...                          # Valfri: om webhooken har API Key authentication
 ```
 
-Bilden konverteras till Instagram-godkänd JPEG med sharp och laddas upp till den publika Supabase Storage-bucketen `instagram-posts` (skapas automatiskt).
+Varje slide croppas till kvadratisk 1080×1080 JPEG med sharp (attention-crop mot bildens mest intressanta region) och laddas upp till den publika Supabase Storage-bucketen `instagram-posts` (skapas automatiskt) som `{postDate}-{n}.jpg`. Gamla filer med samma datumprefix rensas först.
 
 ### Förutsättningar
 
-- Migrationen `database/migrations/CREATE_INSTAGRAM_POSTS_TABLE.sql` körd i Supabase
-- Make.com-scenario: "Webhooks: Custom webhook" → "Instagram for Business: Create a Photo Post" (Photo URL ← `image_url`, Caption ← `caption`)
+- Migrationerna `database/migrations/CREATE_INSTAGRAM_POSTS_TABLE.sql` och `database/migrations/ADD_INSTAGRAM_CAROUSEL_COLUMNS.sql` körda i Supabase
+- Make.com-scenario: "Webhooks: Custom webhook" → router på antal poster i `image_urls`:
+  - 1 bild → "Instagram for Business: Create a Photo Post" (Photo URL ← `image_url`, Caption ← `caption`)
+  - ≥ 2 bilder → "Instagram for Business: Create a Carousel Post" (Photo URLs ← `image_urls[]`, Caption ← `caption`) - Instagrams Graph API kräver minst 2 barn för en karusell
 - Instagram Business/Creator-konto kopplat till en Facebook-sida
 
-### GitHub Actions
+### Schemaläggning
 
-Körs automatiskt kl 08:00 svensk tid via `.github/workflows/daily-instagram-post.yml` (dubbla cron-tider 06+07 UTC; scriptets timvakt hanterar sommar-/vintertid). `instagram_posts`-tabellen ger idempotens (max en post per dag) och 7-dagars variationshistorik så samma event inte featuras flera dagar i rad.
+Primär trigger är **Vercel cron**: `/api/cron/instagram-post` körs kl 06:00 och 07:00 UTC (se `vercel.json`); pipelinens timvakt (08–12 Europe/Stockholm) hanterar sommar-/vintertid. `.github/workflows/daily-instagram-post.yml` är enbart en backup-trigger (GitHub-cron är konsekvent 2–3 h försenad för det här repot) plus manuellt verktyg via workflow_dispatch. `instagram_posts`-tabellen ger idempotens (max en post per dag) så dubbla triggers är ofarliga, samt 7-dagars variationshistorik så samma event inte featuras flera dagar i rad.
 
 ---
 
