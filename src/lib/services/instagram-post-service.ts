@@ -105,6 +105,21 @@ export function getStockholmDayRange(now: Date = new Date()): { start: string; e
 
 // ============ Datahämtning ============
 
+/**
+ * Event som aldrig ska med i Instagram-posten - varken som slide eller i
+ * "Det händer också"-listan. Matchas som substring mot normaliserat eventnamn
+ * (långkörare får nytt event-id varje dag, så id-blockning fungerar inte).
+ * Typfall: utställningar vars bild annars återkommer dag efter dag.
+ */
+const EXCLUDED_EVENT_NAME_PATTERNS = [
+  'tryckt!', // "TRYCKT! Grafisk konst" - daglig utställning, bilden låg med i varje post
+]
+
+export function isExcludedFromInstagram(name: string): boolean {
+  const normalized = normalizeEventName(name)
+  return EXCLUDED_EVENT_NAME_PATTERNS.some((pattern) => normalized.includes(pattern))
+}
+
 /** Hämta alla publicerade event som startar under dagens Stockholm-kalenderdag */
 export async function getTodayEvents(supabase: SupabaseClient): Promise<Event[]> {
   const { start, end } = getStockholmDayRange()
@@ -119,7 +134,14 @@ export async function getTodayEvents(supabase: SupabaseClient): Promise<Event[]>
   if (error) {
     throw new Error(`Kunde inte hämta dagens event: ${error.message}`)
   }
-  return (data || []) as Event[]
+  const events = (data || []) as Event[]
+  const excluded = events.filter((e) => isExcludedFromInstagram(e.name))
+  if (excluded.length > 0) {
+    console.log(
+      `  🚫 Exkluderar ${excluded.length} event från Instagram-posten: ${excluded.map((e) => e.name).join(', ')}`
+    )
+  }
+  return events.filter((e) => !isExcludedFromInstagram(e.name))
 }
 
 /**
