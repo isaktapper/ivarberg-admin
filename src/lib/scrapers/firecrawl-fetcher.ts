@@ -25,16 +25,53 @@ export function getFirecrawlFetchCount(): number {
   return pageFetchCount;
 }
 
-/** Firecrawl kan ge tillfälliga 500-fel - försök igen en gång innan vi ger upp */
+// Gratisplanen tillåter 10 anrop/minut. Håll oss under det med ett minsta
+// intervall mellan anrop, och vänta ut resetten om vi ändå får 429.
+const MIN_INTERVAL_MS = 6500;
+const MAX_ATTEMPTS = 4;
+let lastCallAt = 0;
+
+function sleep(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+async function pace(): Promise<void> {
+  const wait = lastCallAt + MIN_INTERVAL_MS - Date.now();
+  if (wait > 0) await sleep(wait);
+  lastCallAt = Date.now();
+}
+
+/** Läser "retry after 19s" ur Firecrawls 429-meddelande, annars 60s */
+function retryAfterMs(message: string): number {
+  const m = message.match(/retry after (\d+)s/i);
+  return m ? (parseInt(m[1], 10) + 1) * 1000 : 60_000;
+}
+
+/**
+ * Firecrawl kan ge tillfälliga 500-fel och 429 (rate limit). Vid 429 väntar vi
+ * tills gränsen nollställts, annars kort backoff. Ger upp efter MAX_ATTEMPTS.
+ */
 async function withRetry<T>(label: string, fn: () => Promise<T>): Promise<T> {
-  try {
-    return await fn();
-  } catch (firstError) {
-    const msg = firstError instanceof Error ? firstError.message : String(firstError);
-    console.warn(`  ⚠️ Firecrawl-fel för ${label} (${msg.substring(0, 100)}), försöker igen om 3s...`);
-    await new Promise(resolve => setTimeout(resolve, 3000));
-    return fn();
+  let lastError: unknown;
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    await pace();
+    try {
+      return await fn();
+    } catch (error) {
+      lastError = error;
+      const msg = error instanceof Error ? error.message : String(error);
+      const status = (error as { status?: number }).status;
+      const isRateLimit = status === 429 || /rate limit/i.test(msg);
+      if (attempt === MAX_ATTEMPTS) break;
+
+      const wait = isRateLimit ? retryAfterMs(msg) : 3000 * attempt;
+      console.warn(
+        `  ⚠️ Firecrawl-fel för ${label} (${msg.substring(0, 100)}), försök ${attempt}/${MAX_ATTEMPTS}, väntar ${Math.round(wait / 1000)}s...`
+      );
+      await sleep(wait);
+    }
   }
+  throw lastError instanceof Error ? lastError : new Error(String(lastError));
 }
 
 /** Hämta en sidas fulla HTML via Firecrawl (motsvarar fetch + response.text()) */

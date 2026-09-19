@@ -61,6 +61,10 @@ export class VisitVarbergFirecrawlScraper extends VisitVarbergScraper {
       }
     });
 
+    if (eventUrls.length === 0) {
+      throw new Error(`[Firecrawl] Inga event-länkar hittades på ${this.config.url} - trolig felsida eller ändrad sidstruktur`);
+    }
+
     // STEG 3: Filtrera bort events som redan finns i databasen
     const newUrls = eventUrls.filter(url => !this.knownUrls.has(url));
     this.skippedKnown = eventUrls.length - newUrls.length;

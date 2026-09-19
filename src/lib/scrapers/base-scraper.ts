@@ -1,5 +1,6 @@
 import { ScrapedEvent, ScraperConfig } from './types';
 import TurndownService from 'turndown';
+import { fetchHTMLDirect } from './http-fetcher';
 
 export abstract class BaseScraper {
   protected turndownService: TurndownService;
@@ -26,17 +27,10 @@ export abstract class BaseScraper {
   abstract scrape(): Promise<ScrapedEvent[]>;
   
   protected async fetchHTML(url: string): Promise<string> {
-    const response = await fetch(url, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (compatible; iVarberg-EventBot/1.0)'
-      }
-    });
-    
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-    }
-    
-    return response.text();
+    // Webbläsarlika headers, cookie-jar, manuell redirect-följning och retries
+    // - se http-fetcher.ts. Kastar Error vid HTTP-fel/redirect-loop så att
+    // FallbackScraper kan gå vidare till Firecrawl.
+    return fetchHTMLDirect(url);
   }
   
   protected delay(ms: number): Promise<void> {

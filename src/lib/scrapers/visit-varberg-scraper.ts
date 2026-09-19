@@ -25,7 +25,65 @@ interface VisitVarbergEventData {
   longTerm?: boolean;
   useDefaultStartTime?: boolean; // True = heldag utan specifik tid
   useDefaultEndTime?: boolean;
-  organizer?: string; // Finns ibland i datan
+  organizer?: string | { name?: string; surname?: string }; // Gammalt format: sträng. Nytt format: person-objekt
+  organization?: string; // Nytt format (hösten 2026): arrangörens namn
+}
+
+/**
+ * Plockar ut alla JSON-objekt som skickas till AppRegistry.registerInitialState(...)
+ * i ett script. Använder klammer-räkning i stället för regex - objekten är
+ * 10 000+ tecken och innehåller "});" i beskrivningstexter.
+ */
+export function extractInitialStates(scriptContent: string): unknown[] {
+  const results: unknown[] = [];
+  const marker = /registerInitialState\(\s*['"][^'"]*['"]\s*,\s*/g;
+  let match: RegExpExecArray | null;
+
+  while ((match = marker.exec(scriptContent)) !== null) {
+    const start = match.index + match[0].length;
+    if (scriptContent[start] !== '{') continue;
+
+    let depth = 0;
+    let inString = false;
+    let escaped = false;
+    for (let i = start; i < scriptContent.length; i++) {
+      const ch = scriptContent[i];
+      if (inString) {
+        if (escaped) escaped = false;
+        else if (ch === '\\') escaped = true;
+        else if (ch === '"') inString = false;
+        continue;
+      }
+      if (ch === '"') inString = true;
+      else if (ch === '{') depth++;
+      else if (ch === '}') {
+        depth--;
+        if (depth === 0) {
+          try {
+            results.push(JSON.parse(scriptContent.slice(start, i + 1)));
+          } catch {
+            // Inte giltig JSON - inte det vi letar efter
+          }
+          break;
+        }
+      }
+    }
+  }
+  return results;
+}
+
+/**
+ * Visit Varberg bytte eventplattform hösten 2026: eventdatan låg tidigare på
+ * toppnivå, nu ligger den i `{ event: {...}, breadcrumbs: [...] }`. Stöd båda.
+ */
+export function pickEventData(candidate: unknown): VisitVarbergEventData | null {
+  if (!candidate || typeof candidate !== 'object') return null;
+  const obj = candidate as Record<string, unknown>;
+  const inner = (obj.event && typeof obj.event === 'object' ? obj.event : obj) as Record<string, unknown>;
+  if (typeof inner.name === 'string' && Array.isArray(inner.dates)) {
+    return inner as unknown as VisitVarbergEventData;
+  }
+  return null;
 }
 
 export class VisitVarbergScraper extends BaseScraper {
@@ -58,6 +116,15 @@ export class VisitVarbergScraper extends BaseScraper {
       });
 
       console.log(`📋 Found ${eventUrls.length} event URLs`);
+
+      // Listsidan har normalt 100+ event. 0 länkar betyder att vi fått en
+      // block-/felsida med HTTP 200 eller att sidstrukturen ändrats - kasta så
+      // att Firecrawl-fallbacken provas och körningen inte loggas som lyckad.
+      if (eventUrls.length === 0) {
+        throw new Error(
+          `Inga event-länkar hittades på ${this.config.url} (HTML ${listHtml.length} tecken) - trolig blockering eller ändrad sidstruktur`
+        );
+      }
 
       // STEG 3: Scrapa varje event-sida
       for (const url of eventUrls) {
@@ -103,20 +170,13 @@ export class VisitVarbergScraper extends BaseScraper {
       if (foundEventData) return;
 
       const scriptContent = $(scriptTag).html();
-      if (scriptContent && scriptContent.includes('AppRegistry.registerInitialState')) {
-        // Regex för att extrahera JSON-objektet
-        const match = scriptContent.match(/registerInitialState\([^,]+,\s*({[\s\S]*?})\);/);
-        if (match && match[1]) {
-          try {
-            const parsed = JSON.parse(match[1]);
+      if (!scriptContent || !scriptContent.includes('registerInitialState')) return;
 
-            // Kontrollera om detta är event-datan (har name och dates)
-            if (parsed.name && parsed.dates && Array.isArray(parsed.dates)) {
-              foundEventData = parsed;
-            }
-          } catch {
-            // Tyst skippa fel - detta är förmodligen inte event-datan
-          }
+      for (const candidate of extractInitialStates(scriptContent)) {
+        const data = pickEventData(candidate);
+        if (data) {
+          foundEventData = data;
+          return;
         }
       }
     });
@@ -165,7 +225,8 @@ export class VisitVarbergScraper extends BaseScraper {
       venueName: eventData.venue?.trim(),
       phone: eventData.phone,
       email: eventData.email,
-      organizerName: eventData.venue?.trim(), // Använd venue som arrangörnamn (Visit Varberg använder venue som arrangör)
+      // Nytt format har arrangören i `organization`; annars venue som tidigare
+      organizerName: eventData.organization?.trim() || eventData.venue?.trim(),
       organizerWebsite: eventData.website, // Arrangörens hemsida
     };
 

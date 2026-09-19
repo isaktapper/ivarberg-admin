@@ -56,6 +56,14 @@ export class ArenaVarbergScraper extends BaseScraper {
       });
       
       console.log(`Found ${eventUrls.length} event URLs to scrape`);
+
+      // Kalendern har normalt 25+ event. 0 länkar = block-/felsida med HTTP 200
+      // (händer från GitHub Actions-IP:n) - kasta så att fallbacken provas.
+      if (eventUrls.length === 0) {
+        throw new Error(
+          `Inga event-länkar hittades på ${this.config.url} (HTML ${calendarHtml.length} tecken) - trolig blockering eller ändrad sidstruktur`
+        );
+      }
       
       // Steg 2: Besök varje event-sida och scrapa detaljerad information
       for (const eventUrl of eventUrls) {

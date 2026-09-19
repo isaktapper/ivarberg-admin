@@ -1,0 +1,85 @@
+# DIAGNOS: Testar direkt hämtning av alla scraper-källor från en GitHub Actions-runner
+# och visar statuskod, redirect-kedja och svarsheaders. Skriver inget till databasen
+# och använder inga Firecrawl-credits. Triggas ENDAST manuellt.
+name: Debug source fetch
+
+on:
+  workflow_dispatch:
+
+jobs:
+  debug-fetch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Runner egress IP
+        run: curl -s https://api.ipify.org; echo
+
+      - name: curl med bot-UA (gamla beteendet)
+        continue-on-error: true
+        run: |
+          for u in 'https://visitvarberg.se/evenemang?limit=500' 'https://varberg.se/kulturhuset-komedianten/kalender' 'https://arenavarberg.se/evenemang-varberg/' 'https://societen.se/kalender/' 'https://varbergsbois.ebiljett.nu/List/Events'; do
+            echo "=== $u"
+            curl -sS -m 40 -o /dev/null -A 'Mozilla/5.0 (compatible; iVarberg-EventBot/1.0)' \
+              -w 'status=%{http_code} size=%{size_download} redirects=%{num_redirects} final=%{url_effective}\n' -L --max-redirs 5 "$u" || true
+          done
+
+      - name: curl med webbläsar-UA + cookie-jar, visa redirect-kedja
+        continue-on-error: true
+        run: |
+          UA='Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36'
+          for u in 'https://visitvarberg.se/evenemang?limit=500' 'https://varberg.se/kulturhuset-komedianten/kalender' 'https://arenavarberg.se/evenemang-varberg/' 'https://societen.se/kalender/' 'https://varbergsbois.ebiljett.nu/List/Events'; do
+            echo "=== $u"
+            rm -f /tmp/cj
+            curl -sS -m 40 -o /tmp/body.html -D /tmp/hdrs -A "$UA" -c /tmp/cj -b /tmp/cj \
+              -H 'Accept: text/html,application/xhtml+xml' -H 'Accept-Language: sv-SE,sv;q=0.9,en;q=0.8' \
+              -w 'status=%{http_code} size=%{size_download} redirects=%{num_redirects} final=%{url_effective}\n' -L --max-redirs 8 "$u" || true
+            echo "--- headers (status/location/set-cookie/server):"
+            grep -iE '^HTTP/|^location|^set-cookie|^server|^cf-ray|^x-' /tmp/hdrs | head -30 || true
+            echo "--- body start:"
+            head -c 400 /tmp/body.html | tr '\n' ' '; echo
+          done
+
+      - name: Scraperns egna fetchHTMLDirect (samma kod som daily-scraper)
+        continue-on-error: true
+        run: |
+          cat > scripts/_debug-fetch.ts <<'TS'
+          import { fetchHTMLDirect } from '../src/lib/scrapers/http-fetcher';
+          const urls = [
+            'https://visitvarberg.se/evenemang?limit=500',
+            'https://varberg.se/kulturhuset-komedianten/kalender',
+            'https://arenavarberg.se/evenemang-varberg/',
+            'https://societen.se/kalender/',
+            'https://varbergsbois.ebiljett.nu/List/Events',
+          ];
+          (async () => {
+            for (const u of urls) {
+              const t = Date.now();
+              try {
+                const html = await fetchHTMLDirect(u);
+                const links = (html.match(/href="[^"]*(tillfalle\?eventId=|\/evenemang\/|kalender|Event)[^"]*"/g) || []).length;
+                console.log(`OK   ${u} -> ${html.length} tecken, ~${links} eventlänkar (${Date.now() - t}ms)`);
+              } catch (e) {
+                console.log(`FAIL ${u} -> ${e instanceof Error ? e.message : e} (${Date.now() - t}ms)`);
+              }
+            }
+          })();
+          TS
+          pnpm tsx scripts/_debug-fetch.ts
