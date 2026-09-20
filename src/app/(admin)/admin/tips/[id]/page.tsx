@@ -1,359 +1,217 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import { useParams, useRouter } from 'next/navigation'
-import { EventTip } from '@/types/database'
-import ProtectedLayout from '@/components/ProtectedLayout'
-import { ArrowLeft, XCircle, CheckCircle, ExternalLink } from 'lucide-react'
+import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
-import { formatDate } from '@/lib/utils'
-import Image from 'next/image'
+import { useParams, useRouter } from 'next/navigation'
+import { ArrowLeft, ExternalLink, Sparkles, XCircle, CheckCircle2, Calendar, MapPin, Mail } from 'lucide-react'
+import type { EventTip } from '@/types/database'
+import { formatDateTime, formatDay, formatRelative } from '@/lib/format'
+import { PageHeader } from '@/components/ui/page-header'
+import { Card, CardBody, CardHeader, SectionLabel } from '@/components/ui/card'
+import { StatusBadge, CategoryChip } from '@/components/ui/status-badge'
+import { Button } from '@/components/ui/button'
+import { Dialog, DialogContent } from '@/components/ui/dialog'
+import { Field, Textarea } from '@/components/ui/input'
+import { EmptyState, ErrorState, LoadingState } from '@/components/ui/states'
+import { useToast } from '@/components/ui/toast'
+import { useConfirm } from '@/components/ui/confirm-dialog'
+import { convertTip, markTipsReviewed, rejectTip } from '@/components/admin/tip-actions'
 
-export default function AdminTipDetailPage() {
-  const params = useParams()
+export default function TipDetailPage() {
+  const params = useParams<{ id: string }>()
+  const id = Number(params.id)
   const router = useRouter()
+  const toast = useToast()
+  const confirm = useConfirm()
+
   const [tip, setTip] = useState<EventTip | null>(null)
   const [loading, setLoading] = useState(true)
-  const [converting, setConverting] = useState(false)
-  const [rejecting, setRejecting] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [rejectOpen, setRejectOpen] = useState(false)
+  const [reason, setReason] = useState('')
+  const [imgBroken, setImgBroken] = useState(false)
 
-  useEffect(() => {
-    fetchTip()
-  }, [params.id])
-
-  const fetchTip = async () => {
+  const load = useCallback(async () => {
+    setLoading(true)
+    setError(null)
     try {
-      const response = await fetch(`/api/admin/tips/${params.id}`)
-      const data = await response.json()
-
-      if (data.error) throw new Error(data.error)
-      setTip(data.data)
-    } catch (error) {
-      console.error('Error fetching tip:', error)
-      alert('Fel vid hämtning av tips')
+      const res = await fetch(`/api/admin/tips/${id}`)
+      const json = await res.json()
+      if (!res.ok) throw new Error(json.details || json.error || 'Kunde inte hämta tipset')
+      setTip(json.data)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Okänt fel')
     } finally {
       setLoading(false)
     }
-  }
+  }, [id])
 
-  const handleReject = async () => {
-    const reason = prompt('Varför avböjer du detta tips? (Valfritt)')
-    
-    setRejecting(true)
+  useEffect(() => {
+    if (!Number.isNaN(id)) load()
+  }, [id, load])
+
+  const doConvert = async () => {
+    if (!tip) return
+    const ok = await confirm({ title: 'Konvertera till event?', description: `”${tip.event_name}” skapas som utkast.`, confirmLabel: 'Konvertera' })
+    if (!ok) return
+    setBusy(true)
     try {
-      const response = await fetch(`/api/admin/tips/${params.id}/reject`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ reason: reason || '' })
+      const result = await convertTip(tip.id)
+      toast.toast({
+        kind: 'success',
+        title: 'Event skapat som utkast',
+        description: tip.event_name,
+        action: { label: 'Öppna eventet', onClick: () => router.push(`/events/${result.event.id}/edit`) },
       })
-
-      const data = await response.json()
-
-      if (data.error) throw new Error(data.error)
-
-      alert('Tips avböjt!')
-      router.push('/admin/tips')
-    } catch (error) {
-      console.error('Error rejecting tip:', error)
-      alert('Fel vid avböjning av tips')
+      load()
+    } catch (e) {
+      toast.error('Kunde inte konvertera', e instanceof Error ? e.message : undefined)
     } finally {
-      setRejecting(false)
+      setBusy(false)
     }
   }
 
-  const handleConvert = async () => {
-    if (!confirm(
-      `Är du säker på att du vill konvertera detta tips till ett event?\n\n` +
-      `Eventet kommer att skapas och du kommer att tas till redigeringssidan för att komplettera information.`
-    )) {
-      return
-    }
-
-    setConverting(true)
+  const doReject = async () => {
+    if (!tip) return
+    setBusy(true)
     try {
-      const response = await fetch(`/api/admin/tips/${params.id}/convert`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' }
-      })
-
-      const data = await response.json()
-
-      if (!response.ok || data.error) {
-        throw new Error(data.details || data.error || 'Failed to convert tip')
-      }
-
-      alert('✅ Tips konverterat till event! Du kommer att tas till redigeringssidan.')
-      router.push(`/events/${data.event.id}/edit`)
-    } catch (error) {
-      console.error('Error converting tip:', error)
-      alert(`Fel vid konvertering av tips: ${error instanceof Error ? error.message : 'Okänt fel'}`)
+      await rejectTip(tip.id, reason.trim())
+      toast.success('Tipset avvisat')
+      setRejectOpen(false)
+      load()
+    } catch (e) {
+      toast.error('Kunde inte avvisa', e instanceof Error ? e.message : undefined)
     } finally {
-      setConverting(false)
+      setBusy(false)
     }
   }
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'pending':
-        return 'bg-yellow-100 text-yellow-800'
-      case 'reviewed':
-        return 'bg-blue-100 text-blue-800'
-      case 'approved':
-        return 'bg-green-100 text-green-800'
-      case 'rejected':
-        return 'bg-red-100 text-red-800'
-      case 'converted':
-        return 'bg-purple-100 text-purple-800'
-      default:
-        return 'bg-gray-100 text-gray-800'
+  const doReviewed = async () => {
+    if (!tip) return
+    setBusy(true)
+    try {
+      await markTipsReviewed([tip.id])
+      toast.success('Markerat som granskat')
+      load()
+    } catch (e) {
+      toast.error('Kunde inte uppdatera', e instanceof Error ? e.message : undefined)
+    } finally {
+      setBusy(false)
     }
   }
 
-  const getStatusText = (status: string) => {
-    switch (status) {
-      case 'pending':
-        return 'Väntar'
-      case 'reviewed':
-        return 'Granskad'
-      case 'approved':
-        return 'Godkänd'
-      case 'rejected':
-        return 'Avböjd'
-      case 'converted':
-        return 'Konverterad'
-      default:
-        return status
-    }
-  }
+  if (loading) return <LoadingState />
+  if (error) return <ErrorState title="Kunde inte hämta tipset" description={error} onRetry={load} />
+  if (!tip) return <EmptyState title="Tipset hittades inte" action={<Button asChild variant="secondary"><Link href="/admin/tips">Tillbaka till tips</Link></Button>} />
 
-  if (loading) {
-    return (
-      <ProtectedLayout>
-        <div className="flex items-center justify-center h-64">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-        </div>
-      </ProtectedLayout>
-    )
-  }
-
-  if (!tip) {
-    return (
-      <ProtectedLayout>
-        <div className="text-center py-12">
-          <div className="text-gray-500 text-lg">Tips hittades inte</div>
-          <Link href="/admin/tips" className="text-blue-600 hover:text-blue-800 mt-4 inline-block">
-            Tillbaka till tips
-          </Link>
-        </div>
-      </ProtectedLayout>
-    )
-  }
+  const cats = tip.categories?.length ? tip.categories : tip.category ? [tip.category] : []
+  const when = tip.date_time || tip.event_date
+  const isFinal = tip.status === 'converted' || tip.status === 'rejected'
 
   return (
-    <ProtectedLayout>
-      <div className="space-y-6">
-        {/* Header */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-4">
-            <Link
-              href="/admin/tips"
-              className="p-2 text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-lg"
-            >
-              <ArrowLeft className="h-5 w-5" />
-            </Link>
-            <div>
-              <h1 className="text-3xl font-bold text-gray-900">{tip.event_name}</h1>
-              <p className="text-gray-600 mt-1">
-                Granska och hantera tips
-              </p>
-            </div>
-          </div>
+    <>
+      <Link href="/admin/tips" className="inline-flex w-fit items-center gap-1.5 text-[13px] text-ink-soft hover:text-ink">
+        <ArrowLeft className="size-3.5" /> Tips från besökare
+      </Link>
 
-          {/* Status */}
-          <span className={`inline-flex px-3 py-1 text-sm font-semibold rounded-full ${getStatusColor(tip.status)}`}>
-            {getStatusText(tip.status)}
-          </span>
-        </div>
+      <PageHeader
+        title={tip.event_name}
+        description={`Inkom ${formatRelative(tip.created_at)}`}
+        actions={
+          <>
+            {tip.status === 'pending' ? (
+              <Button variant="secondary" disabled={busy} onClick={doReviewed}>
+                <CheckCircle2 /> Markera som granskad
+              </Button>
+            ) : null}
+            {!isFinal ? (
+              <Button variant="destructive" disabled={busy} onClick={() => { setReason(''); setRejectOpen(true) }}>
+                <XCircle /> Avvisa
+              </Button>
+            ) : null}
+            {tip.status !== 'converted' ? (
+              <Button loading={busy} onClick={doConvert}>
+                <Sparkles /> Konvertera till event
+              </Button>
+            ) : null}
+          </>
+        }
+      />
 
-        {/* Actions */}
-        {tip.status !== 'converted' && tip.status !== 'rejected' && (
-          <div className="bg-white p-6 rounded-lg border border-gray-200 flex items-center justify-between">
-            <div>
-              <h3 className="font-semibold text-gray-900 mb-1">Åtgärder</h3>
-              <p className="text-sm text-gray-600">
-                Välj hur du vill hantera detta tips
-              </p>
+      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_340px]">
+        <Card className="overflow-hidden">
+          {tip.image_url && !imgBroken ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={tip.image_url} alt="" onError={() => setImgBroken(true)} className="aspect-[16/7] w-full object-cover" />
+          ) : (
+            <div className="flex aspect-[16/7] w-full items-center justify-center bg-poppy-light font-mono text-xs text-poppy">Ingen bild bifogad</div>
+          )}
+          <CardBody className="flex flex-col gap-5">
+            <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-sm text-ink-soft">
+              <span className="inline-flex items-center gap-1.5"><Calendar className="size-4 text-ink-muted" /> {tip.date_time ? formatDateTime(tip.date_time) : formatDay(when)}</span>
+              <span className="inline-flex items-center gap-1.5"><MapPin className="size-4 text-ink-muted" /> {[tip.venue_name, tip.event_location].filter(Boolean).join(' · ') || '–'}</span>
             </div>
-            <div className="flex items-center space-x-3">
-              <button
-                onClick={handleReject}
-                disabled={rejecting}
-                className="flex items-center space-x-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50"
-              >
-                <XCircle className="h-4 w-4" />
-                <span>{rejecting ? 'Avböjer...' : 'Avböj'}</span>
-              </button>
-              <button
-                onClick={handleConvert}
-                disabled={converting}
-                className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
-              >
-                <CheckCircle className="h-4 w-4" />
-                <span>{converting ? 'Konverterar...' : 'Konvertera till Event'}</span>
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* Event Information */}
-        <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-          <div className="px-6 py-4 border-b border-gray-200">
-            <h2 className="text-lg font-semibold text-gray-900">Event Information</h2>
-          </div>
-          
-          <div className="p-6 space-y-6">
-            {/* Image */}
-            {tip.image_url && (
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Bild
-                </label>
-                <div className="relative w-full h-64 bg-gray-100 rounded-lg overflow-hidden">
-                  <img
-                    src={tip.image_url}
-                    alt={tip.event_name}
-                    className="w-full h-full object-cover"
-                  />
-                </div>
+            {cats.length ? (
+              <div className="flex flex-wrap gap-1.5">
+                {cats.map((c, i) => <CategoryChip key={c} muted={i > 0}>{c}</CategoryChip>)}
               </div>
-            )}
-
-            {/* Name */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Event Namn
-              </label>
-              <div className="text-lg font-medium text-gray-900">{tip.event_name}</div>
+            ) : null}
+            <div className="flex flex-col gap-1.5">
+              <SectionLabel>Beskrivning</SectionLabel>
+              {tip.event_description ? <p className="whitespace-pre-line text-sm leading-relaxed text-ink">{tip.event_description}</p> : <p className="text-sm text-ink-faint">Ingen beskrivning</p>}
             </div>
-
-            {/* Date & Time */}
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Datum och Tid
-                </label>
-                <div className="text-gray-900">
-                  {tip.date_time ? formatDate(tip.date_time) : tip.event_date || '-'}
-                </div>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Status
-                </label>
-                <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor(tip.status)}`}>
-                  {getStatusText(tip.status)}
-                </span>
-              </div>
-            </div>
-
-            {/* Location */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Plats
-              </label>
-              <div className="text-gray-900">{tip.event_location || '-'}</div>
-              {tip.venue_name && (
-                <div className="text-sm text-gray-600 mt-1">
-                  Platsnamn: {tip.venue_name}
-                </div>
-              )}
-            </div>
-
-            {/* Categories */}
-            {tip.categories && tip.categories.length > 0 && (
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Kategorier
-                </label>
-                <div className="flex flex-wrap gap-2">
-                  {tip.categories.map((category, index) => (
-                    <span
-                      key={index}
-                      className="inline-flex px-3 py-1 text-sm font-medium rounded-full bg-blue-100 text-blue-800"
-                    >
-                      {category}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Description */}
-            {tip.event_description && (
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Beskrivning
-                </label>
-                <div className="text-gray-900 whitespace-pre-wrap">{tip.event_description}</div>
-              </div>
-            )}
-
-            {/* Website */}
-            {tip.website_url && (
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Webbplats
-                </label>
-                <a
-                  href={tip.website_url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center space-x-2 text-blue-600 hover:text-blue-800"
-                >
-                  <span>{tip.website_url}</span>
-                  <ExternalLink className="h-4 w-4" />
+            {tip.website_url ? (
+              <div className="flex flex-col gap-1.5">
+                <SectionLabel>Webbplats</SectionLabel>
+                <a href={tip.website_url} target="_blank" rel="noopener noreferrer" className="inline-flex w-fit items-center gap-1.5 text-sm font-medium text-sea hover:text-sea-dark">
+                  {tip.website_url} <ExternalLink className="size-3.5" />
                 </a>
               </div>
-            )}
-          </div>
-        </div>
+            ) : null}
+          </CardBody>
+        </Card>
 
-        {/* Submitter Information */}
-        <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-          <div className="px-6 py-4 border-b border-gray-200">
-            <h2 className="text-lg font-semibold text-gray-900">Inlämnare</h2>
-          </div>
-          
-          <div className="p-6 space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                E-post
-              </label>
-              <div className="text-gray-900">{tip.submitter_email}</div>
-            </div>
-            {tip.submitter_name && (
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Namn
-                </label>
-                <div className="text-gray-900">{tip.submitter_name}</div>
-              </div>
-            )}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Inlämnad
-              </label>
-              <div className="text-gray-900">{formatDate(tip.created_at)}</div>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Uppdaterad
-              </label>
-              <div className="text-gray-900">{formatDate(tip.updated_at)}</div>
-            </div>
-          </div>
+        <div className="flex flex-col gap-4">
+          <Card>
+            <CardHeader title="Status" />
+            <CardBody className="flex flex-col gap-3 text-[13px]">
+              <StatusBadge domain="tip" value={tip.status} />
+              <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 text-ink-soft">
+                <dt>Inkom</dt><dd className="font-mono text-xs text-ink">{formatDateTime(tip.created_at)}</dd>
+                <dt>Uppdaterad</dt><dd className="font-mono text-xs text-ink">{formatDateTime(tip.updated_at)}</dd>
+              </dl>
+            </CardBody>
+          </Card>
+          <Card>
+            <CardHeader title="Inlämnare" />
+            <CardBody className="flex flex-col gap-1 text-[13px]">
+              <span className="font-medium text-ink">{tip.submitter_name || 'Anonym'}</span>
+              <a href={`mailto:${tip.submitter_email}`} className="inline-flex items-center gap-1.5 text-sea hover:text-sea-dark">
+                <Mail className="size-3.5" /> {tip.submitter_email}
+              </a>
+            </CardBody>
+          </Card>
         </div>
       </div>
-    </ProtectedLayout>
+
+      <Dialog open={rejectOpen} onOpenChange={setRejectOpen}>
+        <DialogContent
+          size="sm"
+          title="Avvisa tips"
+          description="Anledningen loggas och används inte i något utskick."
+          footer={
+            <>
+              <Button variant="ghost" onClick={() => setRejectOpen(false)}>Avbryt</Button>
+              <Button variant="destructive" loading={busy} onClick={doReject}>Avvisa</Button>
+            </>
+          }
+        >
+          <Field label="Anledning" htmlFor="reject-reason" help="Valfritt">
+            <Textarea id="reject-reason" autoFocus value={reason} onChange={(e) => setReason(e.target.value)} placeholder="T.ex. dublett, utanför Varberg, otillräcklig info…" />
+          </Field>
+        </DialogContent>
+      </Dialog>
+    </>
   )
 }

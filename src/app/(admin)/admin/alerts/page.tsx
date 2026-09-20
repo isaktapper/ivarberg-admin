@@ -1,28 +1,29 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { Suspense, useCallback, useEffect, useState } from 'react'
+import { Bell, ChevronDown, Mail, Smartphone, RefreshCw, Check, CheckCheck } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
-import ProtectedLayout from '@/components/ProtectedLayout'
-import { 
-  AlertTriangle, 
-  AlertCircle, 
-  Info, 
-  CheckCircle,
-  Clock,
-  MessageSquare,
-  Mail,
-  Smartphone,
-  RefreshCw,
-  Filter
-} from 'lucide-react'
+import { useAuth } from '@/contexts/AuthContext'
+import { useUrlState } from '@/hooks/use-url-state'
+import { formatDateTime, formatRelative } from '@/lib/format'
+import { cn } from '@/lib/utils'
+import { PageHeader } from '@/components/ui/page-header'
+import { Segmented } from '@/components/ui/tabs'
+import { Pagination } from '@/components/ui/pagination'
+import { StatusBadge } from '@/components/ui/status-badge'
+import { Button } from '@/components/ui/button'
+import { BulkBar, BulkButton } from '@/components/ui/bulk-bar'
+import { EmptyState, ErrorState, TableSkeleton } from '@/components/ui/states'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { useToast } from '@/components/ui/toast'
 
 interface SystemAlert {
   id: number
-  severity: 'info' | 'warning' | 'critical'
+  severity: 'info' | 'warning' | 'error' | 'critical'
   category: string
   title: string
   message: string
-  details: Record<string, any>
+  details: Record<string, unknown> | null
   source: string | null
   acknowledged: boolean
   acknowledged_by: string | null
@@ -34,314 +35,230 @@ interface SystemAlert {
   created_at: string
 }
 
-const SEVERITY_CONFIG = {
-  critical: {
-    icon: AlertTriangle,
-    bg: 'bg-red-50',
-    border: 'border-red-200',
-    text: 'text-red-700',
-    badge: 'bg-red-100 text-red-800'
-  },
-  warning: {
-    icon: AlertCircle,
-    bg: 'bg-amber-50',
-    border: 'border-amber-200',
-    text: 'text-amber-700',
-    badge: 'bg-amber-100 text-amber-800'
-  },
-  info: {
-    icon: Info,
-    bg: 'bg-blue-50',
-    border: 'border-blue-200',
-    text: 'text-blue-700',
-    badge: 'bg-blue-100 text-blue-800'
-  }
-}
+const FILTERS = [
+  { value: 'open', label: 'Olösta' },
+  { value: 'critical', label: 'Kritiska olösta' },
+  { value: 'all', label: 'Alla' },
+]
+const DEFAULTS = { filter: 'open', page: '1' }
+const PAGE_SIZE = 50
 
 export default function AlertsPage() {
+  return (
+    <Suspense fallback={<TableSkeleton rows={4} />}>
+      <AlertsList />
+    </Suspense>
+  )
+}
+
+function AlertsList() {
+  const toast = useToast()
+  const { user } = useAuth()
+  const { state, set } = useUrlState(DEFAULTS)
+  const page = Math.max(1, parseInt(state.page) || 1)
+
   const [alerts, setAlerts] = useState<SystemAlert[]>([])
+  const [total, setTotal] = useState(0)
+  const [counts, setCounts] = useState<Record<string, number>>({})
   const [loading, setLoading] = useState(true)
-  const [filter, setFilter] = useState<'all' | 'unresolved' | 'critical'>('unresolved')
+  const [error, setError] = useState<string | null>(null)
+  const [selected, setSelected] = useState<Set<number>>(new Set())
+  const [busy, setBusy] = useState(false)
 
-  const fetchAlerts = async () => {
+  const applyFilter = useCallback(
+    <T,>(q: T, filter: string): T => {
+      // PostgREST-builder är kedjad; typen bevaras via cast
+      const b = q as unknown as { eq: (c: string, v: unknown) => unknown }
+      if (filter === 'open') return b.eq('resolved', false) as T
+      if (filter === 'critical') return (b.eq('resolved', false) as unknown as { eq: (c: string, v: unknown) => unknown }).eq('severity', 'critical') as T
+      return q
+    },
+    []
+  )
+
+  const loadCounts = useCallback(async () => {
+    const results = await Promise.all(
+      FILTERS.map((f) => applyFilter(supabase.from('system_alerts').select('*', { count: 'exact', head: true }), f.value))
+    )
+    const next: Record<string, number> = {}
+    FILTERS.forEach((f, i) => (next[f.value] = results[i].count ?? 0))
+    setCounts(next)
+  }, [applyFilter])
+
+  const load = useCallback(async () => {
     setLoading(true)
+    setError(null)
     try {
-      let query = supabase
-        .from('system_alerts')
-        .select('*')
+      const from = (page - 1) * PAGE_SIZE
+      const q = applyFilter(supabase.from('system_alerts').select('*', { count: 'exact' }), state.filter)
         .order('created_at', { ascending: false })
-        .limit(100)
-
-      if (filter === 'unresolved') {
-        query = query.eq('resolved', false)
-      } else if (filter === 'critical') {
-        query = query.eq('severity', 'critical')
-      }
-
-      const { data, error } = await query
-
+        .range(from, from + PAGE_SIZE - 1)
+      const { data, error, count } = await q
       if (error) throw error
-      setAlerts(data || [])
-    } catch (error) {
-      console.error('Error fetching alerts:', error)
+      setAlerts((data as SystemAlert[]) || [])
+      setTotal(count ?? 0)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Okänt fel')
     } finally {
       setLoading(false)
     }
-  }
+  }, [applyFilter, page, state.filter])
 
   useEffect(() => {
-    fetchAlerts()
-  }, [filter])
+    load()
+    loadCounts()
+  }, [load, loadCounts])
 
-  const acknowledgeAlert = async (alertId: number) => {
-    try {
-      const { error } = await supabase
-        .from('system_alerts')
-        .update({
-          acknowledged: true,
-          acknowledged_at: new Date().toISOString(),
-          acknowledged_by: 'admin' // TODO: Use actual user
-        })
-        .eq('id', alertId)
+  useEffect(() => setSelected(new Set()), [state.filter, page])
 
-      if (error) throw error
-      fetchAlerts()
-    } catch (error) {
-      console.error('Error acknowledging alert:', error)
+  useEffect(() => {
+    const channel = supabase
+      .channel('alerts-page')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'system_alerts' }, () => {
+        load()
+        loadCounts()
+      })
+      .subscribe()
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [load, loadCounts])
+
+  const patch = (ids: number[], p: Partial<SystemAlert>) => setAlerts((prev) => prev.map((a) => (ids.includes(a.id) ? { ...a, ...p } : a)))
+
+  const acknowledge = async (ids: number[]) => {
+    const p = { acknowledged: true, acknowledged_by: user?.email ?? null, acknowledged_at: new Date().toISOString() }
+    const snapshot = alerts
+    patch(ids, p)
+    setBusy(true)
+    const { error } = await supabase.from('system_alerts').update(p).in('id', ids)
+    setBusy(false)
+    if (error) {
+      setAlerts(snapshot)
+      toast.error('Kunde inte notera larmet', error.message)
+    } else {
+      toast.success(ids.length === 1 ? 'Larmet noterat' : `${ids.length} larm noterade`)
     }
   }
 
-  const resolveAlert = async (alertId: number) => {
-    try {
-      const { error } = await supabase
-        .from('system_alerts')
-        .update({
-          resolved: true,
-          resolved_at: new Date().toISOString()
-        })
-        .eq('id', alertId)
-
-      if (error) throw error
-      fetchAlerts()
-    } catch (error) {
-      console.error('Error resolving alert:', error)
+  const resolve = async (ids: number[]) => {
+    const p = { resolved: true, resolved_at: new Date().toISOString() }
+    const snapshot = alerts
+    patch(ids, p)
+    setBusy(true)
+    const { error } = await supabase.from('system_alerts').update(p).in('id', ids)
+    setBusy(false)
+    if (error) {
+      setAlerts(snapshot)
+      toast.error('Kunde inte markera som löst', error.message)
+    } else {
+      toast.success(ids.length === 1 ? 'Larmet löst' : `${ids.length} larm lösta`)
+      setSelected(new Set())
+      loadCounts()
+      if (state.filter !== 'all') setTimeout(load, 600)
     }
   }
 
-  const unresolvedCount = alerts.filter(a => !a.resolved).length
-  const criticalCount = alerts.filter(a => a.severity === 'critical' && !a.resolved).length
+  const toggle = (id: number) =>
+    setSelected((prev) => {
+      const n = new Set(prev)
+      if (n.has(id)) n.delete(id)
+      else n.add(id)
+      return n
+    })
 
   return (
-    <ProtectedLayout>
-      <div className="max-w-6xl mx-auto">
-        {/* Header */}
-        <div className="flex justify-between items-center mb-6">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">Systemvarningar</h1>
-            <p className="text-gray-600 mt-1">
-              {unresolvedCount > 0 ? (
-                <>
-                  <span className="font-medium text-amber-600">{unresolvedCount} olösta</span>
-                  {criticalCount > 0 && (
-                    <span className="ml-2 font-medium text-red-600">({criticalCount} kritiska)</span>
-                  )}
-                </>
-              ) : (
-                <span className="text-green-600">✓ Inga aktiva varningar</span>
-              )}
-            </p>
-          </div>
+    <>
+      <PageHeader
+        title="Larm"
+        description="Systemlarm från scrapers, Instagram-flödet och cron-jobb."
+        actions={
+          <Button variant="secondary" onClick={() => { load(); loadCounts() }}>
+            <RefreshCw /> Uppdatera
+          </Button>
+        }
+      />
 
-          <div className="flex items-center gap-3">
-            {/* Filter */}
-            <div className="flex items-center gap-2 bg-gray-100 rounded-lg p-1">
-              <button
-                onClick={() => setFilter('unresolved')}
-                className={`px-3 py-1.5 text-sm rounded-md transition-colors ${
-                  filter === 'unresolved' 
-                    ? 'bg-white shadow text-gray-900' 
-                    : 'text-gray-600 hover:text-gray-900'
-                }`}
-              >
-                Olösta
-              </button>
-              <button
-                onClick={() => setFilter('critical')}
-                className={`px-3 py-1.5 text-sm rounded-md transition-colors ${
-                  filter === 'critical' 
-                    ? 'bg-white shadow text-gray-900' 
-                    : 'text-gray-600 hover:text-gray-900'
-                }`}
-              >
-                Kritiska
-              </button>
-              <button
-                onClick={() => setFilter('all')}
-                className={`px-3 py-1.5 text-sm rounded-md transition-colors ${
-                  filter === 'all' 
-                    ? 'bg-white shadow text-gray-900' 
-                    : 'text-gray-600 hover:text-gray-900'
-                }`}
-              >
-                Alla
-              </button>
-            </div>
+      <Segmented items={FILTERS.map((f) => ({ value: f.value, label: f.label, count: counts[f.value] ?? null }))} value={state.filter} onChange={(v) => set({ filter: v })} />
 
-            {/* Refresh */}
-            <button
-              onClick={fetchAlerts}
-              disabled={loading}
-              className="p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
-            >
-              <RefreshCw className={`w-5 h-5 ${loading ? 'animate-spin' : ''}`} />
+      {error ? (
+        <ErrorState title="Kunde inte hämta larm" description={error} onRetry={load} />
+      ) : loading ? (
+        <TableSkeleton rows={4} />
+      ) : alerts.length === 0 ? (
+        <EmptyState icon={<Bell />} title={state.filter === 'all' ? 'Inga larm' : 'Inga olösta larm'} description="Allt ser lugnt ut." />
+      ) : (
+        <div className="flex flex-col gap-3">
+          {alerts.map((a) => (
+            <AlertCard key={a.id} alert={a} selected={selected.has(a.id)} onToggle={() => toggle(a.id)} onAck={() => acknowledge([a.id])} onResolve={() => resolve([a.id])} busy={busy} />
+          ))}
+        </div>
+      )}
+
+      {total > PAGE_SIZE ? <Pagination page={page} pageSize={PAGE_SIZE} total={total} onPageChange={(p) => set({ page: String(p) }, { resetPage: false })} itemLabel="larm" /> : null}
+
+      <BulkBar count={selected.size} onClear={() => setSelected(new Set())}>
+        <BulkButton primary disabled={busy} onClick={() => resolve(Array.from(selected))}>
+          Markera lösta
+        </BulkButton>
+        <BulkButton disabled={busy} onClick={() => acknowledge(Array.from(selected))}>
+          Notera
+        </BulkButton>
+      </BulkBar>
+    </>
+  )
+}
+
+function AlertCard({ alert, selected, onToggle, onAck, onResolve, busy }: { alert: SystemAlert; selected: boolean; onToggle: () => void; onAck: () => void; onResolve: () => void; busy: boolean }) {
+  const [open, setOpen] = useState(false)
+  const stateValue = alert.resolved ? 'resolved' : alert.acknowledged ? 'acknowledged' : 'open'
+  const hasDetails = alert.details && Object.keys(alert.details).length > 0
+  const critical = alert.severity === 'critical' && !alert.resolved
+
+  return (
+    <article className={cn('flex gap-4 rounded-[12px] border bg-white px-5 py-4', selected ? 'border-sea bg-sea-lightest' : critical ? 'border-poppy-line' : 'border-line', alert.resolved && 'opacity-70')}>
+      <input type="checkbox" aria-label="Markera larm" checked={selected} onChange={onToggle} className="mt-1 size-4 shrink-0 cursor-pointer accent-sea" />
+      <div className="flex min-w-0 flex-1 flex-col gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <StatusBadge domain="alertSeverity" value={alert.severity} />
+          <span className="rounded-full bg-stone px-2 py-0.5 text-xs font-medium text-ink-soft">{alert.category}</span>
+          <StatusBadge domain="alert" value={stateValue} />
+          <span className="ml-auto font-mono text-xs text-ink-muted" title={formatDateTime(alert.created_at)}>{formatRelative(alert.created_at)}</span>
+        </div>
+        <h3 className="text-sm font-semibold text-ink">{alert.title}</h3>
+        <p className="whitespace-pre-line text-[13px] leading-relaxed text-ink-soft">{alert.message}</p>
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-ink-muted">
+          {alert.source ? <span>Källa: <span className="font-mono text-ink-soft">{alert.source}</span></span> : null}
+          {alert.sms_sent ? (
+            <Tooltip><TooltipTrigger asChild><span className="inline-flex items-center gap-1"><Smartphone className="size-3.5" /> SMS</span></TooltipTrigger><TooltipContent>SMS skickat</TooltipContent></Tooltip>
+          ) : null}
+          {alert.email_sent ? (
+            <Tooltip><TooltipTrigger asChild><span className="inline-flex items-center gap-1"><Mail className="size-3.5" /> E-post</span></TooltipTrigger><TooltipContent>E-post skickad</TooltipContent></Tooltip>
+          ) : null}
+          {alert.acknowledged_by ? <span>Noterad av {alert.acknowledged_by} {alert.acknowledged_at ? formatRelative(alert.acknowledged_at) : ''}</span> : null}
+          {alert.resolved_at ? <span>Löst {formatRelative(alert.resolved_at)}</span> : null}
+          {hasDetails ? (
+            <button type="button" onClick={() => setOpen((o) => !o)} className="inline-flex items-center gap-1 font-medium text-sea hover:text-sea-dark">
+              Detaljer <ChevronDown className={cn('size-3.5 transition-transform', open && 'rotate-180')} />
             </button>
-          </div>
+          ) : null}
         </div>
-
-        {/* Alerts List */}
-        {loading ? (
-          <div className="flex items-center justify-center h-64">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-          </div>
-        ) : alerts.length === 0 ? (
-          <div className="text-center py-12 bg-gray-50 rounded-lg">
-            <CheckCircle className="mx-auto h-12 w-12 text-green-500 mb-4" />
-            <h3 className="text-lg font-medium text-gray-900">Inga varningar</h3>
-            <p className="text-gray-600 mt-1">
-              {filter === 'unresolved' 
-                ? 'Alla varningar är lösta!'
-                : filter === 'critical'
-                ? 'Inga kritiska varningar.'
-                : 'Inga varningar har loggats ännu.'}
-            </p>
-          </div>
-        ) : (
-          <div className="space-y-4">
-            {alerts.map((alert) => {
-              const config = SEVERITY_CONFIG[alert.severity]
-              const Icon = config.icon
-
-              return (
-                <div
-                  key={alert.id}
-                  className={`${config.bg} ${config.border} border rounded-lg p-4 ${
-                    alert.resolved ? 'opacity-60' : ''
-                  }`}
-                >
-                  <div className="flex items-start gap-4">
-                    {/* Icon */}
-                    <div className={`p-2 rounded-full ${config.badge}`}>
-                      <Icon className="w-5 h-5" />
-                    </div>
-
-                    {/* Content */}
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <h3 className={`font-medium ${config.text}`}>
-                          {alert.title}
-                        </h3>
-                        <span className={`text-xs px-2 py-0.5 rounded-full ${config.badge}`}>
-                          {alert.severity}
-                        </span>
-                        <span className="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">
-                          {alert.category}
-                        </span>
-                        {alert.resolved && (
-                          <span className="text-xs px-2 py-0.5 rounded-full bg-green-100 text-green-700">
-                            ✓ Löst
-                          </span>
-                        )}
-                      </div>
-
-                      <p className="text-gray-700 mt-1">{alert.message}</p>
-
-                      {/* Details */}
-                      {alert.details && Object.keys(alert.details).length > 0 && (
-                        <details className="mt-2">
-                          <summary className="text-sm text-gray-500 cursor-pointer hover:text-gray-700">
-                            Visa detaljer
-                          </summary>
-                          <pre className="mt-2 p-2 bg-white rounded text-xs overflow-x-auto">
-                            {JSON.stringify(alert.details, null, 2)}
-                          </pre>
-                        </details>
-                      )}
-
-                      {/* Meta */}
-                      <div className="flex items-center gap-4 mt-3 text-xs text-gray-500">
-                        <span className="flex items-center gap-1">
-                          <Clock className="w-3 h-3" />
-                          {new Date(alert.created_at).toLocaleString('sv-SE')}
-                        </span>
-                        {alert.source && (
-                          <span className="flex items-center gap-1">
-                            <MessageSquare className="w-3 h-3" />
-                            {alert.source}
-                          </span>
-                        )}
-                        {alert.sms_sent && (
-                          <span className="flex items-center gap-1 text-green-600">
-                            <Smartphone className="w-3 h-3" />
-                            SMS skickat
-                          </span>
-                        )}
-                        {alert.email_sent && (
-                          <span className="flex items-center gap-1 text-green-600">
-                            <Mail className="w-3 h-3" />
-                            Email skickat
-                          </span>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Actions */}
-                    {!alert.resolved && (
-                      <div className="flex flex-col gap-2">
-                        {!alert.acknowledged && (
-                          <button
-                            onClick={() => acknowledgeAlert(alert.id)}
-                            className="px-3 py-1.5 text-xs font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
-                          >
-                            Noterad
-                          </button>
-                        )}
-                        <button
-                          onClick={() => resolveAlert(alert.id)}
-                          className="px-3 py-1.5 text-xs font-medium text-white bg-green-600 rounded-md hover:bg-green-700"
-                        >
-                          Markera löst
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-        )}
-
-        {/* Setup Instructions */}
-        <div className="mt-8 p-4 bg-gray-50 rounded-lg">
-          <h3 className="font-medium text-gray-900 mb-2">📱 Konfigurera SMS-notifikationer</h3>
-          <p className="text-sm text-gray-600 mb-3">
-            För att få SMS vid kritiska fel, lägg till dessa i din <code className="bg-gray-200 px-1 rounded">.env.local</code>:
-          </p>
-          <pre className="text-xs bg-gray-900 text-gray-100 p-3 rounded overflow-x-auto">
-{`# Twilio (för SMS)
-TWILIO_ACCOUNT_SID=your_account_sid
-TWILIO_AUTH_TOKEN=your_auth_token
-TWILIO_PHONE_NUMBER=+1234567890
-ALERT_PHONE_NUMBER=+46701234567
-
-# Email för alerts (använder din befintliga Resend)
-ALERT_EMAIL=din@email.com`}
-          </pre>
-          <p className="text-xs text-gray-500 mt-2">
-            Skapa ett Twilio-konto på <a href="https://www.twilio.com" target="_blank" rel="noopener" className="text-blue-600 hover:underline">twilio.com</a> - 
-            de har gratis testkrediter för att komma igång.
-          </p>
-        </div>
+        {open && hasDetails ? (
+          <pre className="thin-scroll max-h-64 overflow-auto rounded-[8px] border border-line bg-sand-soft p-3 font-mono text-[11px] leading-relaxed text-ink">{JSON.stringify(alert.details, null, 2)}</pre>
+        ) : null}
       </div>
-    </ProtectedLayout>
+      {!alert.resolved ? (
+        <div className="flex shrink-0 flex-col gap-2">
+          {!alert.acknowledged ? (
+            <Button variant="secondary" size="sm" disabled={busy} onClick={onAck}>
+              <Check /> Noterad
+            </Button>
+          ) : null}
+          <Button variant="success" size="sm" disabled={busy} onClick={onResolve}>
+            <CheckCheck /> Markera löst
+          </Button>
+        </div>
+      ) : null}
+    </article>
   )
 }

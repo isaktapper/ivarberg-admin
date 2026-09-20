@@ -1,238 +1,149 @@
-'use client';
+'use client'
 
-import { useState, useEffect } from 'react';
-import { supabase } from '@/lib/supabase';
-import ProtectedLayout from '@/components/ProtectedLayout';
-import { Mail, Plus, Trash2 } from 'lucide-react';
+import { useCallback, useEffect, useState } from 'react'
+import { Mail, Plus, Trash2 } from 'lucide-react'
+import { supabase } from '@/lib/supabase'
+import type { EmailRecipient } from '@/types/database'
+import { formatDay } from '@/lib/format'
+import { PageHeader } from '@/components/ui/page-header'
+import { Card, CardBody, CardHeader } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
+import { Field, Input, Select, Checkbox } from '@/components/ui/input'
+import { Banner, EmptyState, ErrorState, TableSkeleton } from '@/components/ui/states'
+import { IconButton } from '@/components/ui/tooltip'
+import { useToast } from '@/components/ui/toast'
+import { useConfirm } from '@/components/ui/confirm-dialog'
 
-interface EmailRecipient {
-  id: number;
-  email: string;
-  name?: string;
-  notification_types: string[];
-  enabled: boolean;
-  created_at: string;
-}
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
 export default function NotificationsPage() {
-  const [recipients, setRecipients] = useState<EmailRecipient[]>([]);
-  const [newEmail, setNewEmail] = useState('');
-  const [newName, setNewName] = useState('');
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const toast = useToast()
+  const confirm = useConfirm()
+  const [recipients, setRecipients] = useState<EmailRecipient[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [email, setEmail] = useState('')
+  const [name, setName] = useState('')
+  const [formError, setFormError] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
+
+  const load = useCallback(async () => {
+    setError(null)
+    const { data, error } = await supabase.from('email_recipients').select('*').order('created_at', { ascending: false })
+    if (error) setError(error.message)
+    else setRecipients((data as EmailRecipient[]) || [])
+    setLoading(false)
+  }, [])
 
   useEffect(() => {
-    loadRecipients();
-  }, []);
+    load()
+  }, [load])
 
-  async function loadRecipients() {
-    setLoading(true);
-    setError(null);
-    
-    const { data, error: fetchError } = await supabase
-      .from('email_recipients')
-      .select('*')
-      .order('created_at', { ascending: false });
-    
-    if (fetchError) {
-      setError('Kunde inte ladda mottagare: ' + fetchError.message);
-    } else if (data) {
-      setRecipients(data);
+  const add = async () => {
+    const e = email.trim().toLowerCase()
+    if (!e) return setFormError('E-postadress krävs')
+    if (!EMAIL_RE.test(e)) return setFormError('Ogiltig e-postadress')
+    if (recipients.some((r) => r.email.toLowerCase() === e)) return setFormError('Adressen finns redan i listan')
+    setFormError(null)
+    setBusy(true)
+    const { error } = await supabase.from('email_recipients').insert({ email: e, name: name.trim() || null, notification_types: ['daily_report'], enabled: true })
+    setBusy(false)
+    if (error) {
+      setFormError(error.code === '23505' ? 'Adressen finns redan i listan' : error.message)
+      return
     }
-    
-    setLoading(false);
+    setEmail('')
+    setName('')
+    toast.success('Mottagare tillagd', e)
+    load()
   }
 
-  async function addRecipient() {
-    if (!newEmail) {
-      setError('Email-adress krävs');
-      return;
-    }
-
-    // Validera email format
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(newEmail)) {
-      setError('Ogiltig email-adress');
-      return;
-    }
-
-    setError(null);
-    
-    const { error: insertError } = await supabase
-      .from('email_recipients')
-      .insert({
-        email: newEmail,
-        name: newName || null,
-        notification_types: ['daily_report'],
-        enabled: true
-      });
-
-    if (insertError) {
-      if (insertError.code === '23505') { // Unique constraint violation
-        setError('Denna email-adress finns redan');
-      } else {
-        setError('Kunde inte lägga till mottagare: ' + insertError.message);
-      }
-    } else {
-      setNewEmail('');
-      setNewName('');
-      loadRecipients();
+  const toggle = async (r: EmailRecipient) => {
+    setRecipients((prev) => prev.map((x) => (x.id === r.id ? { ...x, enabled: !r.enabled } : x)))
+    const { error } = await supabase.from('email_recipients').update({ enabled: !r.enabled }).eq('id', r.id)
+    if (error) {
+      setRecipients((prev) => prev.map((x) => (x.id === r.id ? { ...x, enabled: r.enabled } : x)))
+      toast.error('Kunde inte uppdatera', error.message)
     }
   }
 
-  async function toggleEnabled(id: number, currentEnabled: boolean) {
-    const { error: updateError } = await supabase
-      .from('email_recipients')
-      .update({ enabled: !currentEnabled })
-      .eq('id', id);
-    
-    if (updateError) {
-      setError('Kunde inte uppdatera: ' + updateError.message);
-    } else {
-      loadRecipients();
+  const remove = async (r: EmailRecipient) => {
+    const ok = await confirm({ title: 'Ta bort mottagare?', description: `${r.email} får inte längre några utskick.`, confirmLabel: 'Ta bort', destructive: true })
+    if (!ok) return
+    const { error } = await supabase.from('email_recipients').delete().eq('id', r.id)
+    if (error) toast.error('Kunde inte ta bort', error.message)
+    else {
+      toast.success('Mottagare borttagen', r.email)
+      load()
     }
-  }
-
-  async function deleteRecipient(id: number, email: string) {
-    if (!confirm(`Är du säker på att du vill ta bort ${email}?`)) return;
-    
-    const { error: deleteError } = await supabase
-      .from('email_recipients')
-      .delete()
-      .eq('id', id);
-    
-    if (deleteError) {
-      setError('Kunde inte ta bort: ' + deleteError.message);
-    } else {
-      loadRecipients();
-    }
-  }
-
-  if (loading) {
-    return (
-      <ProtectedLayout>
-        <div className="p-8">
-          <div className="text-center">Laddar...</div>
-        </div>
-      </ProtectedLayout>
-    );
   }
 
   return (
-    <ProtectedLayout>
-      <div className="p-8">
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold mb-2 flex items-center gap-3">
-            <Mail className="w-8 h-8" />
-            Email-notifikationer
-          </h1>
-          <p className="text-gray-600">
-            Hantera vilka som ska få dagliga rapporter från event-scrapern
-          </p>
-        </div>
-      
-      {/* Error message */}
-      {error && (
-        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg mb-6">
-          {error}
-        </div>
-      )}
+    <>
+      <PageHeader title="Inställningar" description="Vem som får de automatiska e-postutskicken." />
 
-      {/* Add new recipient */}
-      <div className="bg-white p-6 rounded-lg shadow-sm border mb-6">
-        <h2 className="text-xl font-semibold mb-4">Lägg till mottagare</h2>
-        <div className="flex flex-col sm:flex-row gap-3">
-          <input
-            type="email"
-            placeholder="email@example.com"
-            value={newEmail}
-            onChange={(e) => setNewEmail(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && addRecipient()}
-            className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-          />
-          <input
-            type="text"
-            placeholder="Namn (valfritt)"
-            value={newName}
-            onChange={(e) => setNewName(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && addRecipient()}
-            className="sm:w-48 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-          />
-          <button
-            onClick={addRecipient}
-            className="flex items-center gap-2 px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium transition-colors"
-          >
-            <Plus className="w-4 h-4" />
-            Lägg till
-          </button>
-        </div>
-        <p className="text-sm text-gray-500 mt-2">
-          💡 Mottagare får automatiskt dagliga email-rapporter efter varje scraping
-        </p>
-      </div>
+      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
+        <Card>
+          <CardHeader title="Mottagare av dagliga rapporter" description={`${recipients.filter((r) => r.enabled).length} aktiva av ${recipients.length}`} />
 
-      {/* Recipients list */}
-      <div className="bg-white rounded-lg shadow-sm border overflow-hidden">
-        <div className="p-4 border-b bg-gray-50">
-          <h2 className="text-xl font-semibold">
-            Mottagare ({recipients.length})
-          </h2>
-        </div>
-        
-        {recipients.length === 0 ? (
-          <div className="p-8 text-center text-gray-500">
-            Inga mottagare ännu. Lägg till en email-adress ovan för att börja få rapporter.
-          </div>
-        ) : (
-          <div className="divide-y">
-            {recipients.map(recipient => (
-              <div key={recipient.id} className="p-4 flex items-center justify-between hover:bg-gray-50 transition-colors">
-                <div className="flex-1">
-                  <div className="font-medium text-gray-900">{recipient.email}</div>
-                  {recipient.name && (
-                    <div className="text-sm text-gray-500">{recipient.name}</div>
-                  )}
-                  <div className="text-xs text-gray-400 mt-1">
-                    Tillagd {new Date(recipient.created_at).toLocaleDateString('sv-SE')}
-                  </div>
-                </div>
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => toggleEnabled(recipient.id, recipient.enabled)}
-                    className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-                      recipient.enabled 
-                        ? 'bg-green-100 text-green-700 hover:bg-green-200' 
-                        : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
-                    }`}
-                  >
-                    {recipient.enabled ? '✓ Aktiv' : 'Inaktiv'}
-                  </button>
-                  <button
-                    onClick={() => deleteRecipient(recipient.id, recipient.email)}
-                    className="flex items-center gap-2 px-4 py-2 bg-red-50 text-red-700 rounded-lg hover:bg-red-100 font-medium transition-colors"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                    Ta bort
-                  </button>
-                </div>
+          <CardBody className="border-b border-line bg-sand-soft">
+            <form
+              className="grid gap-3 sm:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_170px_auto] sm:items-end"
+              onSubmit={(e) => {
+                e.preventDefault()
+                add()
+              }}
+            >
+              <Field label="E-post" htmlFor="new-email" required error={formError}>
+                <Input id="new-email" type="email" autoComplete="off" value={email} onChange={(e) => { setEmail(e.target.value); setFormError(null) }} placeholder="namn@exempel.se" aria-invalid={!!formError} />
+              </Field>
+              <Field label="Namn" htmlFor="new-name">
+                <Input id="new-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="Valfritt" />
+              </Field>
+              <Field label="Typ av utskick" htmlFor="new-type">
+                <Select id="new-type" value="daily_report" disabled>
+                  <option value="daily_report">Daglig rapport</option>
+                </Select>
+              </Field>
+              <Button type="submit" loading={busy} className="h-10">
+                <Plus strokeWidth={2.5} /> Lägg till
+              </Button>
+            </form>
+          </CardBody>
+
+          {error ? (
+            <CardBody><ErrorState title="Kunde inte hämta mottagare" description={error} onRetry={load} /></CardBody>
+          ) : loading ? (
+            <TableSkeleton rows={3} />
+          ) : recipients.length === 0 ? (
+            <EmptyState icon={<Mail />} title="Inga mottagare" description="Lägg till en adress ovan för att börja skicka den dagliga rapporten." />
+          ) : (
+            <div className="flex flex-col">
+              <div className="grid grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_90px_110px_44px] items-center gap-3 border-b border-line bg-sand-soft px-5 text-[11px] font-semibold uppercase tracking-[0.08em] text-ink-muted" style={{ height: 36 }}>
+                <span>E-post</span><span>Namn</span><span>Aktiv</span><span>Tillagd</span><span />
               </div>
-            ))}
-          </div>
-        )}
-      </div>
+              {recipients.map((r) => (
+                <div key={r.id} className="grid min-h-12 grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_90px_110px_44px] items-center gap-3 border-b border-line-soft px-5 text-[13px] last:border-b-0">
+                  <span className={r.enabled ? 'truncate font-medium text-ink' : 'truncate text-ink-muted line-through'}>{r.email}</span>
+                  <span className="truncate text-ink-soft">{r.name || '–'}</span>
+                  <Checkbox checked={r.enabled} onChange={() => toggle(r)} aria-label={`Aktivera ${r.email}`} />
+                  <span className="font-mono text-xs text-ink-soft">{formatDay(r.created_at)}</span>
+                  <IconButton label="Ta bort" onClick={() => remove(r)} className="hover:bg-poppy-light hover:text-poppy"><Trash2 /></IconButton>
+                </div>
+              ))}
+            </div>
+          )}
+        </Card>
 
-      {/* Info box */}
-      <div className="mt-6 bg-blue-50 border border-blue-200 rounded-lg p-4">
-        <h3 className="font-semibold text-blue-900 mb-2">ℹ️ Om email-rapporter</h3>
-        <ul className="text-sm text-blue-800 space-y-1">
-          <li>• Emails skickas automatiskt efter varje daglig scraping (kl. 06:00)</li>
-          <li>• Rapporten innehåller sammanfattning och status för alla scrapers</li>
-          <li>• Du kan när som helst aktivera/inaktivera mottagare utan att ta bort dem</li>
-          <li>• Använd <code className="bg-blue-100 px-1 rounded">onboarding@resend.dev</code> som avsändare tills du verifierar din egen domän</li>
-        </ul>
+        <Card className="h-fit">
+          <CardHeader title="Om utskicken" />
+          <CardBody className="flex flex-col gap-3 text-[13px] leading-relaxed text-ink-soft">
+            <p>Den dagliga rapporten skickas efter morgonens scraper-körning och sammanfattar nya event, dubletter som hoppats över och eventuella fel.</p>
+            <p>Avaktivera en mottagare för att pausa utskicken utan att ta bort adressen.</p>
+            <Banner tone="info">Fler utskickstyper (t.ex. larm via e-post) kan läggas till senare. Just nu finns bara den dagliga rapporten.</Banner>
+          </CardBody>
+        </Card>
       </div>
-      </div>
-    </ProtectedLayout>
-  );
+    </>
+  )
 }
-

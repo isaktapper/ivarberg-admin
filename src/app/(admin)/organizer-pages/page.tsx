@@ -1,1003 +1,334 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { Suspense, useCallback, useEffect, useMemo, useState } from 'react'
+import Link from 'next/link'
+import { useRouter } from 'next/navigation'
+import { Plus, MoreHorizontal, Pencil, ExternalLink, Eye, EyeOff, Copy, Trash2, Download } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { OrganizerPage } from '@/types/database'
-import ProtectedLayout from '@/components/ProtectedLayout'
-import { 
-  Plus, 
-  Search, 
-  Edit, 
-  Trash2, 
-  Eye,
-  Copy,
-  ExternalLink,
-  Settings,
-  X,
-  ChevronDown,
-  ChevronUp,
-  CheckSquare,
-  Square,
-  Users,
-  Calendar,
-  Globe,
-  Download,
-  Link as LinkIcon
-} from 'lucide-react'
-import Link from 'next/link'
-import { formatDate, getFrontendUrl } from '@/lib/utils'
+import { getFrontendUrl } from '@/lib/utils'
+import { formatRelative, formatNumber } from '@/lib/format'
+import { useUrlState } from '@/hooks/use-url-state'
+import { PageHeader } from '@/components/ui/page-header'
+import { Button } from '@/components/ui/button'
+import { SearchInput } from '@/components/ui/search-input'
+import { FilterBar, SelectFilter } from '@/components/ui/filter-chip'
+import { DataTable, type Column } from '@/components/ui/data-table'
+import { StatusBadge } from '@/components/ui/status-badge'
+import { Pagination } from '@/components/ui/pagination'
+import { BulkBar, BulkButton } from '@/components/ui/bulk-bar'
+import { Dialog, DialogContent } from '@/components/ui/dialog'
+import { Field, Input } from '@/components/ui/input'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
+import { EmptyState, ErrorState, Banner } from '@/components/ui/states'
+import { useToast } from '@/components/ui/toast'
+import { useConfirm } from '@/components/ui/confirm-dialog'
+
+type PageRow = OrganizerPage & { organizer?: { id: number; name: string } | null; event_count: number }
+
+const DEFAULTS = { q: '', status: '', page: '1' }
+const PAGE_SIZE = 50
 
 export default function OrganizerPagesPage() {
-  const [organizerPages, setOrganizerPages] = useState<OrganizerPage[]>([])
-  const [filteredPages, setFilteredPages] = useState<OrganizerPage[]>([])
+  return (
+    <Suspense>
+      <Inner />
+    </Suspense>
+  )
+}
+
+function Inner() {
+  const router = useRouter()
+  const toast = useToast()
+  const confirm = useConfirm()
+  const { state, set, reset } = useUrlState(DEFAULTS)
+
+  const [pages, setPages] = useState<PageRow[]>([])
   const [loading, setLoading] = useState(true)
-  const [searchTerm, setSearchTerm] = useState('')
-  const [statusFilter, setStatusFilter] = useState<'all' | 'published' | 'draft'>('all')
-  const [selectedPages, setSelectedPages] = useState<Set<number>>(new Set())
-  const [bulkUpdating, setBulkUpdating] = useState(false)
-  
-  // Import functionality
-  const [showImportModal, setShowImportModal] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [selected, setSelected] = useState<Set<string | number>>(new Set())
+  const [busy, setBusy] = useState(false)
+
+  const [importOpen, setImportOpen] = useState(false)
   const [importUrl, setImportUrl] = useState('')
   const [importing, setImporting] = useState(false)
   const [importError, setImportError] = useState('')
-  const [importSuccess, setImportSuccess] = useState(false)
-  
-  // Column visibility state
-  const [visibleColumns, setVisibleColumns] = useState({
-    name: true,
-    organizer: true,
-    slug: true,
-    status: true,
-    events: true,
-    created: true,
-    updated: true,
-    actions: true
-  })
-  const [showColumnSelector, setShowColumnSelector] = useState(false)
-  
-  // Filter visibility state
-  const [showFilters, setShowFilters] = useState(false)
 
-  // Pagination
-  const [currentPage, setCurrentPage] = useState(1)
-  const itemsPerPage = 50
-
-  useEffect(() => {
-    fetchOrganizerPages()
-  }, [])
-
-  useEffect(() => {
-    filterPages()
-    setCurrentPage(1) // Reset till första sidan vid filtrering
-  }, [organizerPages, searchTerm, statusFilter]) // eslint-disable-line react-hooks/exhaustive-deps
-
-  const fetchOrganizerPages = async () => {
+  const load = useCallback(async () => {
+    setLoading(true)
+    setError(null)
     try {
-      console.log('🔍 Fetching organizer pages...')
-      
-      // Fetch organizer pages with organizer data joined
-      const { data, error } = await supabase
-        .from('organizer_pages')
-        .select(`
-          *,
-          organizer:organizers(id, name)
-        `)
-        .order('created_at', { ascending: false })
-
-      console.log('📊 Supabase response:', { data, error })
-
-      if (error) {
-        console.error('❌ Supabase error details:', {
-          message: error.message,
-          details: error.details,
-          hint: error.hint,
-          code: error.code
-        })
-        throw error
-      }
-      
-      // Lägg till event_count separat (endast om organizer_id finns)
-      const pagesWithEventCount = await Promise.all(
-        (data || []).map(async (page) => {
-          let eventCount = 0
-          
-          if (page.organizer_id) {
-            const { count } = await supabase
-              .from('events')
-              .select('*', { count: 'exact', head: true })
-              .eq('organizer_id', page.organizer_id)
-            
-            eventCount = count || 0
-          }
-          
-          return {
-            ...page,
-            event_count: eventCount
-          }
-        })
-      )
-      
-      console.log('✅ Transformed data:', pagesWithEventCount)
-      setOrganizerPages(pagesWithEventCount)
-    } catch (error) {
-      console.error('❌ Error fetching organizer pages:', {
-        error,
-        message: error instanceof Error ? error.message : 'Unknown error',
-        stack: error instanceof Error ? error.stack : undefined
-      })
-      alert('Fel vid hämtning av arrangörssidor: ' + (error instanceof Error ? error.message : 'Okänt fel'))
+      const [pagesRes, eventsRes] = await Promise.all([
+        supabase.from('organizer_pages').select('*, organizer:organizers(id, name)').order('created_at', { ascending: false }),
+        supabase.from('events').select('organizer_id').not('organizer_id', 'is', null),
+      ])
+      if (pagesRes.error) throw pagesRes.error
+      const counts = new Map<number, number>()
+      eventsRes.data?.forEach((e) => e.organizer_id && counts.set(e.organizer_id, (counts.get(e.organizer_id) ?? 0) + 1))
+      setPages((pagesRes.data ?? []).map((p) => ({ ...p, event_count: p.organizer_id ? (counts.get(p.organizer_id) ?? 0) : 0 })))
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Okänt fel')
     } finally {
       setLoading(false)
     }
-  }
+  }, [])
 
-  const filterPages = () => {
-    let filtered = organizerPages
+  useEffect(() => {
+    load()
+  }, [load])
 
-    if (searchTerm) {
-      filtered = filtered.filter(page =>
-        page.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        page.slug.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        page.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        page.description.toLowerCase().includes(searchTerm.toLowerCase())
-      )
-    }
-
-    if (statusFilter !== 'all') {
-      filtered = filtered.filter(page => 
-        statusFilter === 'published' ? page.is_published : !page.is_published
-      )
-    }
-
-    setFilteredPages(filtered)
-  }
-
-  const deletePage = async (id: number) => {
-    if (!confirm('Är du säker på att du vill ta bort denna arrangörssida?')) {
-      return
-    }
-
-    try {
-      const { error } = await supabase
-        .from('organizer_pages')
-        .delete()
-        .eq('id', id)
-
-      if (error) throw error
-      
-      setOrganizerPages(organizerPages.filter(page => page.id !== id))
-    } catch (error) {
-      console.error('Error deleting organizer page:', error)
-      alert('Fel vid borttagning av arrangörssida')
-    }
-  }
-
-  const togglePublished = async (id: number, currentStatus: boolean) => {
-    try {
-      const { error } = await supabase
-        .from('organizer_pages')
-        .update({ is_published: !currentStatus })
-        .eq('id', id)
-
-      if (error) throw error
-      
-      setOrganizerPages(organizerPages.map(page => 
-        page.id === id 
-          ? { ...page, is_published: !currentStatus }
-          : page
-      ))
-    } catch (error) {
-      console.error('Error updating published status:', error)
-      alert('Fel vid uppdatering av publiceringsstatus')
-    }
-  }
-
-  const duplicatePage = async (id: number) => {
-    const page = organizerPages.find(p => p.id === id)
-    if (!page) return
-
-    try {
-      const duplicateData = {
-        ...page,
-        name: `${page.name} (Kopia)`,
-        slug: `${page.slug}-kopia-${Date.now()}`,
-        title: `${page.title} (Kopia)`,
-        is_published: false
-      }
-
-      // Remove id, created_at, updated_at from duplicate
-      const { id: _, created_at, updated_at, ...duplicateWithoutMeta } = duplicateData
-
-      const { data, error } = await supabase
-        .from('organizer_pages')
-        .insert(duplicateWithoutMeta)
-        .select()
-
-      if (error) throw error
-      
-      if (data && data[0]) {
-        setOrganizerPages([data[0], ...organizerPages])
-        alert('Arrangörssida duplicerad!')
-      }
-    } catch (error) {
-      console.error('Error duplicating page:', error)
-      alert('Fel vid duplicering av arrangörssida')
-    }
-  }
-
-  const toggleSelectAll = () => {
-    if (selectedPages.size === filteredPages.length) {
-      setSelectedPages(new Set())
-    } else {
-      setSelectedPages(new Set(filteredPages.map(p => p.id)))
-    }
-  }
-
-  const toggleSelectPage = (id: number) => {
-    const newSelected = new Set(selectedPages)
-    if (newSelected.has(id)) {
-      newSelected.delete(id)
-    } else {
-      newSelected.add(id)
-    }
-    setSelectedPages(newSelected)
-  }
-
-  const bulkUpdateStatus = async (newStatus: boolean) => {
-    if (selectedPages.size === 0) {
-      alert('Välj minst en arrangörssida')
-      return
-    }
-
-    if (!confirm(`Är du säker på att du vill ${newStatus ? 'publicera' : 'avpublicera'} ${selectedPages.size} arrangörssidor?`)) {
-      return
-    }
-
-    setBulkUpdating(true)
-    try {
-      const { error } = await supabase
-        .from('organizer_pages')
-        .update({ is_published: newStatus })
-        .in('id', Array.from(selectedPages))
-
-      if (error) throw error
-      
-      // Uppdatera lokalt state
-      setOrganizerPages(organizerPages.map(page => 
-        selectedPages.has(page.id)
-          ? { ...page, is_published: newStatus }
-          : page
-      ))
-      
-      setSelectedPages(new Set())
-      alert(`${selectedPages.size} arrangörssidor uppdaterade!`)
-    } catch (error) {
-      console.error('Error bulk updating pages:', error)
-      alert('Fel vid uppdatering av arrangörssidor')
-    } finally {
-      setBulkUpdating(false)
-    }
-  }
-
-  const getStatusColor = (isPublished: boolean) => {
-    return isPublished 
-      ? 'bg-green-100 text-green-800'
-      : 'bg-gray-100 text-gray-800'
-  }
-
-  const getStatusText = (isPublished: boolean) => {
-    return isPublished ? 'Publicerad' : 'Utkast'
-  }
-
-  // Column selector functions
-  const toggleColumn = (column: keyof typeof visibleColumns) => {
-    setVisibleColumns(prev => ({
-      ...prev,
-      [column]: !prev[column]
-    }))
-  }
-
-  const toggleAllColumns = () => {
-    const allVisible = Object.values(visibleColumns).every(v => v)
-    setVisibleColumns({
-      name: !allVisible,
-      slug: !allVisible,
-      status: !allVisible,
-      events: !allVisible,
-      created: !allVisible,
-      updated: !allVisible,
-      actions: !allVisible
+  const filtered = useMemo(() => {
+    const q = state.q.trim().toLowerCase()
+    return pages.filter((p) => {
+      if (state.status === 'published' && !p.is_published) return false
+      if (state.status === 'draft' && p.is_published) return false
+      if (q && ![p.name, p.slug, p.title, p.description, p.organizer?.name].filter(Boolean).join(' ').toLowerCase().includes(q)) return false
+      return true
     })
+  }, [pages, state])
+
+  const page = Math.max(1, parseInt(state.page) || 1)
+  const paged = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
+  const publishedCount = pages.filter((p) => p.is_published).length
+
+  // ---- åtgärder --------------------------------------------------------
+  const setPublished = async (ids: number[], value: boolean) => {
+    setBusy(true)
+    const { error } = await supabase.from('organizer_pages').update({ is_published: value }).in('id', ids)
+    setBusy(false)
+    if (error) return toast.error('Kunde inte uppdatera', error.message)
+    setPages((prev) => prev.map((p) => (ids.includes(p.id) ? { ...p, is_published: value } : p)))
+    setSelected(new Set())
+    toast.success(ids.length === 1 ? (value ? 'Sidan publicerad' : 'Sidan avpublicerad') : `${ids.length} sidor ${value ? 'publicerade' : 'avpublicerade'}`)
   }
 
-  // Clear all filters
-  const clearAllFilters = () => {
-    setSearchTerm('')
-    setStatusFilter('all')
+  const remove = async (rows: PageRow[]) => {
+    const ok = await confirm({
+      title: rows.length === 1 ? `Ta bort ”${rows[0].name}”?` : `Ta bort ${rows.length} sidor?`,
+      description: 'Sidan försvinner från ivarberg.nu. Går inte att ångra.',
+      confirmLabel: 'Ta bort',
+      destructive: true,
+    })
+    if (!ok) return
+    const ids = rows.map((r) => r.id)
+    const { error } = await supabase.from('organizer_pages').delete().in('id', ids)
+    if (error) return toast.error('Kunde inte ta bort', error.message)
+    setPages((prev) => prev.filter((p) => !ids.includes(p.id)))
+    setSelected(new Set())
+    toast.success(rows.length === 1 ? 'Sidan togs bort' : `${rows.length} sidor togs bort`)
   }
 
-  // Import functions
-  const handleImport = async () => {
-    if (!importUrl.trim()) {
-      setImportError('Vänligen ange en URL')
-      return
+  const duplicate = async (p: PageRow) => {
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { id, created_at, updated_at, organizer, event_count, ...rest } = p
+    const { data, error } = await supabase
+      .from('organizer_pages')
+      .insert({ ...rest, name: `${p.name} (Kopia)`, slug: `${p.slug}-kopia-${Date.now()}`, title: `${p.title} (Kopia)`, is_published: false })
+      .select('*, organizer:organizers(id, name)')
+      .single()
+    if (error) return toast.error('Kunde inte duplicera', error.message)
+    if (data) {
+      setPages((prev) => [{ ...data, event_count: p.event_count }, ...prev])
+      toast.toast({ kind: 'success', title: 'Sidan duplicerad som utkast', action: { label: 'Öppna kopian', onClick: () => router.push(`/organizer-pages/${data.id}/edit`) } })
     }
+  }
 
+  const handleImport = async () => {
+    if (!importUrl.trim()) return setImportError('Ange en URL')
     setImporting(true)
     setImportError('')
-    setImportSuccess(false)
-
     try {
-      const response = await fetch('/api/organizer-pages/import', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ url: importUrl.trim() })
-      })
-
+      const response = await fetch('/api/organizer-pages/import', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url: importUrl.trim() }) })
       const result = await response.json()
-
-      if (!response.ok) {
-        throw new Error(result.error || 'Import misslyckades')
-      }
-
-      // Add the new page to the list
-      setOrganizerPages(prev => [result.page, ...prev])
-      setImportSuccess(true)
+      if (!response.ok) throw new Error(result.error || 'Import misslyckades')
+      setPages((prev) => [{ ...result.page, event_count: 0 }, ...prev])
+      setImportOpen(false)
       setImportUrl('')
-      
-      // Close modal after 2 seconds
-      setTimeout(() => {
-        setShowImportModal(false)
-        setImportSuccess(false)
-      }, 2000)
-
-    } catch (error) {
-      console.error('Import error:', error)
-      setImportError(error instanceof Error ? error.message : 'Okänt fel vid import')
+      toast.toast({ kind: 'success', title: 'Sidan importerad som utkast', action: { label: 'Redigera', onClick: () => router.push(`/organizer-pages/${result.page.id}/edit`) } })
+    } catch (e) {
+      setImportError(e instanceof Error ? e.message : 'Okänt fel vid import')
     } finally {
       setImporting(false)
     }
   }
 
-  const closeImportModal = () => {
-    setShowImportModal(false)
-    setImportUrl('')
-    setImportError('')
-    setImportSuccess(false)
-  }
-  
-  // Pagination calculations
-  const totalPages = Math.ceil(filteredPages.length / itemsPerPage)
-  const startIndex = (currentPage - 1) * itemsPerPage
-  const endIndex = startIndex + itemsPerPage
-  const paginatedPages = filteredPages.slice(startIndex, endIndex)
-
-  if (loading) {
-    return (
-      <ProtectedLayout>
-        <div className="flex items-center justify-center h-64">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+  const columns: Column<PageRow>[] = [
+    {
+      key: 'name',
+      header: 'Namn',
+      width: 'minmax(220px,1fr)',
+      cell: (p) => (
+        <div className="flex min-w-0 flex-col">
+          <Link href={`/organizer-pages/${p.id}/edit`} className="truncate text-[13px] font-medium text-ink hover:text-sea">
+            {p.name}
+          </Link>
+          <span className="truncate text-[11px] text-ink-muted">{p.title}</span>
         </div>
-      </ProtectedLayout>
-    )
-  }
+      ),
+    },
+    {
+      key: 'organizer',
+      header: 'Arrangör',
+      width: '170px',
+      cell: (p) =>
+        p.organizer ? (
+          <Link href={`/organizers/${p.organizer.id}`} className="truncate text-[13px] text-sea hover:text-sea-dark">
+            {p.organizer.name}
+          </Link>
+        ) : (
+          <span className="text-[13px] text-ink-faint">Ingen</span>
+        ),
+    },
+    { key: 'slug', header: 'Slug', width: '180px', cell: (p) => <span className="block truncate font-mono text-xs text-ink-soft">/{p.slug}</span> },
+    { key: 'status', header: 'Status', width: '110px', cell: (p) => <StatusBadge domain="page" value={p.is_published} /> },
+    { key: 'events', header: 'Event', width: '70px', cell: (p) => <span className="font-mono text-xs text-ink">{p.event_count}</span> },
+    { key: 'updated', header: 'Uppdaterad', width: '130px', cell: (p) => <span className="font-mono text-xs text-ink-soft">{formatRelative(p.updated_at)}</span> },
+    {
+      key: 'actions',
+      header: '',
+      width: '44px',
+      cell: (p) => (
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button type="button" aria-label="Fler åtgärder" className="inline-flex size-8 items-center justify-center rounded-md text-ink-muted hover:bg-stone hover:text-ink">
+              <MoreHorizontal className="size-4" />
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem onSelect={() => router.push(`/organizer-pages/${p.id}/edit`)}>
+              <Pencil /> Redigera
+            </DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => window.open(`${getFrontendUrl()}/arrangor/${p.slug}`, '_blank', 'noopener')}>
+              <ExternalLink /> Visa på webben
+            </DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => setPublished([p.id], !p.is_published)}>
+              {p.is_published ? <EyeOff /> : <Eye />} {p.is_published ? 'Avpublicera' : 'Publicera'}
+            </DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => duplicate(p)}>
+              <Copy /> Duplicera
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem destructive onSelect={() => remove([p])}>
+              <Trash2 /> Ta bort
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      ),
+    },
+  ]
+
+  const selectedRows = pages.filter((p) => selected.has(p.id))
+  const hasActive = !!(state.q || state.status)
 
   return (
-    <ProtectedLayout>
-      <div className="space-y-6">
-        {/* Header */}
-        <div className="flex justify-between items-center">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">Arrangörssidor</h1>
-            <p className="mt-1 text-sm text-gray-500">
-              Hantera SEO-sidor för arrangörer
-            </p>
+    <>
+      <PageHeader
+        title="Arrangörssidor"
+        meta={`${formatNumber(pages.length)} sidor · ${publishedCount} publicerade`}
+        actions={
+          <>
+            <Button variant="secondary" onClick={() => setImportOpen(true)}>
+              <Download /> Importera från URL
+            </Button>
+            <Button asChild>
+              <Link href="/organizer-pages/new">
+                <Plus strokeWidth={2.5} /> Ny sida
+              </Link>
+            </Button>
+          </>
+        }
+      />
+
+      <FilterBar onReset={reset} hasActive={hasActive}>
+        <SearchInput value={state.q} onChange={(q) => set({ q })} placeholder="Namn, slug, arrangör…" className="w-72" />
+        <SelectFilter
+          label="Status"
+          value={state.status}
+          options={[
+            { value: 'published', label: 'Publicerad', count: publishedCount },
+            { value: 'draft', label: 'Utkast', count: pages.length - publishedCount },
+          ]}
+          onChange={(v) => set({ status: v })}
+        />
+      </FilterBar>
+
+      {error ? (
+        <ErrorState description={error} onRetry={load} />
+      ) : (
+        <DataTable
+          columns={columns}
+          rows={paged}
+          rowKey={(p) => p.id}
+          loading={loading}
+          selectable
+          selected={selected}
+          onSelectedChange={setSelected}
+          emptyState={
+            <EmptyState
+              title={hasActive ? 'Inga sidor matchar' : 'Inga arrangörssidor än'}
+              description={hasActive ? 'Prova att rensa filtren.' : 'Skapa en sida manuellt, importera från en URL eller generera från en arrangör.'}
+              action={
+                hasActive ? (
+                  <Button variant="secondary" onClick={reset}>
+                    Rensa filter
+                  </Button>
+                ) : (
+                  <Button asChild>
+                    <Link href="/organizer-pages/new">Ny sida</Link>
+                  </Button>
+                )
+              }
+            />
+          }
+          footer={<Pagination page={page} pageSize={PAGE_SIZE} total={filtered.length} onPageChange={(p) => set({ page: String(p) }, { resetPage: false })} itemLabel="sidor" />}
+        />
+      )}
+
+      <BulkBar count={selected.size} onClear={() => setSelected(new Set())}>
+        <BulkButton primary disabled={busy || !selectedRows.some((p) => !p.is_published)} onClick={() => setPublished(selectedRows.filter((p) => !p.is_published).map((p) => p.id), true)}>
+          Publicera
+        </BulkButton>
+        <BulkButton disabled={busy || !selectedRows.some((p) => p.is_published)} onClick={() => setPublished(selectedRows.filter((p) => p.is_published).map((p) => p.id), false)}>
+          Avpublicera
+        </BulkButton>
+        <BulkButton danger onClick={() => remove(selectedRows)}>
+          Ta bort
+        </BulkButton>
+      </BulkBar>
+
+      <Dialog
+        open={importOpen}
+        onOpenChange={(o) => {
+          setImportOpen(o)
+          if (!o) {
+            setImportUrl('')
+            setImportError('')
+          }
+        }}
+      >
+        <DialogContent
+          size="sm"
+          title="Importera från URL"
+          description="Sidan hämtas, innehållet skrivs om med AI och sparas som utkast."
+          footer={
+            <>
+              <Button variant="ghost" onClick={() => setImportOpen(false)}>
+                Avbryt
+              </Button>
+              <Button onClick={handleImport} loading={importing} disabled={!importUrl.trim()}>
+                Importera
+              </Button>
+            </>
+          }
+        >
+          <div className="flex flex-col gap-3">
+            <Field label="Webbadress" htmlFor="import-url" error={importError || null}>
+              <Input id="import-url" type="url" autoFocus value={importUrl} onChange={(e) => setImportUrl(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleImport()} placeholder="https://arrangoren.se" aria-invalid={!!importError} />
+            </Field>
+            {importing ? <Banner tone="info">Hämtar och genererar innehåll, det tar 10–30 sekunder…</Banner> : null}
           </div>
-          <div className="flex items-center space-x-3">
-            <button
-              onClick={() => setShowColumnSelector(!showColumnSelector)}
-              className="inline-flex items-center px-3 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-            >
-              <Settings className="w-4 h-4 mr-2" />
-              Kolumner
-            </button>
-            <button
-              onClick={() => setShowImportModal(true)}
-              className="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-            >
-              <Download className="w-4 h-4 mr-2" />
-              Importera från URL
-            </button>
-            <Link
-              href="/organizer-pages/new"
-              className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-            >
-              <Plus className="w-4 h-4 mr-2" />
-              Ny Arrangörssida
-            </Link>
-          </div>
-        </div>
-
-        {/* Filters */}
-        <div className="bg-white rounded-lg shadow">
-          {/* Filter Header */}
-          <div 
-            className="flex items-center justify-between p-4 cursor-pointer hover:bg-gray-50 rounded-t-lg"
-            onClick={() => setShowFilters(!showFilters)}
-          >
-            <div className="flex items-center space-x-2">
-              <h3 className="text-lg font-medium text-gray-900">Filter</h3>
-              {/* Show active filter count */}
-              {(() => {
-                const activeFilters = [
-                  searchTerm,
-                  statusFilter !== 'all'
-                ].filter(Boolean).length;
-                
-                return activeFilters > 0 && (
-                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                    {activeFilters} aktiv{activeFilters > 1 ? 'a' : ''}
-                  </span>
-                );
-              })()}
-            </div>
-            
-            <div className="flex items-center space-x-2">
-              {showFilters && (
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    clearAllFilters();
-                  }}
-                  className="text-sm text-blue-600 hover:text-blue-800 font-medium"
-                >
-                  Rensa alla
-                </button>
-              )}
-              {showFilters ? (
-                <ChevronUp className="w-5 h-5 text-gray-400" />
-              ) : (
-                <ChevronDown className="w-5 h-5 text-gray-400" />
-              )}
-            </div>
-          </div>
-
-          {/* Collapsible Filter Content */}
-          {showFilters && (
-            <div className="px-4 pb-4 border-t border-gray-200">
-              {/* Row 1: Search and Status */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4 mt-4">
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-                  <input
-                    type="text"
-                    placeholder="Sök arrangörssidor..."
-                    className="pl-10 pr-4 py-2 w-full border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                  />
-                </div>
-
-                <select
-                  className="px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-                  value={statusFilter}
-                  onChange={(e) => setStatusFilter(e.target.value as 'all' | 'published' | 'draft')}
-                >
-                  <option value="all">Alla statusar</option>
-                  <option value="published">Publicerade</option>
-                  <option value="draft">Utkast</option>
-                </select>
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* Column Selector */}
-        {showColumnSelector && (
-          <div className="bg-white p-4 rounded-lg shadow">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-medium text-gray-900">Välj synliga kolumner</h3>
-              <button
-                onClick={() => setShowColumnSelector(false)}
-                className="text-gray-400 hover:text-gray-600"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-            
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <label className="flex items-center">
-                <input
-                  type="checkbox"
-                  checked={visibleColumns.name}
-                  onChange={() => toggleColumn('name')}
-                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                />
-                <span className="ml-2 text-sm text-gray-700">Namn</span>
-              </label>
-              
-              <label className="flex items-center">
-                <input
-                  type="checkbox"
-                  checked={visibleColumns.organizer}
-                  onChange={() => toggleColumn('organizer')}
-                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                />
-                <span className="ml-2 text-sm text-gray-700">Arrangör</span>
-              </label>
-              
-              <label className="flex items-center">
-                <input
-                  type="checkbox"
-                  checked={visibleColumns.slug}
-                  onChange={() => toggleColumn('slug')}
-                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                />
-                <span className="ml-2 text-sm text-gray-700">Slug</span>
-              </label>
-              
-              <label className="flex items-center">
-                <input
-                  type="checkbox"
-                  checked={visibleColumns.status}
-                  onChange={() => toggleColumn('status')}
-                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                />
-                <span className="ml-2 text-sm text-gray-700">Status</span>
-              </label>
-              
-              <label className="flex items-center">
-                <input
-                  type="checkbox"
-                  checked={visibleColumns.events}
-                  onChange={() => toggleColumn('events')}
-                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                />
-                <span className="ml-2 text-sm text-gray-700">Evenemang</span>
-              </label>
-              
-              <label className="flex items-center">
-                <input
-                  type="checkbox"
-                  checked={visibleColumns.created}
-                  onChange={() => toggleColumn('created')}
-                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                />
-                <span className="ml-2 text-sm text-gray-700">Skapad</span>
-              </label>
-              
-              <label className="flex items-center">
-                <input
-                  type="checkbox"
-                  checked={visibleColumns.updated}
-                  onChange={() => toggleColumn('updated')}
-                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                />
-                <span className="ml-2 text-sm text-gray-700">Uppdaterad</span>
-              </label>
-              
-              <label className="flex items-center">
-                <input
-                  type="checkbox"
-                  checked={visibleColumns.actions}
-                  onChange={() => toggleColumn('actions')}
-                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                />
-                <span className="ml-2 text-sm text-gray-700">Åtgärder</span>
-              </label>
-            </div>
-            
-            <div className="mt-4 pt-4 border-t border-gray-200">
-              <button
-                onClick={toggleAllColumns}
-                className="text-sm text-blue-600 hover:text-blue-800 font-medium"
-              >
-                {Object.values(visibleColumns).every(v => v) ? 'Dölj alla' : 'Visa alla'}
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* Bulk Actions */}
-        {selectedPages.size > 0 && (
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-4">
-                <span className="text-sm font-medium text-blue-900">
-                  {selectedPages.size} arrangörssida{selectedPages.size > 1 ? 'r' : ''} valda
-                </span>
-                <button
-                  onClick={() => bulkUpdateStatus(true)}
-                  disabled={bulkUpdating}
-                  className="inline-flex items-center px-3 py-1.5 border border-transparent text-sm font-medium rounded-md text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:opacity-50"
-                >
-                  {bulkUpdating ? 'Uppdaterar...' : 'Publicera'}
-                </button>
-                <button
-                  onClick={() => bulkUpdateStatus(false)}
-                  disabled={bulkUpdating}
-                  className="inline-flex items-center px-3 py-1.5 border border-transparent text-sm font-medium rounded-md text-white bg-gray-600 hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 disabled:opacity-50"
-                >
-                  {bulkUpdating ? 'Uppdaterar...' : 'Avpublicera'}
-                </button>
-              </div>
-              <button
-                onClick={() => setSelectedPages(new Set())}
-                className="text-sm text-blue-600 hover:text-blue-800"
-              >
-                Rensa val
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* Organizer Pages List */}
-        <div className="bg-white shadow rounded-lg overflow-hidden">
-          {filteredPages.length === 0 ? (
-            <div className="text-center py-12">
-              <Users className="mx-auto h-12 w-12 text-gray-400" />
-              <h3 className="mt-2 text-sm font-medium text-gray-900">Inga arrangörssidor</h3>
-              <p className="mt-1 text-sm text-gray-500">
-                Kom igång genom att skapa din första arrangörssida.
-              </p>
-              <div className="mt-6">
-                <Link
-                  href="/organizer-pages/new"
-                  className="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700"
-                >
-                  <Plus className="w-4 h-4 mr-2" />
-                  Ny Arrangörssida
-                </Link>
-              </div>
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full divide-y divide-gray-200 table-fixed">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="px-2 py-2 text-left w-10">
-                      <button
-                        onClick={toggleSelectAll}
-                        className="text-gray-600 hover:text-gray-900"
-                        title={selectedPages.size === filteredPages.length ? 'Avmarkera alla' : 'Markera alla'}
-                      >
-                        {selectedPages.size === filteredPages.length && filteredPages.length > 0 ? (
-                          <CheckSquare className="w-4 h-4" />
-                        ) : (
-                          <Square className="w-4 h-4" />
-                        )}
-                      </button>
-                    </th>
-                    {visibleColumns.name && (
-                      <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase w-1/4">
-                        Namn
-                      </th>
-                    )}
-                    {visibleColumns.organizer && (
-                      <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase w-40">
-                        Arrangör
-                      </th>
-                    )}
-                    {visibleColumns.slug && (
-                      <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase w-40">
-                        Slug
-                      </th>
-                    )}
-                    {visibleColumns.status && (
-                      <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase w-28">
-                        Status
-                      </th>
-                    )}
-                    {visibleColumns.events && (
-                      <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase w-24">
-                        Evenemang
-                      </th>
-                    )}
-                    {visibleColumns.created && (
-                      <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase w-32">
-                        Skapad
-                      </th>
-                    )}
-                    {visibleColumns.updated && (
-                      <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase w-32">
-                        Uppdaterad
-                      </th>
-                    )}
-                    {visibleColumns.actions && (
-                      <th className="px-2 py-2 text-right w-40">
-                        <span className="sr-only">Åtgärder</span>
-                      </th>
-                    )}
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                  {paginatedPages.map((page) => (
-                    <tr key={page.id} className={`hover:bg-gray-50 ${selectedPages.has(page.id) ? 'bg-blue-50' : ''}`}>
-                      {/* Checkbox */}
-                      <td className="px-2 py-2 whitespace-nowrap">
-                        <button
-                          onClick={() => toggleSelectPage(page.id)}
-                          className="text-gray-600 hover:text-gray-900"
-                        >
-                          {selectedPages.has(page.id) ? (
-                            <CheckSquare className="w-4 h-4 text-blue-600" />
-                          ) : (
-                            <Square className="w-4 h-4" />
-                          )}
-                        </button>
-                      </td>
-                      
-                      {/* Namn */}
-                      {visibleColumns.name && (
-                        <td className="px-3 py-2">
-                          <div className="text-sm font-medium text-gray-900 truncate">
-                            {page.name}
-                          </div>
-                          <div className="text-sm text-gray-500 truncate">
-                            {page.title}
-                          </div>
-                        </td>
-                      )}
-                      
-                      {/* Arrangör */}
-                      {visibleColumns.organizer && (
-                        <td className="px-3 py-2">
-                          {page.organizer ? (
-                            <Link
-                              href={`/organizers/${page.organizer.id}`}
-                              className="text-sm text-blue-600 hover:text-blue-800 truncate"
-                            >
-                              {page.organizer.name}
-                            </Link>
-                          ) : (
-                            <span className="text-sm text-gray-400 italic">Ingen koppling</span>
-                          )}
-                        </td>
-                      )}
-                      
-                      {/* Slug */}
-                      {visibleColumns.slug && (
-                        <td className="px-3 py-2 whitespace-nowrap">
-                          <div className="text-sm text-gray-500 font-mono">
-                            /{page.slug}
-                          </div>
-                        </td>
-                      )}
-                      
-                      {/* Status */}
-                      {visibleColumns.status && (
-                        <td className="px-3 py-2 whitespace-nowrap">
-                          <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${getStatusColor(page.is_published)}`}>
-                            {getStatusText(page.is_published)}
-                          </span>
-                        </td>
-                      )}
-                      
-                      {/* Evenemang */}
-                      {visibleColumns.events && (
-                        <td className="px-3 py-2 whitespace-nowrap">
-                          <div className="flex items-center text-sm text-gray-500">
-                            <Calendar className="w-4 h-4 mr-1" />
-                            {page.event_count || 0}
-                          </div>
-                        </td>
-                      )}
-                      
-                      {/* Skapad */}
-                      {visibleColumns.created && (
-                        <td className="px-3 py-2 whitespace-nowrap">
-                          <div className="text-sm text-gray-500">
-                            {formatDate(page.created_at)}
-                          </div>
-                        </td>
-                      )}
-                      
-                      {/* Uppdaterad */}
-                      {visibleColumns.updated && (
-                        <td className="px-3 py-2 whitespace-nowrap">
-                          <div className="text-sm text-gray-500">
-                            {formatDate(page.updated_at)}
-                          </div>
-                        </td>
-                      )}
-                      
-                      {/* Actions */}
-                      {visibleColumns.actions && (
-                        <td className="px-2 py-2 whitespace-nowrap text-right">
-                          <div className="flex items-center justify-end gap-1">
-                            <button
-                              onClick={() => togglePublished(page.id, page.is_published)}
-                              className={`p-1 rounded hover:bg-gray-100 ${
-                                page.is_published ? 'text-green-600' : 'text-gray-400'
-                              }`}
-                              title={page.is_published ? 'Avpublicera' : 'Publicera'}
-                            >
-                              <Globe className="w-4 h-4" />
-                            </button>
-                            <a
-                              href={`${getFrontendUrl()}/arrangor/${page.slug}`}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-blue-600 hover:bg-blue-50 p-1 rounded"
-                              title="Visa på publika sidan"
-                            >
-                              <ExternalLink className="w-4 h-4" />
-                            </a>
-                            <button
-                              onClick={() => duplicatePage(page.id)}
-                              className="text-indigo-600 hover:bg-indigo-50 p-1 rounded"
-                              title="Duplicera"
-                            >
-                              <Copy className="w-4 h-4" />
-                            </button>
-                            <Link
-                              href={`/organizer-pages/${page.id}/edit`}
-                              className="text-indigo-600 hover:bg-indigo-50 p-1 rounded"
-                              title="Redigera"
-                            >
-                              <Edit className="w-4 h-4" />
-                            </Link>
-                            <button
-                              onClick={() => deletePage(page.id)}
-                              className="text-red-600 hover:bg-red-50 p-1 rounded"
-                              title="Ta bort"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
-                          </div>
-                        </td>
-                      )}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
-
-        {/* Pagination */}
-        {totalPages > 1 && (
-          <div className="flex items-center justify-between bg-white px-4 py-3 rounded-lg shadow">
-            <div className="text-sm text-gray-700">
-              Visar <span className="font-medium">{startIndex + 1}</span> till <span className="font-medium">{Math.min(endIndex, filteredPages.length)}</span> av{' '}
-              <span className="font-medium">{filteredPages.length}</span> arrangörssidor
-            </div>
-            
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                disabled={currentPage === 1}
-                className="px-3 py-1 text-sm border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                Föregående
-              </button>
-              
-              <div className="flex gap-1">
-                {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => {
-                  // Visa bara 7 sidor: första, sista, och 5 runt nuvarande
-                  if (
-                    page === 1 ||
-                    page === totalPages ||
-                    (page >= currentPage - 2 && page <= currentPage + 2)
-                  ) {
-                    return (
-                      <button
-                        key={page}
-                        onClick={() => setCurrentPage(page)}
-                        className={`px-3 py-1 text-sm rounded ${
-                          currentPage === page
-                            ? 'bg-blue-600 text-white'
-                            : 'border border-gray-300 hover:bg-gray-50'
-                        }`}
-                      >
-                        {page}
-                      </button>
-                    )
-                  } else if (
-                    page === currentPage - 3 ||
-                    page === currentPage + 3
-                  ) {
-                    return <span key={page} className="px-2 text-gray-500">...</span>
-                  }
-                  return null
-                })}
-              </div>
-              
-              <button
-                onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-                disabled={currentPage === totalPages}
-                className="px-3 py-1 text-sm border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                Nästa
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* Import Modal */}
-        {showImportModal && (
-          <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
-            <div className="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
-              <div className="mt-3">
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-lg font-medium text-gray-900">
-                    Importera arrangörssida från URL
-                  </h3>
-                  <button
-                    onClick={closeImportModal}
-                    className="text-gray-400 hover:text-gray-600"
-                  >
-                    <X className="w-6 h-6" />
-                  </button>
-                </div>
-                
-                <div className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Webbplats-URL
-                    </label>
-                    <input
-                      type="url"
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-                      value={importUrl}
-                      onChange={(e) => setImportUrl(e.target.value)}
-                      placeholder="https://example.com"
-                      disabled={importing}
-                    />
-                    <p className="mt-1 text-sm text-gray-500">
-                      Systemet kommer att extrahera innehåll, bilder och generera SEO-text automatiskt.
-                    </p>
-                  </div>
-
-                  {importError && (
-                    <div className="bg-red-50 border border-red-200 rounded-md p-3">
-                      <p className="text-sm text-red-600">{importError}</p>
-                    </div>
-                  )}
-
-                  {importSuccess && (
-                    <div className="bg-green-50 border border-green-200 rounded-md p-3">
-                      <p className="text-sm text-green-600">
-                        ✅ Arrangörssida importerad framgångsrikt! Den sparas som utkast för granskning.
-                      </p>
-                    </div>
-                  )}
-                </div>
-
-                <div className="flex justify-end space-x-3 mt-6">
-                  <button
-                    onClick={closeImportModal}
-                    disabled={importing}
-                    className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 border border-gray-300 rounded-md hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 disabled:opacity-50"
-                  >
-                    Avbryt
-                  </button>
-                  <button
-                    onClick={handleImport}
-                    disabled={importing || !importUrl.trim()}
-                    className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
-                  >
-                    {importing ? (
-                      <>
-                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                        Importerar...
-                      </>
-                    ) : (
-                      <>
-                        <Download className="w-4 h-4 mr-2" />
-                        Importera
-                      </>
-                    )}
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-      </div>
-    </ProtectedLayout>
+        </DialogContent>
+      </Dialog>
+    </>
   )
 }

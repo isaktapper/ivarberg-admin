@@ -103,6 +103,8 @@ export default function GooglePlacesAutocomplete({
         google.maps.event?.clearInstanceListeners?.(autocompleteRef.current)
       }
     }
+    // Callbacks läses via refs-liknande closure; nya callbacks kräver inte ny autocomplete-instans
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [onChange])
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -126,6 +128,6 @@ export default function GooglePlacesAutocomplete({
 // Extend window för TypeScript
 declare global {
   interface Window {
-    google: any
+    google: typeof google
   }
 }

@@ -1,254 +1,320 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import { EventTip, EventTipStatus } from '@/types/database'
-import ProtectedLayout from '@/components/ProtectedLayout'
-import { Search, Eye, X, AlertCircle } from 'lucide-react'
-import Link from 'next/link'
-import { formatDate } from '@/lib/utils'
+import { Suspense, useCallback, useEffect, useMemo, useState } from 'react'
+import { useRouter } from 'next/navigation'
+import { Eye, MoreHorizontal, Sparkles, XCircle, CheckCircle2, Lightbulb } from 'lucide-react'
+import { supabase } from '@/lib/supabase'
+import type { EventTip, EventTipStatus } from '@/types/database'
+import { useUrlState } from '@/hooks/use-url-state'
+import { formatDay, formatRelative } from '@/lib/format'
+import { PageHeader } from '@/components/ui/page-header'
+import { Segmented } from '@/components/ui/tabs'
+import { SearchInput } from '@/components/ui/search-input'
+import { DataTable, TitleCell, Thumb, type Column } from '@/components/ui/data-table'
+import { StatusBadge, CategoryChip } from '@/components/ui/status-badge'
+import { Pagination } from '@/components/ui/pagination'
+import { BulkBar, BulkButton } from '@/components/ui/bulk-bar'
+import { Button } from '@/components/ui/button'
+import { Dialog, DialogContent } from '@/components/ui/dialog'
+import { Field, Textarea } from '@/components/ui/input'
+import { EmptyState, ErrorState, LoadingState } from '@/components/ui/states'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
+import { useToast } from '@/components/ui/toast'
+import { useConfirm } from '@/components/ui/confirm-dialog'
+import { convertTip, markTipsReviewed, rejectTip } from '@/components/admin/tip-actions'
 
-export default function AdminTipsPage() {
+const STATUSES: { value: string; label: string }[] = [
+  { value: 'pending', label: 'Väntar' },
+  { value: 'reviewed', label: 'Granskade' },
+  { value: 'approved', label: 'Godkända' },
+  { value: 'rejected', label: 'Avvisade' },
+  { value: 'converted', label: 'Skapade' },
+  { value: 'all', label: 'Alla' },
+]
+
+const DEFAULTS = { status: 'pending', q: '', page: '1' }
+const PAGE_SIZE = 20
+/**
+ * API:et (/api/admin/tips) saknar sökparameter. Vi hämtar därför upp till
+ * 200 tips för vald status och söker/paginerar i klienten.
+ */
+const FETCH_LIMIT = 200
+
+export default function TipsPage() {
+  return (
+    <Suspense fallback={<LoadingState />}>
+      <TipsList />
+    </Suspense>
+  )
+}
+
+function TipsList() {
+  const router = useRouter()
+  const toast = useToast()
+  const confirm = useConfirm()
+  const { state, set } = useUrlState(DEFAULTS)
+
   const [tips, setTips] = useState<EventTip[]>([])
+  const [counts, setCounts] = useState<Record<string, number>>({})
   const [loading, setLoading] = useState(true)
-  const [searchTerm, setSearchTerm] = useState('')
-  const [statusFilter, setStatusFilter] = useState<EventTipStatus | 'all'>('pending')
-  const [page, setPage] = useState(1)
-  const [total, setTotal] = useState(0)
-  const [totalPages, setTotalPages] = useState(0)
-  const limit = 20
+  const [error, setError] = useState<string | null>(null)
+  const [selected, setSelected] = useState<Set<string | number>>(new Set())
+  const [rejectTarget, setRejectTarget] = useState<number[] | null>(null)
+  const [rejectReason, setRejectReason] = useState('')
+  const [busy, setBusy] = useState(false)
 
-  useEffect(() => {
-    fetchTips()
-  }, [page, statusFilter])
+  const page = Math.max(1, parseInt(state.page) || 1)
 
-  const fetchTips = async () => {
-    setLoading(true)
-    try {
-      const params = new URLSearchParams({
-        page: page.toString(),
-        limit: limit.toString(),
-        status: statusFilter === 'all' ? '' : statusFilter
+  const loadCounts = useCallback(async () => {
+    const keys = STATUSES.map((s) => s.value)
+    const results = await Promise.all(
+      keys.map((k) => {
+        let q = supabase.from('event_tips').select('*', { count: 'exact', head: true })
+        if (k !== 'all') q = q.eq('status', k)
+        return q
       })
+    )
+    const next: Record<string, number> = {}
+    keys.forEach((k, i) => (next[k] = results[i].count ?? 0))
+    setCounts(next)
+  }, [])
 
-      const response = await fetch(`/api/admin/tips?${params}`)
-      const data = await response.json()
-
-      if (data.error) throw new Error(data.error)
-
-      setTips(data.tips || [])
-      setTotal(data.total || 0)
-      setTotalPages(data.totalPages || 0)
-    } catch (error) {
-      console.error('Error fetching tips:', error)
-      alert('Fel vid hämtning av tips')
+  const loadTips = useCallback(async () => {
+    setLoading(true)
+    setError(null)
+    try {
+      const res = await fetch(`/api/admin/tips?page=1&limit=${FETCH_LIMIT}&status=${state.status}`)
+      const json = await res.json()
+      if (!res.ok) throw new Error(json.details || json.error || 'Kunde inte hämta tips')
+      setTips(json.tips || [])
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Okänt fel')
     } finally {
       setLoading(false)
     }
+  }, [state.status])
+
+  useEffect(() => {
+    loadTips()
+    loadCounts()
+  }, [loadTips, loadCounts])
+
+  useEffect(() => setSelected(new Set()), [state.status, state.q])
+
+  const filtered = useMemo(() => {
+    const term = state.q.trim().toLowerCase()
+    if (!term) return tips
+    return tips.filter((t) =>
+      [t.event_name, t.venue_name, t.event_location, t.submitter_name, t.submitter_email].some((v) => v?.toLowerCase().includes(term))
+    )
+  }, [tips, state.q])
+
+  const pageRows = useMemo(() => filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE), [filtered, page])
+
+  const refresh = () => {
+    loadTips()
+    loadCounts()
+    setSelected(new Set())
   }
 
-  const getStatusColor = (status: EventTipStatus) => {
-    switch (status) {
-      case 'pending':
-        return 'bg-yellow-100 text-yellow-800'
-      case 'reviewed':
-        return 'bg-blue-100 text-blue-800'
-      case 'approved':
-        return 'bg-green-100 text-green-800'
-      case 'rejected':
-        return 'bg-red-100 text-red-800'
-      case 'converted':
-        return 'bg-purple-100 text-purple-800'
-      default:
-        return 'bg-gray-100 text-gray-800'
+  const doConvert = async (tip: EventTip) => {
+    const ok = await confirm({
+      title: 'Konvertera till event?',
+      description: `”${tip.event_name}” skapas som utkast och kan sedan granskas och publiceras.`,
+      confirmLabel: 'Konvertera',
+    })
+    if (!ok) return
+    setBusy(true)
+    try {
+      const result = await convertTip(tip.id)
+      toast.toast({
+        kind: 'success',
+        title: 'Event skapat som utkast',
+        description: tip.event_name,
+        action: { label: 'Öppna eventet', onClick: () => router.push(`/events/${result.event.id}/edit`) },
+      })
+      refresh()
+    } catch (e) {
+      toast.error('Kunde inte konvertera', e instanceof Error ? e.message : undefined)
+    } finally {
+      setBusy(false)
     }
   }
 
-  const getStatusText = (status: EventTipStatus) => {
-    switch (status) {
-      case 'pending':
-        return 'Väntar'
-      case 'reviewed':
-        return 'Granskad'
-      case 'approved':
-        return 'Godkänd'
-      case 'rejected':
-        return 'Avböjd'
-      case 'converted':
-        return 'Konverterad'
-      default:
-        return status
+  const doReject = async () => {
+    if (!rejectTarget?.length) return
+    setBusy(true)
+    try {
+      for (const id of rejectTarget) await rejectTip(id, rejectReason.trim())
+      toast.success(rejectTarget.length === 1 ? 'Tipset avvisat' : `${rejectTarget.length} tips avvisade`)
+      setRejectTarget(null)
+      setRejectReason('')
+      refresh()
+    } catch (e) {
+      toast.error('Kunde inte avvisa', e instanceof Error ? e.message : undefined)
+    } finally {
+      setBusy(false)
     }
   }
 
-  const filteredTips = tips.filter(tip =>
-    tip.event_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    tip.event_location?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    tip.submitter_email.toLowerCase().includes(searchTerm.toLowerCase())
-  )
+  const doReviewed = async (ids: number[]) => {
+    setBusy(true)
+    try {
+      await markTipsReviewed(ids)
+      toast.success(ids.length === 1 ? 'Markerat som granskat' : `${ids.length} tips markerade som granskade`)
+      refresh()
+    } catch (e) {
+      toast.error('Kunde inte uppdatera', e instanceof Error ? e.message : undefined)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const columns: Column<EventTip>[] = [
+    {
+      key: 'event',
+      header: 'Event',
+      width: 'minmax(220px, 1.6fr)',
+      cell: (t) => (
+        <TitleCell thumb={<Thumb src={t.image_url} alt="" />} title={t.event_name} subtitle={t.venue_name || t.event_location || undefined} href={`/admin/tips/${t.id}`} />
+      ),
+    },
+    { key: 'date', header: 'Datum', width: '110px', cell: (t) => <span className="font-mono text-xs">{formatDay(t.date_time || t.event_date)}</span> },
+    { key: 'place', header: 'Plats', width: 'minmax(120px, 1fr)', cell: (t) => <span className="block truncate text-ink-soft">{t.event_location || '–'}</span> },
+    {
+      key: 'submitter',
+      header: 'Inlämnare',
+      width: 'minmax(140px, 1fr)',
+      cell: (t) => (
+        <div className="flex min-w-0 flex-col">
+          <span className="truncate">{t.submitter_name || '–'}</span>
+          <span className="truncate text-[11px] text-ink-muted">{t.submitter_email}</span>
+        </div>
+      ),
+    },
+    {
+      key: 'cats',
+      header: 'Kategorier',
+      width: '150px',
+      cell: (t) => {
+        const cats = t.categories?.length ? t.categories : t.category ? [t.category] : []
+        if (!cats.length) return <span className="text-ink-faint">–</span>
+        return (
+          <span className="flex items-center gap-1.5">
+            <CategoryChip>{cats[0]}</CategoryChip>
+            {cats.length > 1 ? <span className="text-[11px] text-ink-muted">+{cats.length - 1}</span> : null}
+          </span>
+        )
+      },
+    },
+    { key: 'status', header: 'Status', width: '120px', cell: (t) => <StatusBadge domain="tip" value={t.status} /> },
+    { key: 'created', header: 'Inkom', width: '110px', cell: (t) => <span className="font-mono text-xs text-ink-soft">{formatRelative(t.created_at)}</span> },
+    {
+      key: 'actions',
+      header: '',
+      width: '44px',
+      cell: (t) => (
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button type="button" aria-label="Fler åtgärder" onClick={(e) => e.stopPropagation()} className="inline-flex size-8 items-center justify-center rounded-md text-ink-muted hover:bg-stone hover:text-ink">
+              <MoreHorizontal className="size-4" />
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem onSelect={() => router.push(`/admin/tips/${t.id}`)}>
+              <Eye /> Visa
+            </DropdownMenuItem>
+            {t.status !== 'converted' ? (
+              <DropdownMenuItem onSelect={() => doConvert(t)}>
+                <Sparkles /> Konvertera till event
+              </DropdownMenuItem>
+            ) : null}
+            {t.status === 'pending' ? (
+              <DropdownMenuItem onSelect={() => doReviewed([t.id])}>
+                <CheckCircle2 /> Markera som granskad
+              </DropdownMenuItem>
+            ) : null}
+            {t.status !== 'rejected' && t.status !== 'converted' ? (
+              <>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem destructive onSelect={() => { setRejectTarget([t.id]); setRejectReason('') }}>
+                  <XCircle /> Avvisa…
+                </DropdownMenuItem>
+              </>
+            ) : null}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      ),
+    },
+  ]
+
+  const selectedIds = Array.from(selected).map(Number)
 
   return (
-    <ProtectedLayout>
-      <div className="space-y-6">
-        {/* Header */}
-        <div className="flex justify-between items-center">
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900">Event Tips</h1>
-            <p className="text-gray-600 mt-1">
-              Hantera inkomna event tips från besökare
-            </p>
-          </div>
-        </div>
+    <>
+      <PageHeader
+        title="Tips från besökare"
+        description="Event som besökare skickat in via ivarberg.nu. Konvertera till utkast eller avvisa."
+        meta={counts.all != null ? `${counts.all} totalt` : undefined}
+      />
 
-        {/* Filters */}
-        <div className="bg-white rounded-lg border border-gray-200 p-4">
-          <div className="flex flex-col md:flex-row gap-4">
-            {/* Search */}
-            <div className="flex-1">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
-                <input
-                  type="text"
-                  placeholder="Sök event tips..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                />
-              </div>
-            </div>
-
-            {/* Status Filter */}
-            <div className="md:w-48">
-              <select
-                value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value as EventTipStatus | 'all')}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              >
-                <option value="all">Alla statusar</option>
-                <option value="pending">Väntar ({tips.filter(t => t.status === 'pending').length})</option>
-                <option value="reviewed">Granskad</option>
-                <option value="approved">Godkänd</option>
-                <option value="rejected">Avböjd</option>
-                <option value="converted">Konverterad</option>
-              </select>
-            </div>
-          </div>
-        </div>
-
-        {/* Tips List */}
-        <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-          {loading ? (
-            <div className="text-center py-12">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
-            </div>
-          ) : filteredTips.length === 0 ? (
-            <div className="text-center py-12">
-              <AlertCircle className="mx-auto h-12 w-12 text-gray-400 mb-4" />
-              <div className="text-gray-500 text-lg">
-                {tips.length === 0 ? 'Inga event tips ännu' : 'Inga tips matchar sökningen'}
-              </div>
-            </div>
-          ) : (
-            <>
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead className="bg-gray-50 border-b">
-                    <tr>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Event
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Datum
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Plats
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Inlämnare
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Status
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Åtgärder
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody className="bg-white divide-y divide-gray-200">
-                    {filteredTips.map((tip) => (
-                      <tr key={tip.id} className="hover:bg-gray-50">
-                        <td className="px-6 py-4">
-                          <div className="font-medium text-gray-900">{tip.event_name}</div>
-                          {tip.categories && tip.categories.length > 0 && (
-                            <div className="text-sm text-gray-500 mt-1">
-                              {tip.categories.join(', ')}
-                            </div>
-                          )}
-                        </td>
-                        <td className="px-6 py-4">
-                          <div className="text-gray-900">
-                            {tip.date_time ? formatDate(tip.date_time) : tip.event_date || '-'}
-                          </div>
-                        </td>
-                        <td className="px-6 py-4">
-                          <div className="text-gray-900">{tip.event_location || '-'}</div>
-                          {tip.venue_name && (
-                            <div className="text-sm text-gray-500">{tip.venue_name}</div>
-                          )}
-                        </td>
-                        <td className="px-6 py-4">
-                          <div className="text-gray-900">{tip.submitter_email}</div>
-                          {tip.submitter_name && (
-                            <div className="text-sm text-gray-500">{tip.submitter_name}</div>
-                          )}
-                        </td>
-                        <td className="px-6 py-4">
-                          <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor(tip.status)}`}>
-                            {getStatusText(tip.status)}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4">
-                          <Link
-                            href={`/admin/tips/${tip.id}`}
-                            className="inline-flex items-center px-3 py-1 text-sm text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded"
-                          >
-                            <Eye className="h-4 w-4 mr-1" />
-                            Visa
-                          </Link>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-
-              {/* Pagination */}
-              {totalPages > 1 && (
-                <div className="bg-gray-50 px-4 py-3 flex items-center justify-between border-t border-gray-200">
-                  <div className="text-sm text-gray-700">
-                    Visar {((page - 1) * limit) + 1} till {Math.min(page * limit, total)} av {total} tips
-                  </div>
-                  <div className="flex space-x-2">
-                    <button
-                      onClick={() => setPage(p => Math.max(1, p - 1))}
-                      disabled={page === 1}
-                      className="px-3 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50"
-                    >
-                      Föregående
-                    </button>
-                    <button
-                      onClick={() => setPage(p => Math.min(totalPages, p + 1))}
-                      disabled={page === totalPages}
-                      className="px-3 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50"
-                    >
-                      Nästa
-                    </button>
-                  </div>
-                </div>
-              )}
-            </>
-          )}
-        </div>
+      <div className="flex flex-wrap items-center gap-2">
+        <Segmented items={STATUSES.map((s) => ({ value: s.value, label: s.label, count: counts[s.value] ?? null }))} value={state.status} onChange={(v) => set({ status: v })} />
+        <SearchInput value={state.q} onChange={(v) => set({ q: v })} placeholder="Sök namn, plats, inlämnare…" className="w-72" />
       </div>
-    </ProtectedLayout>
+
+      {error ? (
+        <ErrorState title="Kunde inte hämta tips" description={error} onRetry={refresh} />
+      ) : (
+        <DataTable
+          columns={columns}
+          rows={pageRows}
+          rowKey={(t) => t.id}
+          loading={loading}
+          selectable
+          selected={selected}
+          onSelectedChange={setSelected}
+          rowHref={(t) => `/admin/tips/${t.id}`}
+          onRowClick={(t) => router.push(`/admin/tips/${t.id}`)}
+          emptyState={
+            <EmptyState
+              icon={<Lightbulb />}
+              title={state.q ? 'Inga tips matchar sökningen' : 'Inga tips här'}
+              description={state.status === 'pending' ? 'Alla inkomna tips är hanterade.' : undefined}
+            />
+          }
+          footer={<Pagination page={page} pageSize={PAGE_SIZE} total={filtered.length} onPageChange={(p) => set({ page: String(p) }, { resetPage: false })} itemLabel="tips" />}
+        />
+      )}
+
+      <BulkBar count={selected.size} onClear={() => setSelected(new Set())}>
+        <BulkButton primary disabled={busy} onClick={() => doReviewed(selectedIds)}>
+          Markera granskade
+        </BulkButton>
+        <BulkButton danger disabled={busy} onClick={() => { setRejectTarget(selectedIds); setRejectReason('') }}>
+          Avvisa
+        </BulkButton>
+      </BulkBar>
+
+      <Dialog open={!!rejectTarget} onOpenChange={(o) => !o && setRejectTarget(null)}>
+        <DialogContent
+          size="sm"
+          title={rejectTarget && rejectTarget.length > 1 ? `Avvisa ${rejectTarget.length} tips` : 'Avvisa tips'}
+          description="Anledningen loggas och används inte i något utskick."
+          footer={
+            <>
+              <Button variant="ghost" onClick={() => setRejectTarget(null)}>Avbryt</Button>
+              <Button variant="destructive" loading={busy} onClick={doReject}>Avvisa</Button>
+            </>
+          }
+        >
+          <Field label="Anledning" htmlFor="reject-reason" help="Valfritt">
+            <Textarea id="reject-reason" autoFocus value={rejectReason} onChange={(e) => setRejectReason(e.target.value)} placeholder="T.ex. dublett, utanför Varberg, otillräcklig info…" />
+          </Field>
+        </DialogContent>
+      </Dialog>
+    </>
   )
 }
+
+export type { EventTipStatus }

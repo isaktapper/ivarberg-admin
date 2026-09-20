@@ -5,7 +5,7 @@ function Card({ className, ...props }: React.ComponentProps<"div">) {
   return <div data-slot="card" className={cn("rounded-[12px] border border-line bg-white", className)} {...props} />
 }
 
-function CardHeader({ className, title, description, actions, children, ...props }: React.ComponentProps<"div"> & { title?: React.ReactNode; description?: React.ReactNode; actions?: React.ReactNode }) {
+function CardHeader({ className, title, description, actions, children, ...props }: Omit<React.ComponentProps<"div">, "title"> & { title?: React.ReactNode; description?: React.ReactNode; actions?: React.ReactNode }) {
   return (
     <div data-slot="card-header" className={cn("flex items-start justify-between gap-4 border-b border-line px-5 py-4", className)} {...props}>
       <div className="flex min-w-0 flex-col gap-0.5">

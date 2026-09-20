@@ -5,25 +5,24 @@
  * Godkännandet sker på /instagram/approve/<token> (länk härifrån eller i
  * ntfy-notisen).
  */
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
+import { ExternalLink, Image as ImageIcon, RefreshCw } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
-import ProtectedLayout from '@/components/ProtectedLayout'
 import { InstagramPost } from '@/types/database'
-import { CheckCircle, Clock, ExternalLink, Instagram, RefreshCw, SkipForward, XCircle } from 'lucide-react'
+import { PageHeader } from '@/components/ui/page-header'
+import { Button } from '@/components/ui/button'
+import { Card, CardBody } from '@/components/ui/card'
+import { StatusBadge } from '@/components/ui/status-badge'
+import { DataTable, type Column } from '@/components/ui/data-table'
+import { EmptyState, ErrorState, Skeleton } from '@/components/ui/states'
+import { formatDayYear, formatTime } from '@/lib/format'
 
 type Row = InstagramPost & { event?: { name: string } | null }
 
-const STATUS: Record<InstagramPost['status'], { label: string; className: string; Icon: typeof Clock }> = {
-  pending: { label: 'Väntar på godkännande', className: 'bg-amber-100 text-amber-800', Icon: Clock },
-  published: { label: 'Publicerad', className: 'bg-green-100 text-green-800', Icon: CheckCircle },
-  skipped: { label: 'Överhoppad', className: 'bg-gray-100 text-gray-700', Icon: SkipForward },
-  failed: { label: 'Misslyckad', className: 'bg-red-100 text-red-800', Icon: XCircle },
-}
-
 const SOURCE: Record<string, string> = {
   manual: 'godkänd på sidan',
-  ntfy: 'godkänd i notisen',
+  ntfy: 'godkänd via ntfy',
   auto: 'auto-publicerad',
   direct: 'direktpublicerad',
 }
@@ -31,122 +30,114 @@ const SOURCE: Record<string, string> = {
 export default function InstagramPage() {
   const [rows, setRows] = useState<Row[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
-  async function load() {
+  const load = useCallback(async () => {
     setLoading(true)
-    const { data } = await supabase
-      .from('instagram_posts')
-      .select('*, event:events(name)')
-      .order('post_date', { ascending: false })
-      .limit(30)
+    setError(null)
+    const { data, error } = await supabase.from('instagram_posts').select('*, event:events(name)').order('post_date', { ascending: false }).limit(30)
+    if (error) setError(error.message)
     setRows((data as Row[]) || [])
     setLoading(false)
-  }
+  }, [])
 
   useEffect(() => {
     load()
-  }, [])
+  }, [load])
 
-  const today = rows[0]
+  const todayKey = new Date().toLocaleDateString('sv-SE', { timeZone: 'Europe/Stockholm' })
+  const latest = rows[0]
+  const isToday = latest?.post_date === todayKey
+  const thumb = latest ? latest.slide_image_urls?.[0] || latest.proxied_image_url || latest.image_url : null
+
+  const columns: Column<Row>[] = [
+    { key: 'date', header: 'Datum', width: '140px', cell: (r) => <span className="font-mono text-xs">{formatDayYear(r.post_date)}</span> },
+    { key: 'status', header: 'Status', width: '120px', cell: (r) => <StatusBadge domain="instagram" value={r.status} /> },
+    {
+      key: 'event',
+      header: 'Huvudevent',
+      width: 'minmax(0,1fr)',
+      cell: (r) => <span className="block truncate">{r.event?.name ?? <span className="text-ink-muted">{r.error ?? '–'}</span>}</span>,
+    },
+    { key: 'slides', header: 'Slides', width: '70px', cell: (r) => <span className="font-mono text-xs text-ink-soft">{r.slide_image_urls?.length ?? (r.status === 'pending' ? '–' : 0)}</span> },
+    {
+      key: 'posted',
+      header: 'Publicerad',
+      width: '200px',
+      cell: (r) => (
+        <span className="truncate text-xs text-ink-soft">
+          {r.posted_at ? formatTime(r.posted_at) : '–'}
+          {r.approval_source ? ` · ${SOURCE[r.approval_source] ?? r.approval_source}` : ''}
+        </span>
+      ),
+    },
+    {
+      key: 'open',
+      header: '',
+      width: '90px',
+      align: 'right',
+      cell: (r) =>
+        r.approval_token ? (
+          <Link href={`/instagram/approve/${r.approval_token}`} className="inline-flex items-center gap-1 text-[13px] font-medium text-sea hover:text-sea-dark">
+            Öppna <ExternalLink className="size-3.5" />
+          </Link>
+        ) : null,
+    },
+  ]
 
   return (
-    <ProtectedLayout>
-      <div className="space-y-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
-              <Instagram className="size-6" /> Instagram
-            </h1>
-            <p className="text-gray-600">
-              Dagliga posten &quot;Det här händer i Varberg idag&quot;. Förslaget skapas på morgonen och skickas som ntfy-notis - godkänn, ändra eller hoppa över.
-            </p>
-          </div>
-          <button onClick={load} className="inline-flex items-center gap-2 text-sm text-gray-700 border rounded-md px-3 py-2 bg-white hover:bg-gray-50">
-            <RefreshCw className={`size-4 ${loading ? 'animate-spin' : ''}`} /> Uppdatera
-          </button>
-        </div>
+    <>
+      <PageHeader
+        title="Instagram"
+        description="Dagliga posten ”Det här händer i Varberg idag”. Förslaget skapas på morgonen och skickas som ntfy-notis: godkänn, ändra eller hoppa över."
+        actions={
+          <Button variant="secondary" onClick={load} disabled={loading}>
+            <RefreshCw className={loading ? 'animate-spin' : ''} />
+            Uppdatera
+          </Button>
+        }
+      />
 
-        {today && (
-          <div className="rounded-xl border bg-white p-4 flex flex-col sm:flex-row gap-4">
-            {today.slide_image_urls?.[0] || today.image_url ? (
+      {error ? <ErrorState title="Kunde inte hämta Instagram-poster" description={error} onRetry={load} /> : null}
+
+      {loading && !latest ? (
+        <Skeleton className="h-44 rounded-[12px]" />
+      ) : latest ? (
+        <Card>
+          <CardBody className="flex flex-col gap-4 sm:flex-row">
+            {thumb ? (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={today.slide_image_urls?.[0] || today.image_url || ''} alt="" className="w-full sm:w-40 aspect-square object-cover rounded-lg bg-gray-100" />
-            ) : null}
-            <div className="flex-1 space-y-2">
-              <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-sm text-gray-500">Senaste: {today.post_date}</span>
-                <StatusBadge status={today.status} />
-                {today.approval_source && <span className="text-xs text-gray-500">({SOURCE[today.approval_source] ?? today.approval_source})</span>}
+              <img src={thumb} alt="" className="aspect-square w-full shrink-0 rounded-[10px] bg-sea-light object-cover sm:size-40" />
+            ) : (
+              <div className="flex aspect-square w-full shrink-0 items-center justify-center rounded-[10px] bg-sea-light text-sea sm:size-40">
+                <ImageIcon className="size-8" strokeWidth={1.5} />
               </div>
-              <p className="font-medium text-gray-900">{today.event?.name ?? (today.status === 'skipped' ? today.error : '–')}</p>
-              {today.caption && <p className="text-sm text-gray-600 line-clamp-3 whitespace-pre-line">{today.caption}</p>}
-              {today.status === 'failed' && today.error && <p className="text-sm text-red-700">{today.error}</p>}
-              {today.approval_token && (
-                <Link
-                  href={`/instagram/approve/${today.approval_token}`}
-                  className="inline-flex items-center gap-1 text-sm font-medium text-pink-700 hover:underline"
-                >
-                  {today.status === 'pending' ? 'Granska och godkänn' : 'Öppna godkännandesidan'} <ExternalLink className="size-4" />
-                </Link>
-              )}
+            )}
+            <div className="flex min-w-0 flex-1 flex-col gap-2">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-ink-muted">{isToday ? 'I dag' : 'Senaste'} · {formatDayYear(latest.post_date)}</span>
+                <StatusBadge domain="instagram" value={latest.status} />
+                {latest.approval_source ? <span className="text-xs text-ink-muted">{SOURCE[latest.approval_source] ?? latest.approval_source}</span> : null}
+              </div>
+              <span className="font-display text-base font-semibold text-ink">{latest.event?.name ?? (latest.status === 'skipped' ? latest.error : 'Inget huvudevent')}</span>
+              {latest.caption ? <p className="line-clamp-4 whitespace-pre-line text-[13px] leading-relaxed text-ink-soft">{latest.caption}</p> : null}
+              {latest.status === 'failed' && latest.error ? <p className="text-[13px] text-poppy">{latest.error}</p> : null}
+              <div className="mt-auto flex flex-wrap items-center gap-3 pt-1 text-[13px]">
+                <span className="font-mono text-xs text-ink-muted">
+                  {latest.slide_image_urls?.length ?? 0} slides{latest.posted_at ? ` · publicerad ${formatTime(latest.posted_at)}` : ''}
+                </span>
+                {latest.approval_token ? (
+                  <Link href={`/instagram/approve/${latest.approval_token}`} className="inline-flex items-center gap-1 font-medium text-sea hover:text-sea-dark">
+                    {latest.status === 'pending' ? 'Granska och godkänn' : 'Öppna godkännandesidan'} <ExternalLink className="size-3.5" />
+                  </Link>
+                ) : null}
+              </div>
             </div>
-          </div>
-        )}
+          </CardBody>
+        </Card>
+      ) : null}
 
-        <div className="rounded-xl border bg-white overflow-hidden">
-          <table className="w-full text-sm">
-            <thead className="bg-gray-50 text-left text-gray-600">
-              <tr>
-                <th className="px-4 py-2 font-medium">Datum</th>
-                <th className="px-4 py-2 font-medium">Status</th>
-                <th className="px-4 py-2 font-medium">Huvudevent</th>
-                <th className="px-4 py-2 font-medium hidden md:table-cell">Slides</th>
-                <th className="px-4 py-2 font-medium hidden md:table-cell">Publicerad</th>
-                <th className="px-4 py-2"></th>
-              </tr>
-            </thead>
-            <tbody className="divide-y">
-              {rows.map((r) => (
-                <tr key={r.id} className="hover:bg-gray-50">
-                  <td className="px-4 py-2 whitespace-nowrap text-gray-900">{r.post_date}</td>
-                  <td className="px-4 py-2">
-                    <StatusBadge status={r.status} />
-                  </td>
-                  <td className="px-4 py-2 text-gray-900">
-                    {r.event?.name ?? <span className="text-gray-500">{r.error ?? '–'}</span>}
-                  </td>
-                  <td className="px-4 py-2 hidden md:table-cell text-gray-600">{r.slide_image_urls?.length ?? (r.status === 'pending' ? '–' : 0)}</td>
-                  <td className="px-4 py-2 hidden md:table-cell text-gray-600 whitespace-nowrap">
-                    {r.posted_at ? new Date(r.posted_at).toLocaleTimeString('sv-SE', { hour: '2-digit', minute: '2-digit' }) : '–'}
-                    {r.approval_source ? ` · ${SOURCE[r.approval_source] ?? r.approval_source}` : ''}
-                  </td>
-                  <td className="px-4 py-2 text-right">
-                    {r.approval_token && (
-                      <Link href={`/instagram/approve/${r.approval_token}`} className="text-pink-700 hover:underline inline-flex items-center gap-1">
-                        Öppna <ExternalLink className="size-3.5" />
-                      </Link>
-                    )}
-                  </td>
-                </tr>
-              ))}
-              {!loading && rows.length === 0 && (
-                <tr>
-                  <td colSpan={6} className="px-4 py-8 text-center text-gray-500">Inga poster ännu</td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </ProtectedLayout>
-  )
-}
-
-function StatusBadge({ status }: { status: InstagramPost['status'] }) {
-  const s = STATUS[status] ?? STATUS.failed
-  return (
-    <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${s.className}`}>
-      <s.Icon className="size-3.5" /> {s.label}
-    </span>
+      <DataTable columns={columns} rows={rows} rowKey={(r) => r.id} loading={loading} emptyState={<EmptyState title="Inga poster ännu" description="Första förslaget skapas av morgonjobbet." />} />
+    </>
   )
 }

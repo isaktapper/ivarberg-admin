@@ -1,1311 +1,1083 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import { supabase } from '@/lib/supabase'
-import { fetchAllRows } from '@/lib/supabase-fetch-all'
-import { Event, EventStatus, EventCategory, Organizer } from '@/types/database'
-import ProtectedLayout from '@/components/ProtectedLayout'
-import OrganizerSearchableDropdown from '@/components/OrganizerSearchableDropdown'
-import { 
-  Plus, 
-  Search, 
-  Edit, 
-  Trash2, 
-  Eye,
-  Star,
-  Calendar,
-  MapPin,
-  User,
-  CheckSquare,
-  Square,
-  Settings,
-  X,
-  ChevronDown,
-  ChevronUp
-} from 'lucide-react'
+import * as React from 'react'
 import Link from 'next/link'
-import { formatDate, getFrontendUrl } from '@/lib/utils'
+import { Suspense } from 'react'
+import { ChevronDown, Columns3, Download, Plus, Star, Calendar, MoreHorizontal, Search, X, ExternalLink, Pencil, Link2, Trash2, Check } from 'lucide-react'
+import { supabase } from '@/lib/supabase'
+import { getFrontendUrl, cn } from '@/lib/utils'
+import { formatDay, formatTime, toLocalDateInput } from '@/lib/format'
+import { getStatus, statusOptions, toneClasses } from '@/lib/status'
+import { CATEGORIES, AREAS, SCRAPER_SOURCES } from '@/lib/constants'
+import { useUrlState } from '@/hooks/use-url-state'
+import { useLocalStorage } from '@/hooks/use-local-storage'
+import type { Event, EventCategory, EventStatus } from '@/types/database'
+import { PageHeader } from '@/components/ui/page-header'
+import { Button } from '@/components/ui/button'
+import { Tabs } from '@/components/ui/tabs'
+import { FilterBar, FilterChip, SelectFilter, MultiFilter } from '@/components/ui/filter-chip'
+import { SearchInput } from '@/components/ui/search-input'
+import { DataTable, TitleCell, Thumb, type Column, type SortState } from '@/components/ui/data-table'
+import { CategoryChip, QualityDot } from '@/components/ui/status-badge'
+import { Pagination } from '@/components/ui/pagination'
+import { BulkBar, BulkButton } from '@/components/ui/bulk-bar'
+import { Dialog, DialogContent } from '@/components/ui/dialog'
+import { CategoryPicker } from '@/components/ui/category-picker'
+import { Input, Field } from '@/components/ui/input'
+import { LoadingState, EmptyState, ErrorState } from '@/components/ui/states'
+import { useToast } from '@/components/ui/toast'
+import { useConfirm } from '@/components/ui/confirm-dialog'
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuCheckboxItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+} from '@/components/ui/dropdown-menu'
 
-export default function EventsPage() {
-  const [events, setEvents] = useState<Event[]>([])
-  const [filteredEvents, setFilteredEvents] = useState<Event[]>([])
-  const [loading, setLoading] = useState(true)
-  const [activeTab, setActiveTab] = useState<'events' | 'tips'>('events')
-  const [searchTerm, setSearchTerm] = useState('')
-  const [statusFilter, setStatusFilter] = useState<EventStatus | 'all'>('all')
-  const [categoryFilter, setCategoryFilter] = useState<EventCategory | 'all'>('all')
-  const [organizerFilter, setOrganizerFilter] = useState<number | 'all'>('all')
-  const [dateFromFilter, setDateFromFilter] = useState('')
-  const [dateToFilter, setDateToFilter] = useState('')
-  const [dateAddedFromFilter, setDateAddedFromFilter] = useState('')
-  const [dateAddedToFilter, setDateAddedToFilter] = useState('')
-  const [featuredFilter, setFeaturedFilter] = useState<'all' | 'featured' | 'not-featured'>('all')
-  const [selectedEvents, setSelectedEvents] = useState<Set<number>>(new Set())
-  const [bulkStatus, setBulkStatus] = useState<EventStatus>('published')
-  const [bulkUpdating, setBulkUpdating] = useState(false)
-  
-  // Bulk edit modal state
-  const [showBulkEditModal, setShowBulkEditModal] = useState(false)
-  const [bulkEditCategory, setBulkEditCategory] = useState<EventCategory | ''>('')
-  const [bulkEditStatus, setBulkEditStatus] = useState<EventStatus | ''>('')
-  const [bulkEditOrganizer, setBulkEditOrganizer] = useState<number | ''>('')
-  const [organizers, setOrganizers] = useState<Organizer[]>([])
+// ---------------------------------------------------------------------------
+// Typer och konstanter
+// ---------------------------------------------------------------------------
 
-  // Column visibility state
-  const [visibleColumns, setVisibleColumns] = useState({
-    event: true,
-    date: true,
-    venue: true,
-    category: true,
-    status: true,
-    organizer: true,
-    created: true,
-    actions: true
-  })
-  const [showColumnSelector, setShowColumnSelector] = useState(false)
-  
-  // Filter visibility state
-  const [showFilters, setShowFilters] = useState(false)
+type View = 'kommande' | 'alla' | 'atgard' | 'utanbild' | 'okategoriserade' | 'passerade'
 
-  // Pagination
-  const [currentPage, setCurrentPage] = useState(1)
-  const itemsPerPage = 50
+const VIEWS: { value: View; label: string }[] = [
+  { value: 'kommande', label: 'Kommande' },
+  { value: 'alla', label: 'Alla' },
+  { value: 'atgard', label: 'Behöver åtgärd' },
+  { value: 'utanbild', label: 'Utan bild' },
+  { value: 'okategoriserade', label: 'Okategoriserade' },
+  { value: 'passerade', label: 'Passerade' },
+]
 
-  useEffect(() => {
-    fetchEvents()
-    fetchOrganizers()
-  }, [])
+const URL_DEFAULTS = {
+  view: 'kommande',
+  q: '',
+  status: '',
+  cats: '',
+  org: '',
+  area: '',
+  dateFrom: '',
+  dateTo: '',
+  addedFrom: '',
+  addedTo: '',
+  featured: '',
+  source: '',
+  sort: '',
+  dir: '',
+  page: '',
+  pageSize: '',
+}
 
-  useEffect(() => {
-    filterEvents()
-    setCurrentPage(1) // Reset till första sidan vid filtrering
-  }, [events, searchTerm, statusFilter, categoryFilter, organizerFilter, dateFromFilter, dateToFilter, dateAddedFromFilter, dateAddedToFilter, featuredFilter, activeTab]) // eslint-disable-line react-hooks/exhaustive-deps
+type ColumnKey = 'event' | 'date' | 'category' | 'status' | 'organizer' | 'quality' | 'source' | 'created' | 'actions'
 
-  const fetchEvents = async () => {
-    try {
-      // Paginerad hämtning - Supabase cappar vid 1000 rader per query,
-      // vilket gjorde att äldre events saknades i listan och totalsiffran
-      // fastnade på 1000
-      const data = await fetchAllRows<Event>((from, to) =>
-        supabase
-          .from('events')
-          .select(`
-            *,
-            organizer:organizers(name)
-          `)
-          .order('created_at', { ascending: false })
-          .order('id', { ascending: false })
-          .range(from, to)
-      )
+const COLUMN_LABELS: Record<ColumnKey, string> = {
+  event: 'Event',
+  date: 'Datum',
+  category: 'Kategori',
+  status: 'Status',
+  organizer: 'Arrangör',
+  quality: 'Kvalitet',
+  source: 'Källa',
+  created: 'Tillagt',
+  actions: 'Åtgärder',
+}
 
-      setEvents(data || [])
-    } catch (error) {
-      console.error('Error fetching events:', error)
-    } finally {
-      setLoading(false)
-    }
-  }
+const DEFAULT_COLUMNS: Record<ColumnKey, boolean> = {
+  event: true,
+  date: true,
+  category: true,
+  status: true,
+  organizer: true,
+  quality: true,
+  source: true,
+  created: false,
+  actions: true,
+}
 
-  const fetchOrganizers = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('organizers')
-        .select('*')
-        .in('status', ['active', 'pending']) // Visa endast aktiva och pending arrangörer
-        .order('name')
+const SORTABLE: Record<string, string> = {
+  date: 'date_time',
+  quality: 'quality_score',
+  created: 'created_at',
+  event: 'name',
+}
 
-      if (error) throw error
-      setOrganizers(data || [])
-    } catch (error) {
-      console.error('Error fetching organizers:', error)
-    }
-  }
+interface OrganizerLite {
+  id: number
+  name: string
+  status: string
+  scraper_source: string | null
+}
 
-  const filterEvents = () => {
-    let filtered = events
+type EventRow = Event & { organizer?: { id: number; name: string; scraper_source: string | null } | null }
 
-    // Tab-baserad filtrering
-    if (activeTab === 'tips') {
-      // Tips-fliken: visa endast draft events
-      filtered = filtered.filter(event => event.status === 'draft')
-    } else {
-      // Events-fliken: visa alla utom draft
-      filtered = filtered.filter(event => event.status !== 'draft')
-    }
+// ---------------------------------------------------------------------------
+// Hjälpare
+// ---------------------------------------------------------------------------
 
-    if (searchTerm) {
-      filtered = filtered.filter(event =>
-        event.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        event.location.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        event.venue_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        event.description?.toLowerCase().includes(searchTerm.toLowerCase())
-      )
-    }
+function startOfDay(d: Date) {
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate())
+}
 
-    if (statusFilter !== 'all' && activeTab === 'events') {
-      filtered = filtered.filter(event => event.status === statusFilter)
-    }
+function addDays(d: Date, n: number) {
+  const out = new Date(d)
+  out.setDate(out.getDate() + n)
+  return out
+}
 
-    if (categoryFilter !== 'all') {
-      filtered = filtered.filter(event => {
-        // Kolla nya multi-category systemet först
-        if (event.categories && event.categories.length > 0) {
-          return event.categories.includes(categoryFilter);
-        }
-        // Fallback till gamla systemet
-        return event.category === categoryFilter;
-      })
-    }
+function endOfDayIso(dateStr: string) {
+  const d = new Date(dateStr)
+  d.setHours(23, 59, 59, 999)
+  return d.toISOString()
+}
 
-    // Organizer filter
-    if (organizerFilter !== 'all') {
-      filtered = filtered.filter(event => event.organizer_id === organizerFilter)
-    }
+function startOfDayIso(dateStr: string) {
+  const d = new Date(dateStr)
+  d.setHours(0, 0, 0, 0)
+  return d.toISOString()
+}
 
-    // Event datum-filter (date_time)
-    if (dateFromFilter) {
-      filtered = filtered.filter(event => {
-        const eventDate = new Date(event.date_time)
-        const fromDate = new Date(dateFromFilter)
-        return eventDate >= fromDate
-      })
-    }
+function sourceOf(row: EventRow): string {
+  return row.organizer?.scraper_source ?? 'Manuell'
+}
 
-    if (dateToFilter) {
-      filtered = filtered.filter(event => {
-        const eventDate = new Date(event.date_time)
-        const toDate = new Date(dateToFilter)
-        // Lägg till 23:59:59 på toDate för att inkludera hela dagen
-        toDate.setHours(23, 59, 59, 999)
-        return eventDate <= toDate
-      })
-    }
+function csvEscape(v: unknown): string {
+  const s = v == null ? '' : String(v)
+  return /[";\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s
+}
 
-    // Date Added filter (created_at)
-    if (dateAddedFromFilter) {
-      filtered = filtered.filter(event => {
-        const eventDate = new Date(event.created_at)
-        const fromDate = new Date(dateAddedFromFilter)
-        return eventDate >= fromDate
-      })
-    }
+// ---------------------------------------------------------------------------
+// Arrangörsväljare (lokal, sökbar)
+// ---------------------------------------------------------------------------
 
-    if (dateAddedToFilter) {
-      filtered = filtered.filter(event => {
-        const eventDate = new Date(event.created_at)
-        const toDate = new Date(dateAddedToFilter)
-        // Lägg till 23:59:59 på toDate för att inkludera hela dagen
-        toDate.setHours(23, 59, 59, 999)
-        return eventDate <= toDate
-      })
-    }
-
-    // Featured filter
-    if (featuredFilter === 'featured') {
-      filtered = filtered.filter(event => event.featured === true)
-    } else if (featuredFilter === 'not-featured') {
-      filtered = filtered.filter(event => event.featured === false)
-    }
-
-    setFilteredEvents(filtered)
-  }
-
-  const deleteEvent = async (id: number) => {
-    if (!confirm('Är du säker på att du vill ta bort detta event?')) {
-      return
-    }
-
-    try {
-      const { error } = await supabase
-        .from('events')
-        .delete()
-        .eq('id', id)
-
-      if (error) throw error
-      
-      setEvents(events.filter(event => event.id !== id))
-    } catch (error) {
-      console.error('Error deleting event:', error)
-      alert('Fel vid borttagning av event')
-    }
-  }
-
-  const toggleFeatured = async (id: number, currentFeatured: boolean) => {
-    try {
-      const { error } = await supabase
-        .from('events')
-        .update({ featured: !currentFeatured })
-        .eq('id', id)
-
-      if (error) throw error
-      
-      setEvents(events.map(event => 
-        event.id === id 
-          ? { ...event, featured: !currentFeatured }
-          : event
-      ))
-    } catch (error) {
-      console.error('Error updating featured status:', error)
-      alert('Fel vid uppdatering av featured status')
-    }
-  }
-
-  const toggleSelectAll = () => {
-    if (selectedEvents.size === filteredEvents.length) {
-      setSelectedEvents(new Set())
-    } else {
-      setSelectedEvents(new Set(filteredEvents.map(e => e.id)))
-    }
-  }
-
-  const toggleSelectEvent = (id: number) => {
-    const newSelected = new Set(selectedEvents)
-    if (newSelected.has(id)) {
-      newSelected.delete(id)
-    } else {
-      newSelected.add(id)
-    }
-    setSelectedEvents(newSelected)
-  }
-
-  const bulkUpdateStatus = async () => {
-    if (selectedEvents.size === 0) {
-      alert('Välj minst ett event')
-      return
-    }
-
-    if (!confirm(`Är du säker på att du vill ändra status till "${getStatusText(bulkStatus)}" för ${selectedEvents.size} events?`)) {
-      return
-    }
-
-    setBulkUpdating(true)
-    try {
-      const { error } = await supabase
-        .from('events')
-        .update({ status: bulkStatus })
-        .in('id', Array.from(selectedEvents))
-
-      if (error) throw error
-      
-      // Uppdatera lokalt state
-      setEvents(events.map(event => 
-        selectedEvents.has(event.id)
-          ? { ...event, status: bulkStatus }
-          : event
-      ))
-      
-      setSelectedEvents(new Set())
-      alert(`${selectedEvents.size} events uppdaterade!`)
-    } catch (error) {
-      console.error('Error bulk updating events:', error)
-      alert('Fel vid uppdatering av events')
-    } finally {
-      setBulkUpdating(false)
-    }
-  }
-
-  const getStatusColor = (status: EventStatus) => {
-    switch (status) {
-      case 'published':
-        return 'bg-green-100 text-green-800'
-      case 'draft':
-        return 'bg-gray-100 text-gray-800'
-      case 'pending_approval':
-        return 'bg-yellow-100 text-yellow-800'
-      case 'cancelled':
-        return 'bg-red-100 text-red-800'
-      default:
-        return 'bg-gray-100 text-gray-800'
-    }
-  }
-
-  const getStatusText = (status: EventStatus) => {
-    switch (status) {
-      case 'published':
-        return 'Publicerad'
-      case 'draft':
-        return 'Utkast'
-      case 'pending_approval':
-        return 'Väntar godkännande'
-      case 'cancelled':
-        return 'Avbruten'
-      default:
-        return status
-    }
-  }
-
-  // Bulk edit functions
-  const bulkDeleteEvents = async () => {
-    if (selectedEvents.size === 0) {
-      alert('Välj minst ett event')
-      return
-    }
-
-    const count = selectedEvents.size
-    if (!confirm(`Är du säker på att du vill ta bort ${count} event${count > 1 ? 's' : ''}? Detta går inte att ångra.`)) {
-      return
-    }
-
-    setBulkUpdating(true)
-    try {
-      const { error } = await supabase
-        .from('events')
-        .delete()
-        .in('id', Array.from(selectedEvents))
-
-      if (error) throw error
-      
-      // Ta bort från lokalt state
-      setEvents(events.filter(event => !selectedEvents.has(event.id)))
-      
-      setSelectedEvents(new Set())
-      alert(`${count} event${count > 1 ? 's' : ''} borttagna!`)
-    } catch (error) {
-      console.error('Error bulk deleting events:', error)
-      alert('Fel vid borttagning av events')
-    } finally {
-      setBulkUpdating(false)
-    }
-  }
-
-  const handleBulkEdit = () => {
-    if (selectedEvents.size === 0) {
-      alert('Välj events att redigera')
-      return
-    }
-    setShowBulkEditModal(true)
-  }
-
-  const handleBulkEditSubmit = async () => {
-    if (selectedEvents.size === 0) return
-
-    setBulkUpdating(true)
-    try {
-      const updateData: any = {}
-      
-      if (bulkEditCategory) {
-        updateData.category = bulkEditCategory; // Behåll första kategorin som huvudkategori
-        updateData.categories = [bulkEditCategory]; // Sätt som array för nya systemet
-      }
-      if (bulkEditStatus) updateData.status = bulkEditStatus
-      if (bulkEditOrganizer) updateData.organizer_id = bulkEditOrganizer
-
-      if (Object.keys(updateData).length === 0) {
-        alert('Välj minst ett fält att uppdatera')
-        return
-      }
-
-      const { error } = await supabase
-        .from('events')
-        .update(updateData)
-        .in('id', Array.from(selectedEvents))
-
-      if (error) throw error
-      
-      // Uppdatera lokalt state
-      setEvents(events.map(event => 
-        selectedEvents.has(event.id)
-          ? { ...event, ...updateData }
-          : event
-      ))
-      
-      setSelectedEvents(new Set())
-      setShowBulkEditModal(false)
-      setBulkEditCategory('')
-      setBulkEditStatus('')
-      setBulkEditOrganizer('')
-      alert(`${selectedEvents.size} events uppdaterade!`)
-    } catch (error) {
-      console.error('Error bulk updating events:', error)
-      alert('Fel vid uppdatering av events')
-    } finally {
-      setBulkUpdating(false)
-    }
-  }
-
-  const closeBulkEditModal = () => {
-    setShowBulkEditModal(false)
-    setBulkEditCategory('')
-    setBulkEditStatus('')
-    setBulkEditOrganizer('')
-  }
-
-  // Column selector functions
-  const toggleColumn = (column: keyof typeof visibleColumns) => {
-    setVisibleColumns(prev => ({
-      ...prev,
-      [column]: !prev[column]
-    }))
-  }
-
-  const toggleAllColumns = () => {
-    const allVisible = Object.values(visibleColumns).every(v => v)
-    setVisibleColumns({
-      event: !allVisible,
-      date: !allVisible,
-      venue: !allVisible,
-      category: !allVisible,
-      status: !allVisible,
-      organizer: !allVisible,
-      created: !allVisible,
-      actions: !allVisible
-    })
-  }
-
-  // Clear all filters
-  const clearAllFilters = () => {
-    setSearchTerm('')
-    setStatusFilter('all')
-    setCategoryFilter('all')
-    setOrganizerFilter('all')
-    setDateFromFilter('')
-    setDateToFilter('')
-    setDateAddedFromFilter('')
-    setDateAddedToFilter('')
-    setFeaturedFilter('all')
-  }
-  
-  // Pagination calculations
-  const totalPages = Math.ceil(filteredEvents.length / itemsPerPage)
-  const startIndex = (currentPage - 1) * itemsPerPage
-  const endIndex = startIndex + itemsPerPage
-  const paginatedEvents = filteredEvents.slice(startIndex, endIndex)
-
-  if (loading) {
-    return (
-      <ProtectedLayout>
-        <div className="flex items-center justify-center h-64">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-        </div>
-      </ProtectedLayout>
-    )
-  }
+function OrganizerPicker({
+  organizers,
+  value,
+  onChange,
+  placeholder = 'Välj arrangör…',
+  autoFocus,
+}: {
+  organizers: OrganizerLite[]
+  value: number | null
+  onChange: (id: number | null) => void
+  placeholder?: string
+  autoFocus?: boolean
+}) {
+  const [q, setQ] = React.useState('')
+  const list = React.useMemo(() => {
+    const term = q.trim().toLowerCase()
+    return organizers.filter((o) => !term || o.name.toLowerCase().includes(term)).slice(0, 80)
+  }, [organizers, q])
+  const selected = organizers.find((o) => o.id === value)
 
   return (
-    <ProtectedLayout>
-      <div className="space-y-6">
-        {/* Header */}
-        <div className="flex justify-between items-center">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">Events</h1>
-            <p className="mt-1 text-sm text-gray-500">
-              Hantera alla dina events
-            </p>
-          </div>
-          <div className="flex items-center space-x-3">
+    <div className="flex flex-col gap-2">
+      <div className="flex h-9 items-center gap-2 rounded-[8px] border border-line bg-white px-3 focus-within:border-sea focus-within:ring-2 focus-within:ring-sea/20">
+        <Search className="size-[15px] text-ink-muted" />
+        <input
+          autoFocus={autoFocus}
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          placeholder={selected ? selected.name : placeholder}
+          className="min-w-0 flex-1 bg-transparent text-[13px] text-ink outline-none placeholder:text-ink-faint"
+        />
+        {selected ? (
+          <button type="button" aria-label="Rensa arrangör" onClick={() => onChange(null)} className="text-ink-faint hover:text-ink">
+            <X className="size-3.5" />
+          </button>
+        ) : null}
+      </div>
+      <div className="thin-scroll max-h-56 overflow-y-auto rounded-[8px] border border-line">
+        {list.length === 0 ? (
+          <div className="px-3 py-3 text-center text-[13px] text-ink-muted">Ingen arrangör matchar</div>
+        ) : (
+          list.map((o) => (
             <button
-              onClick={() => setShowColumnSelector(!showColumnSelector)}
-              className="inline-flex items-center px-3 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-            >
-              <Settings className="w-4 h-4 mr-2" />
-              Kolumner
-            </button>
-            <Link
-              href="/events/new"
-              className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-            >
-              <Plus className="w-4 h-4 mr-2" />
-              Nytt Event
-            </Link>
-          </div>
-        </div>
-
-        {/* Tabs */}
-        <div className="border-b border-gray-200">
-          <nav className="-mb-px flex space-x-8">
-            <button
-              onClick={() => setActiveTab('events')}
-              className={`py-2 px-1 border-b-2 font-medium text-sm ${
-                activeTab === 'events'
-                  ? 'border-blue-500 text-blue-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-              }`}
-            >
-              Events ({events.filter(e => e.status !== 'draft').length})
-            </button>
-            <button
-              onClick={() => setActiveTab('tips')}
-              className={`py-2 px-1 border-b-2 font-medium text-sm ${
-                activeTab === 'tips'
-                  ? 'border-blue-500 text-blue-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-              }`}
-            >
-              Tips ({events.filter(e => e.status === 'draft').length})
-            </button>
-          </nav>
-        </div>
-
-        {/* Filters */}
-        <div className="bg-white rounded-lg shadow">
-          {/* Filter Header */}
-          <div 
-            className="flex items-center justify-between p-4 cursor-pointer hover:bg-gray-50 rounded-t-lg"
-            onClick={() => setShowFilters(!showFilters)}
-          >
-            <div className="flex items-center space-x-2">
-              <h3 className="text-lg font-medium text-gray-900">Filter</h3>
-              {/* Show active filter count */}
-              {(() => {
-                const activeFilters = [
-                  searchTerm,
-                  statusFilter !== 'all',
-                  categoryFilter !== 'all',
-                  organizerFilter !== 'all',
-                  featuredFilter !== 'all',
-                  dateFromFilter,
-                  dateToFilter,
-                  dateAddedFromFilter,
-                  dateAddedToFilter
-                ].filter(Boolean).length;
-                
-                return activeFilters > 0 && (
-                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                    {activeFilters} aktiv{activeFilters > 1 ? 'a' : ''}
-                  </span>
-                );
-              })()}
-            </div>
-            
-            <div className="flex items-center space-x-2">
-              {showFilters && (
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    clearAllFilters();
-                  }}
-                  className="text-sm text-blue-600 hover:text-blue-800 font-medium"
-                >
-                  Rensa alla
-                </button>
+              key={o.id}
+              type="button"
+              onClick={() => onChange(o.id)}
+              className={cn(
+                'flex w-full items-center gap-2 px-3 py-2 text-left text-[13px] hover:bg-sand-soft',
+                o.id === value ? 'bg-sea-lightest font-medium text-ink' : 'text-ink'
               )}
-              {showFilters ? (
-                <ChevronUp className="w-5 h-5 text-gray-400" />
-              ) : (
-                <ChevronDown className="w-5 h-5 text-gray-400" />
-              )}
-            </div>
-          </div>
-
-          {/* Collapsible Filter Content */}
-          {showFilters && (
-            <div className="px-4 pb-4 border-t border-gray-200">
-              {/* Row 1: Search, Status, Category, Featured, Organizer */}
-              <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-4 mt-4">
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-                  <input
-                    type="text"
-                    placeholder="Sök events..."
-                    className="pl-10 pr-4 py-2 w-full border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                  />
-                </div>
-
-                {activeTab === 'events' && (
-                  <select
-                    className="px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-                    value={statusFilter}
-                    onChange={(e) => setStatusFilter(e.target.value as EventStatus | 'all')}
-                  >
-                    <option value="all">Alla statusar</option>
-                    <option value="pending_approval">Väntar godkännande</option>
-                    <option value="published">Publicerad</option>
-                    <option value="cancelled">Avbruten</option>
-                  </select>
-                )}
-
-                <select
-                  className="px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-                  value={categoryFilter}
-                  onChange={(e) => setCategoryFilter(e.target.value as EventCategory | 'all')}
-                >
-                  <option value="all">Alla kategorier</option>
-                  <option value="Scen">Scen</option>
-                  <option value="Nattliv">Nattliv</option>
-                  <option value="Sport">Sport</option>
-                  <option value="Utställningar">Utställningar</option>
-                  <option value="Konst">Konst</option>
-                  <option value="Föreläsningar">Föreläsningar</option>
-                  <option value="Barn & Familj">Barn & Familj</option>
-                  <option value="Mat & Dryck">Mat & Dryck</option>
-                  <option value="Jul">Jul</option>
-                  <option value="Film & bio">Film & bio</option>
-                  <option value="Djur & Natur">Djur & Natur</option>
-                  <option value="Guidade visningar">Guidade visningar</option>
-                  <option value="Marknader">Marknader</option>
-                </select>
-
-                <select
-                  className="px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-                  value={featuredFilter}
-                  onChange={(e) => setFeaturedFilter(e.target.value as 'all' | 'featured' | 'not-featured')}
-                >
-                  <option value="all">Alla events</option>
-                  <option value="featured">Endast featured</option>
-                  <option value="not-featured">Ej featured</option>
-                </select>
-
-                <div className="flex-1">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Arrangör
-                  </label>
-                  <OrganizerSearchableDropdown
-                    organizers={organizers}
-                    value={organizerFilter === 'all' ? null : organizerFilter}
-                    onChange={(id) => setOrganizerFilter(id || 'all')}
-                    placeholder="Alla arrangörer"
-                    showStatus={true}
-                  />
-                </div>
-              </div>
-
-              {/* Row 2: Event Date Range */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Event datum från
-                  </label>
-                  <input
-                    type="date"
-                    className="px-3 py-2 w-full border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-                    value={dateFromFilter}
-                    onChange={(e) => setDateFromFilter(e.target.value)}
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Event datum till
-                  </label>
-                  <input
-                    type="date"
-                    className="px-3 py-2 w-full border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-                    value={dateToFilter}
-                    onChange={(e) => setDateToFilter(e.target.value)}
-                  />
-                </div>
-
-                <div className="flex items-end">
-                  <button
-                    onClick={() => {
-                      setDateFromFilter('')
-                      setDateToFilter('')
-                    }}
-                    className="px-3 py-2 text-sm text-gray-600 hover:text-gray-800 border border-gray-300 rounded-md hover:bg-gray-50"
-                  >
-                    Rensa datum
-                  </button>
-                </div>
-              </div>
-
-              {/* Row 3: Date Added Range */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Datum tillagt från
-                  </label>
-                  <input
-                    type="date"
-                    className="px-3 py-2 w-full border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-                    value={dateAddedFromFilter}
-                    onChange={(e) => setDateAddedFromFilter(e.target.value)}
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Datum tillagt till
-                  </label>
-                  <input
-                    type="date"
-                    className="px-3 py-2 w-full border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-                    value={dateAddedToFilter}
-                    onChange={(e) => setDateAddedToFilter(e.target.value)}
-                  />
-                </div>
-
-                <div className="flex items-end">
-                  <button
-                    onClick={() => {
-                      setDateAddedFromFilter('')
-                      setDateAddedToFilter('')
-                    }}
-                    className="px-3 py-2 text-sm text-gray-600 hover:text-gray-800 border border-gray-300 rounded-md hover:bg-gray-50"
-                  >
-                    Rensa datum tillagt
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* Column Selector */}
-        {showColumnSelector && (
-          <div className="bg-white p-4 rounded-lg shadow">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-medium text-gray-900">Välj synliga kolumner</h3>
-              <button
-                onClick={() => setShowColumnSelector(false)}
-                className="text-gray-400 hover:text-gray-600"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-            
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <label className="flex items-center">
-                <input
-                  type="checkbox"
-                  checked={visibleColumns.event}
-                  onChange={() => toggleColumn('event')}
-                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                />
-                <span className="ml-2 text-sm text-gray-700">Event</span>
-              </label>
-              
-              <label className="flex items-center">
-                <input
-                  type="checkbox"
-                  checked={visibleColumns.date}
-                  onChange={() => toggleColumn('date')}
-                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                />
-                <span className="ml-2 text-sm text-gray-700">Datum</span>
-              </label>
-              
-              <label className="flex items-center">
-                <input
-                  type="checkbox"
-                  checked={visibleColumns.venue}
-                  onChange={() => toggleColumn('venue')}
-                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                />
-                <span className="ml-2 text-sm text-gray-700">Plats</span>
-              </label>
-              
-              <label className="flex items-center">
-                <input
-                  type="checkbox"
-                  checked={visibleColumns.category}
-                  onChange={() => toggleColumn('category')}
-                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                />
-                <span className="ml-2 text-sm text-gray-700">Kategori</span>
-              </label>
-              
-              <label className="flex items-center">
-                <input
-                  type="checkbox"
-                  checked={visibleColumns.status}
-                  onChange={() => toggleColumn('status')}
-                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                />
-                <span className="ml-2 text-sm text-gray-700">Status</span>
-              </label>
-              
-              <label className="flex items-center">
-                <input
-                  type="checkbox"
-                  checked={visibleColumns.organizer}
-                  onChange={() => toggleColumn('organizer')}
-                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                />
-                <span className="ml-2 text-sm text-gray-700">Organizer</span>
-              </label>
-              
-              <label className="flex items-center">
-                <input
-                  type="checkbox"
-                  checked={visibleColumns.created}
-                  onChange={() => toggleColumn('created')}
-                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                />
-                <span className="ml-2 text-sm text-gray-700">Datum tillagt</span>
-              </label>
-              
-              <label className="flex items-center">
-                <input
-                  type="checkbox"
-                  checked={visibleColumns.actions}
-                  onChange={() => toggleColumn('actions')}
-                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                />
-                <span className="ml-2 text-sm text-gray-700">Åtgärder</span>
-              </label>
-            </div>
-            
-            <div className="mt-4 pt-4 border-t border-gray-200">
-              <button
-                onClick={toggleAllColumns}
-                className="text-sm text-blue-600 hover:text-blue-800 font-medium"
-              >
-                {Object.values(visibleColumns).every(v => v) ? 'Dölj alla' : 'Visa alla'}
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* Bulk Actions */}
-        {selectedEvents.size > 0 && (
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-4">
-                <span className="text-sm font-medium text-blue-900">
-                  {selectedEvents.size} event{selectedEvents.size > 1 ? 's' : ''} valda
-                </span>
-                <select
-                  className="px-3 py-1.5 text-sm border border-blue-300 rounded-md focus:ring-blue-500 focus:border-blue-500 bg-white"
-                  value={bulkStatus}
-                  onChange={(e) => setBulkStatus(e.target.value as EventStatus)}
-                >
-                  <option value="draft">Utkast</option>
-                  <option value="pending_approval">Väntar godkännande</option>
-                  <option value="published">Publicerad</option>
-                  <option value="cancelled">Avbruten</option>
-                </select>
-                <button
-                  onClick={bulkUpdateStatus}
-                  disabled={bulkUpdating}
-                  className="inline-flex items-center px-3 py-1.5 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
-                >
-                  {bulkUpdating ? 'Uppdaterar...' : 'Uppdatera status'}
-                </button>
-                <button
-                  onClick={handleBulkEdit}
-                  className="inline-flex items-center px-3 py-1.5 border border-blue-300 text-sm font-medium rounded-md text-blue-700 bg-white hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-                >
-                  <Settings className="w-4 h-4 mr-1" />
-                  Bulk Edit
-                </button>
-                <button
-                  onClick={bulkDeleteEvents}
-                  disabled={bulkUpdating}
-                  className="inline-flex items-center px-3 py-1.5 border border-red-300 text-sm font-medium rounded-md text-red-700 bg-white hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 disabled:opacity-50"
-                >
-                  <Trash2 className="w-4 h-4 mr-1" />
-                  Ta bort
-                </button>
-              </div>
-              <button
-                onClick={() => setSelectedEvents(new Set())}
-                className="text-sm text-blue-600 hover:text-blue-800"
-              >
-                Rensa val
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* Events List */}
-        <div className="bg-white shadow rounded-lg overflow-hidden">
-          {filteredEvents.length === 0 ? (
-            <div className="text-center py-12">
-              <Calendar className="mx-auto h-12 w-12 text-gray-400" />
-              <h3 className="mt-2 text-sm font-medium text-gray-900">Inga events</h3>
-              <p className="mt-1 text-sm text-gray-500">
-                Kom igång genom att skapa ditt första event.
-              </p>
-              <div className="mt-6">
-                <Link
-                  href="/events/new"
-                  className="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700"
-                >
-                  <Plus className="w-4 h-4 mr-2" />
-                  Nytt Event
-                </Link>
-              </div>
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full divide-y divide-gray-200 table-fixed">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="px-2 py-2 text-left w-10">
-                      <button
-                        onClick={toggleSelectAll}
-                        className="text-gray-600 hover:text-gray-900"
-                        title={selectedEvents.size === filteredEvents.length ? 'Avmarkera alla' : 'Markera alla'}
-                      >
-                        {selectedEvents.size === filteredEvents.length && filteredEvents.length > 0 ? (
-                          <CheckSquare className="w-4 h-4" />
-                        ) : (
-                          <Square className="w-4 h-4" />
-                        )}
-                      </button>
-                    </th>
-                    {visibleColumns.event && (
-                      <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase w-1/4">
-                        Event
-                      </th>
-                    )}
-                    {visibleColumns.date && (
-                      <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase w-32">
-                        Datum
-                      </th>
-                    )}
-                    {visibleColumns.venue && (
-                      <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase w-40">
-                        Plats
-                      </th>
-                    )}
-                    {visibleColumns.category && (
-                      <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase w-28">
-                        Kategori
-                      </th>
-                    )}
-                    {visibleColumns.status && (
-                      <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase w-32">
-                        Status
-                      </th>
-                    )}
-                    {visibleColumns.organizer && (
-                      <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase w-32">
-                        Organizer
-                      </th>
-                    )}
-                    {visibleColumns.created && (
-                      <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase w-32">
-                        Datum tillagt
-                      </th>
-                    )}
-                    {visibleColumns.actions && (
-                      <th className="px-2 py-2 text-right w-36">
-                        <span className="sr-only">Åtgärder</span>
-                      </th>
-                    )}
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                  {paginatedEvents.map((event) => (
-                    <tr key={event.id} className={`hover:bg-gray-50 ${selectedEvents.has(event.id) ? 'bg-blue-50' : ''}`}>
-                      {/* Checkbox */}
-                      <td className="px-2 py-2 whitespace-nowrap">
-                        <button
-                          onClick={() => toggleSelectEvent(event.id)}
-                          className="text-gray-600 hover:text-gray-900"
-                        >
-                          {selectedEvents.has(event.id) ? (
-                            <CheckSquare className="w-4 h-4 text-blue-600" />
-                          ) : (
-                            <Square className="w-4 h-4" />
-                          )}
-                        </button>
-                      </td>
-                      
-                      {/* Event namn */}
-                      {visibleColumns.event && (
-                        <td className="px-3 py-2">
-                          <div className="flex items-center gap-1 min-w-0">
-                            {event.featured && (
-                              <Star className="h-3 w-3 text-yellow-400 fill-current flex-shrink-0" />
-                            )}
-                            <div className="text-sm font-medium text-gray-900 truncate">
-                              {event.name}
-                            </div>
-                          </div>
-                        </td>
-                      )}
-                      
-                      {/* Datum */}
-                      {visibleColumns.date && (
-                        <td className="px-3 py-2 whitespace-nowrap">
-                          <div className="text-sm text-gray-900">
-                            {formatDate(event.date_time)}
-                          </div>
-                        </td>
-                      )}
-                      
-                      {/* Plats */}
-                      {visibleColumns.venue && (
-                        <td className="px-3 py-2">
-                          <div className="text-sm text-gray-900 truncate">
-                            {event.venue_name || event.location}
-                          </div>
-                        </td>
-                      )}
-                      
-                      {/* Kategori */}
-                      {visibleColumns.category && (
-                        <td className="px-3 py-2 whitespace-nowrap">
-                          {(() => {
-                            // Visa nya multi-category systemet om det finns
-                            if (event.categories && event.categories.length > 0) {
-                              const mainCategory = event.categories[0];
-                              const additionalCount = event.categories.length - 1;
-                              return (
-                                <div className="flex items-center space-x-1">
-                                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                                    {mainCategory}
-                                  </span>
-                                  {additionalCount > 0 && (
-                                    <span className="text-xs text-gray-500 font-medium">
-                                      +{additionalCount}
-                                    </span>
-                                  )}
-                                </div>
-                              );
-                            }
-                            // Fallback till gamla systemet
-                            return (
-                              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                                {event.category || 'Okategoriserad'}
-                              </span>
-                            );
-                          })()}
-                        </td>
-                      )}
-                      
-                      {/* Status */}
-                      {visibleColumns.status && (
-                        <td className="px-3 py-2 whitespace-nowrap">
-                          <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${getStatusColor(event.status)}`}>
-                            {getStatusText(event.status)}
-                          </span>
-                        </td>
-                      )}
-                      
-                      {/* Organizer */}
-                      {visibleColumns.organizer && (
-                        <td className="px-3 py-2 whitespace-nowrap">
-                          <div className="text-sm text-gray-500 truncate">
-                            {event.organizer?.name || '-'}
-                          </div>
-                        </td>
-                      )}
-                      
-                      {/* Datum tillagt */}
-                      {visibleColumns.created && (
-                        <td className="px-3 py-2 whitespace-nowrap">
-                          <div className="text-sm text-gray-500">
-                            {formatDate(event.created_at)}
-                          </div>
-                        </td>
-                      )}
-                      
-                      {/* Actions */}
-                      {visibleColumns.actions && (
-                        <td className="px-2 py-2 whitespace-nowrap text-right">
-                          <div className="flex items-center justify-end gap-1">
-                            <button
-                              onClick={() => toggleFeatured(event.id, event.featured)}
-                              className={`p-1 rounded hover:bg-gray-100 ${
-                                event.featured ? 'text-yellow-600' : 'text-gray-400'
-                              }`}
-                              title={event.featured ? 'Ta bort från featured' : 'Lägg till i featured'}
-                            >
-                              <Star className={`w-4 h-4 ${event.featured ? 'fill-current' : ''}`} />
-                            </button>
-                            <a
-                              href={`${getFrontendUrl()}/event/${event.event_id}`}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-blue-600 hover:bg-blue-50 p-1 rounded"
-                              title="Visa på publika sidan"
-                            >
-                              <Eye className="w-4 h-4" />
-                            </a>
-                            <Link
-                              href={`/events/${event.id}/edit`}
-                              className="text-indigo-600 hover:bg-indigo-50 p-1 rounded"
-                              title="Redigera"
-                            >
-                              <Edit className="w-4 h-4" />
-                            </Link>
-                            <button
-                              onClick={() => deleteEvent(event.id)}
-                              className="text-red-600 hover:bg-red-50 p-1 rounded"
-                              title="Ta bort"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
-                          </div>
-                        </td>
-                      )}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
-
-        {/* Pagination */}
-        {totalPages > 1 && (
-          <div className="flex items-center justify-between bg-white px-4 py-3 rounded-lg shadow">
-            <div className="text-sm text-gray-700">
-              Visar <span className="font-medium">{startIndex + 1}</span> till <span className="font-medium">{Math.min(endIndex, filteredEvents.length)}</span> av{' '}
-              <span className="font-medium">{filteredEvents.length}</span> events
-            </div>
-            
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                disabled={currentPage === 1}
-                className="px-3 py-1 text-sm border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                Föregående
-              </button>
-              
-              <div className="flex gap-1">
-                {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => {
-                  // Visa bara 7 sidor: första, sista, och 5 runt nuvarande
-                  if (
-                    page === 1 ||
-                    page === totalPages ||
-                    (page >= currentPage - 2 && page <= currentPage + 2)
-                  ) {
-                    return (
-                      <button
-                        key={page}
-                        onClick={() => setCurrentPage(page)}
-                        className={`px-3 py-1 text-sm rounded ${
-                          currentPage === page
-                            ? 'bg-blue-600 text-white'
-                            : 'border border-gray-300 hover:bg-gray-50'
-                        }`}
-                      >
-                        {page}
-                      </button>
-                    )
-                  } else if (
-                    page === currentPage - 3 ||
-                    page === currentPage + 3
-                  ) {
-                    return <span key={page} className="px-2 text-gray-500">...</span>
-                  }
-                  return null
-                })}
-              </div>
-              
-              <button
-                onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-                disabled={currentPage === totalPages}
-                className="px-3 py-1 text-sm border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                Nästa
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* Bulk Edit Modal */}
-        {showBulkEditModal && (
-          <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
-            <div className="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
-              <div className="mt-3">
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-lg font-medium text-gray-900">
-                    Bulk Edit ({selectedEvents.size} events)
-                  </h3>
-                  <button
-                    onClick={closeBulkEditModal}
-                    className="text-gray-400 hover:text-gray-600"
-                  >
-                    <X className="w-6 h-6" />
-                  </button>
-                </div>
-                
-                <div className="space-y-4">
-                  {/* Kategorier - Multi-select */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Kategorier (1-3 kategorier)
-                    </label>
-                    <div className="space-y-2 max-h-40 overflow-y-auto">
-                      {[
-                        'Scen', 'Nattliv', 'Sport', 'Utställningar', 'Konst', 'Föreläsningar', 
-                        'Barn & Familj', 'Mat & Dryck', 'Jul', 'Film & bio', 
-                        'Djur & Natur', 'Guidade visningar', 'Marknader', 'Okategoriserad'
-                      ].map((category) => (
-                        <label key={category} className="flex items-center">
-                          <input
-                            type="checkbox"
-                            value={category}
-                            onChange={(e) => {
-                              const currentCategories = bulkEditCategory ? [bulkEditCategory] : [];
-                              if (e.target.checked) {
-                                if (!currentCategories.includes(category as EventCategory)) {
-                                  const newCategories = [...currentCategories, category as EventCategory];
-                                  setBulkEditCategory(newCategories[0]); // Behåll första som huvudkategori
-                                }
-                              } else {
-                                const newCategories = currentCategories.filter(cat => cat !== category);
-                                setBulkEditCategory(newCategories[0] || '');
-                              }
-                            }}
-                            checked={bulkEditCategory === category}
-                            className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                          />
-                          <span className="ml-2 text-sm text-gray-700">{category}</span>
-                        </label>
-                      ))}
-                    </div>
-                    <p className="mt-1 text-xs text-gray-500">
-                      Bulk edit stöder för närvarande endast en kategori per event
-                    </p>
-                  </div>
-
-                  {/* Status */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Status
-                    </label>
-                    <select
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-                      value={bulkEditStatus}
-                      onChange={(e) => setBulkEditStatus(e.target.value as EventStatus | '')}
-                    >
-                      <option value="">Välj status...</option>
-                      <option value="draft">Utkast</option>
-                      <option value="pending_approval">Väntar godkännande</option>
-                      <option value="published">Publicerad</option>
-                      <option value="cancelled">Avbruten</option>
-                    </select>
-                  </div>
-
-                  {/* Organizer */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Organizer
-                    </label>
-                    <select
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-                      value={bulkEditOrganizer}
-                      onChange={(e) => setBulkEditOrganizer(e.target.value ? parseInt(e.target.value) : '')}
-                    >
-                      <option value="">Välj organizer...</option>
-                      {organizers.map((organizer) => (
-                        <option key={organizer.id} value={organizer.id}>
-                          {organizer.name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-
-                <div className="flex justify-end space-x-3 mt-6">
-                  <button
-                    onClick={closeBulkEditModal}
-                    className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 border border-gray-300 rounded-md hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
-                  >
-                    Avbryt
-                  </button>
-                  <button
-                    onClick={handleBulkEditSubmit}
-                    disabled={bulkUpdating}
-                    className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
-                  >
-                    {bulkUpdating ? 'Uppdaterar...' : 'Uppdatera events'}
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
+            >
+              <span className="flex-1 truncate">{o.name}</span>
+              {o.status === 'pending' ? <span className="text-[11px] text-amber">väntar</span> : null}
+              {o.id === value ? <Check className="size-3.5 text-sea" /> : null}
+            </button>
+          ))
         )}
       </div>
-    </ProtectedLayout>
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Sidan
+// ---------------------------------------------------------------------------
+
+function EventsPageInner() {
+  const toast = useToast()
+  const confirm = useConfirm()
+  const { state, set, reset } = useUrlState(URL_DEFAULTS)
+
+  const [storedPageSize, setStoredPageSize] = useLocalStorage<number>('events.pageSize', 50)
+  const [columns, setColumns] = useLocalStorage<Record<ColumnKey, boolean>>('events.columns', DEFAULT_COLUMNS)
+
+  const view = (VIEWS.some((v) => v.value === state.view) ? state.view : 'kommande') as View
+  const page = Math.max(1, parseInt(state.page || '1', 10) || 1)
+  const pageSize = parseInt(state.pageSize || '', 10) || storedPageSize
+  const cats = state.cats ? state.cats.split(',').filter(Boolean) : []
+  const sortKey = state.sort || 'date'
+  const sortDir: 'asc' | 'desc' = state.dir === 'asc' || state.dir === 'desc' ? state.dir : view === 'kommande' ? 'asc' : 'desc'
+
+  const [rows, setRows] = React.useState<EventRow[]>([])
+  const [total, setTotal] = React.useState(0)
+  const [loading, setLoading] = React.useState(true)
+  const [error, setError] = React.useState<string | null>(null)
+  const [counts, setCounts] = React.useState<Partial<Record<View, number>>>({})
+  const [organizers, setOrganizers] = React.useState<OrganizerLite[]>([])
+  const [selected, setSelected] = React.useState<Set<string | number>>(new Set())
+  const [refreshKey, setRefreshKey] = React.useState(0)
+
+  // Dialoger
+  const [rangeOpen, setRangeOpen] = React.useState(false)
+  const [rangeDraft, setRangeDraft] = React.useState({ from: '', to: '' })
+  const [addedOpen, setAddedOpen] = React.useState(false)
+  const [addedDraft, setAddedDraft] = React.useState({ from: '', to: '' })
+  const [bulkCatsOpen, setBulkCatsOpen] = React.useState(false)
+  const [bulkCats, setBulkCats] = React.useState<EventCategory[]>([])
+  const [bulkOrgOpen, setBulkOrgOpen] = React.useState(false)
+  const [bulkOrg, setBulkOrg] = React.useState<number | null>(null)
+  const [orgFilterOpen, setOrgFilterOpen] = React.useState(false)
+  const [bulkBusy, setBulkBusy] = React.useState(false)
+
+  const refresh = React.useCallback(() => setRefreshKey((k) => k + 1), [])
+
+  // Arrangörer (för filter, källa och bulk)
+  React.useEffect(() => {
+    let alive = true
+    supabase
+      .from('organizers')
+      .select('id, name, status, scraper_source')
+      .order('name')
+      .then(({ data }) => {
+        if (alive && data) setOrganizers(data as OrganizerLite[])
+      })
+    return () => {
+      alive = false
+    }
+  }, [])
+
+  // Organizer-id:n per källa
+  const sourceOrganizerIds = React.useCallback(
+    (source: string): number[] => {
+      if (source === 'Manuell') return organizers.filter((o) => !o.scraper_source).map((o) => o.id)
+      return organizers.filter((o) => o.scraper_source === source).map((o) => o.id)
+    },
+    [organizers]
+  )
+
+  // Vy-filter
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const applyView = React.useCallback((q: any, v: View) => {
+    const nowIso = new Date().toISOString()
+    switch (v) {
+      case 'kommande':
+        return q.eq('status', 'published').gte('date_time', nowIso)
+      case 'alla':
+        return q
+      case 'atgard':
+        return q.or('status.in.(draft,pending_approval),quality_score.lt.50')
+      case 'utanbild':
+        return q.is('image_url', null).gte('date_time', nowIso)
+      case 'okategoriserade':
+        return q.or('categories.cs.{Okategoriserad},categories.is.null').gte('date_time', nowIso)
+      case 'passerade':
+        return q.lt('date_time', nowIso)
+    }
+  }, [])
+
+  // Flik-räknare
+  React.useEffect(() => {
+    let alive = true
+    const load = async () => {
+      const results = await Promise.all(
+        VIEWS.map((v) => applyView(supabase.from('events').select('id', { count: 'exact', head: true }), v.value))
+      )
+      if (!alive) return
+      const next: Partial<Record<View, number>> = {}
+      results.forEach((r, i) => {
+        next[VIEWS[i].value] = r.count ?? 0
+      })
+      setCounts(next)
+    }
+    load()
+    return () => {
+      alive = false
+    }
+  }, [applyView, refreshKey])
+
+  // Huvudfråga
+  React.useEffect(() => {
+    // Vänta på arrangörer om källfilter är satt
+    if (state.source && organizers.length === 0) return
+    let alive = true
+    setLoading(true)
+    setError(null)
+
+    const run = async () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      let q: any = supabase.from('events').select('*, organizer:organizers(id,name,scraper_source)', { count: 'exact' })
+      q = applyView(q, view)
+
+      if (state.q.trim()) {
+        const like = `%${state.q.trim().replace(/[%_,()]/g, ' ')}%`
+        q = q.or(`name.ilike.${like},venue_name.ilike.${like},location.ilike.${like}`)
+      }
+      if (state.status) q = q.eq('status', state.status)
+      if (cats.length) q = q.overlaps('categories', cats)
+      if (state.org === 'none') q = q.is('organizer_id', null)
+      else if (state.org) q = q.eq('organizer_id', Number(state.org))
+      if (state.area) q = q.eq('area', state.area)
+      if (state.dateFrom) q = q.gte('date_time', startOfDayIso(state.dateFrom))
+      if (state.dateTo) q = q.lte('date_time', endOfDayIso(state.dateTo))
+      if (state.addedFrom) q = q.gte('created_at', startOfDayIso(state.addedFrom))
+      if (state.addedTo) q = q.lte('created_at', endOfDayIso(state.addedTo))
+      if (state.featured === 'yes') q = q.eq('featured', true)
+      if (state.featured === 'no') q = q.eq('featured', false)
+      if (state.source) {
+        const ids = sourceOrganizerIds(state.source)
+        if (state.source === 'Manuell') {
+          q = q.or(`organizer_id.is.null${ids.length ? `,organizer_id.in.(${ids.join(',')})` : ''}`)
+        } else if (ids.length) {
+          q = q.in('organizer_id', ids)
+        } else {
+          q = q.eq('organizer_id', -1)
+        }
+      }
+
+      const orderCol = SORTABLE[sortKey] ?? 'date_time'
+      q = q.order(orderCol, { ascending: sortDir === 'asc', nullsFirst: false }).order('id', { ascending: sortDir === 'asc' })
+
+      const from = (page - 1) * pageSize
+      q = q.range(from, from + pageSize - 1)
+
+      const { data, count, error } = await q
+      if (!alive) return
+      if (error) {
+        setError(error.message)
+        setRows([])
+      } else {
+        setRows((data ?? []) as EventRow[])
+        setTotal(count ?? 0)
+      }
+      setLoading(false)
+    }
+    run()
+    return () => {
+      alive = false
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    view,
+    state.q,
+    state.status,
+    state.cats,
+    state.org,
+    state.area,
+    state.dateFrom,
+    state.dateTo,
+    state.addedFrom,
+    state.addedTo,
+    state.featured,
+    state.source,
+    sortKey,
+    sortDir,
+    page,
+    pageSize,
+    organizers.length,
+    refreshKey,
+  ])
+
+  // Rensa markering när sidan/filter byts
+  React.useEffect(() => setSelected(new Set()), [view, page, state.q, state.status, state.cats, state.org, state.source])
+
+  // ---- Mutationer ---------------------------------------------------------
+
+  const patchLocal = (ids: (string | number)[], patch: Partial<EventRow>) => {
+    const set = new Set(ids)
+    setRows((prev) => prev.map((r) => (set.has(r.id) ? { ...r, ...patch } : r)))
+  }
+
+  const updateStatus = async (id: number, status: EventStatus) => {
+    const { error } = await supabase.from('events').update({ status }).eq('id', id)
+    if (error) return toast.error('Kunde inte ändra status', error.message)
+    patchLocal([id], { status })
+    toast.success(`Status ändrad till ${getStatus('event', status).label}`)
+    refresh()
+  }
+
+  const toggleFeatured = async (row: EventRow) => {
+    const { error } = await supabase.from('events').update({ featured: !row.featured }).eq('id', row.id)
+    if (error) return toast.error('Kunde inte uppdatera featured', error.message)
+    patchLocal([row.id], { featured: !row.featured })
+    toast.success(row.featured ? 'Borttagen från featured' : 'Markerad som featured')
+  }
+
+  const deleteOne = async (row: EventRow) => {
+    const ok = await confirm({ title: 'Ta bort event?', description: `”${row.name}” tas bort permanent.`, confirmLabel: 'Ta bort', destructive: true })
+    if (!ok) return
+    const { error } = await supabase.from('events').delete().eq('id', row.id)
+    if (error) return toast.error('Kunde inte ta bort', error.message)
+    toast.success('Event borttaget')
+    refresh()
+  }
+
+  const copyLink = async (row: EventRow) => {
+    try {
+      await navigator.clipboard.writeText(`${getFrontendUrl()}/event/${row.event_id}`)
+      toast.success('Länk kopierad')
+    } catch {
+      toast.error('Kunde inte kopiera länken')
+    }
+  }
+
+  const selectedIds = Array.from(selected) as number[]
+
+  const bulkUpdate = async (patch: Record<string, unknown>, doneMsg: string) => {
+    if (!selectedIds.length) return
+    setBulkBusy(true)
+    const { error } = await supabase.from('events').update(patch).in('id', selectedIds)
+    setBulkBusy(false)
+    if (error) return toast.error('Uppdateringen misslyckades', error.message)
+    toast.success(doneMsg)
+    setSelected(new Set())
+    refresh()
+  }
+
+  const bulkDelete = async () => {
+    const n = selectedIds.length
+    if (!n) return
+    const ok = await confirm({
+      title: `Ta bort ${n} event?`,
+      description: 'Detta går inte att ångra.',
+      confirmLabel: 'Ta bort',
+      destructive: true,
+      typeToConfirm: n > 10 ? 'ta bort' : undefined,
+    })
+    if (!ok) return
+    setBulkBusy(true)
+    const { error } = await supabase.from('events').delete().in('id', selectedIds)
+    setBulkBusy(false)
+    if (error) return toast.error('Kunde inte ta bort', error.message)
+    toast.success(`${n} event borttagna`)
+    setSelected(new Set())
+    refresh()
+  }
+
+  const exportCsv = () => {
+    const header = ['Namn', 'Datum', 'Tid', 'Plats', 'Adress', 'Kategorier', 'Status', 'Arrangör', 'Kvalitet', 'Källa', 'Pris', 'Publik länk']
+    const lines = rows.map((r) =>
+      [
+        r.name,
+        toLocalDateInput(r.date_time),
+        formatTime(r.date_time),
+        r.venue_name ?? '',
+        r.location,
+        (r.categories ?? []).join(', '),
+        getStatus('event', r.status).label,
+        r.organizer?.name ?? '',
+        r.quality_score ?? '',
+        sourceOf(r),
+        r.price ?? '',
+        `${getFrontendUrl()}/event/${r.event_id}`,
+      ]
+        .map(csvEscape)
+        .join(';')
+    )
+    const blob = new Blob(['﻿' + [header.join(';'), ...lines].join('\n')], { type: 'text/csv;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `events-${view}-sida-${page}.csv`
+    a.click()
+    URL.revokeObjectURL(url)
+    toast.success(`${rows.length} rader exporterade`)
+  }
+
+  // ---- Filter-hjälpare ----------------------------------------------------
+
+  const setRange = (from: Date | null, to: Date | null) => {
+    set({ dateFrom: from ? toLocalDateInput(from) : '', dateTo: to ? toLocalDateInput(to) : '' })
+  }
+
+  const today = startOfDay(new Date())
+  const dateLabel = state.dateFrom || state.dateTo ? `Datum: ${state.dateFrom ? formatDay(state.dateFrom) : '…'} – ${state.dateTo ? formatDay(state.dateTo) : '…'}` : 'Datum'
+  const addedLabel = state.addedFrom || state.addedTo ? `Tillagt: ${state.addedFrom ? formatDay(state.addedFrom) : '…'} – ${state.addedTo ? formatDay(state.addedTo) : '…'}` : null
+  const featuredLabel = state.featured === 'yes' ? 'Endast featured' : state.featured === 'no' ? 'Ej featured' : null
+  const moreActive = !!(featuredLabel || addedLabel)
+
+  const hasActiveFilters = !!(
+    state.q ||
+    state.status ||
+    cats.length ||
+    state.org ||
+    state.area ||
+    state.dateFrom ||
+    state.dateTo ||
+    state.addedFrom ||
+    state.addedTo ||
+    state.featured ||
+    state.source
+  )
+
+  const selectedOrgName = state.org === 'none' ? 'Utan arrangör' : state.org ? organizers.find((o) => o.id === Number(state.org))?.name : undefined
+
+  // ---- Kolumner -----------------------------------------------------------
+
+  const sort: SortState = { key: sortKey, dir: sortDir }
+
+  const allColumns: Column<EventRow>[] = [
+    {
+      key: 'event',
+      header: 'Event',
+      width: 'minmax(220px, 1fr)',
+      sortable: true,
+      cell: (r) => (
+        <TitleCell
+          thumb={<Thumb src={r.image_url} alt="" />}
+          title={
+            <span className="inline-flex items-center gap-1.5">
+              {r.featured ? <Star className="size-3 shrink-0 fill-amber text-amber" aria-label="Featured" /> : null}
+              <Link href={`/events/${r.id}/edit`} className="truncate hover:text-sea">
+                {r.name}
+              </Link>
+            </span>
+          }
+          subtitle={r.venue_name || r.location}
+        />
+      ),
+    },
+    {
+      key: 'date',
+      header: 'Datum',
+      width: '120px',
+      sortable: true,
+      cell: (r) => (
+        <div className="flex flex-col font-mono text-xs leading-tight">
+          <span className="text-ink">{formatDay(r.date_time)}</span>
+          <span className="text-ink-muted">{formatTime(r.date_time)}</span>
+        </div>
+      ),
+    },
+    {
+      key: 'category',
+      header: 'Kategori',
+      width: '150px',
+      cell: (r) => {
+        const list = r.categories?.length ? r.categories : r.category ? [r.category] : []
+        if (!list.length) return <CategoryChip muted>Okategoriserad</CategoryChip>
+        return (
+          <span className="inline-flex items-center gap-1.5">
+            <CategoryChip muted={list[0] === 'Okategoriserad'}>{list[0]}</CategoryChip>
+            {list.length > 1 ? <span className="text-[11px] text-ink-muted">+{list.length - 1}</span> : null}
+          </span>
+        )
+      },
+    },
+    {
+      key: 'status',
+      header: 'Status',
+      width: '130px',
+      cell: (r) => {
+        const meta = getStatus('event', r.status)
+        const t = toneClasses[meta.tone]
+        return (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                type="button"
+                onClick={(e) => e.stopPropagation()}
+                aria-label={`Status: ${meta.label}. Ändra`}
+                className={cn('inline-flex items-center gap-1.5 rounded-full py-[3px] pl-2.5 pr-2 text-xs font-medium', t.chip)}
+              >
+                <span className={cn('size-1.5 rounded-full', t.dot)} />
+                {meta.label}
+                <ChevronDown className="size-3" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start">
+              <DropdownMenuLabel>Ändra status</DropdownMenuLabel>
+              {statusOptions('event').map((o) => (
+                <DropdownMenuItem key={o.value} disabled={o.value === r.status} onSelect={() => updateStatus(r.id, o.value as EventStatus)}>
+                  <span className={cn('size-1.5 rounded-full', toneClasses[getStatus('event', o.value).tone].dot)} />
+                  {o.label}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )
+      },
+    },
+    {
+      key: 'organizer',
+      header: 'Arrangör',
+      width: '150px',
+      cell: (r) =>
+        r.organizer ? (
+          <Link href={`/organizers/${r.organizer.id}`} className="block truncate text-ink-soft hover:text-sea">
+            {r.organizer.name}
+          </Link>
+        ) : (
+          <span className="text-ink-faint">–</span>
+        ),
+    },
+    {
+      key: 'quality',
+      header: 'Kvalitet',
+      width: '80px',
+      sortable: true,
+      cell: (r) => <QualityDot score={r.quality_score} />,
+    },
+    {
+      key: 'source',
+      header: 'Källa',
+      width: '110px',
+      cell: (r) => <span className="block truncate text-xs text-ink-muted">{sourceOf(r)}</span>,
+    },
+    {
+      key: 'created',
+      header: 'Tillagt',
+      width: '110px',
+      sortable: true,
+      cell: (r) => <span className="font-mono text-xs text-ink-muted">{formatDay(r.created_at)}</span>,
+    },
+    {
+      key: 'actions',
+      header: '',
+      width: '44px',
+      align: 'right',
+      cell: (r) => (
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button
+              type="button"
+              aria-label="Fler åtgärder"
+              onClick={(e) => e.stopPropagation()}
+              className="inline-flex size-8 items-center justify-center rounded-md text-ink-muted hover:bg-stone hover:text-ink"
+            >
+              <MoreHorizontal className="size-4" />
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem asChild>
+              <Link href={`/events/${r.id}/edit`}>
+                <Pencil /> Redigera
+              </Link>
+            </DropdownMenuItem>
+            <DropdownMenuItem asChild>
+              <a href={`${getFrontendUrl()}/event/${r.event_id}`} target="_blank" rel="noopener noreferrer">
+                <ExternalLink /> Visa på ivarberg.nu
+              </a>
+            </DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => toggleFeatured(r)}>
+              <Star /> {r.featured ? 'Ta bort featured' : 'Markera som featured'}
+            </DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => copyLink(r)}>
+              <Link2 /> Kopiera länk
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem destructive onSelect={() => deleteOne(r)}>
+              <Trash2 /> Ta bort
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      ),
+    },
+  ]
+
+  const visibleColumns = allColumns.filter((c) => columns[c.key as ColumnKey] !== false)
+
+  // ---- Render -------------------------------------------------------------
+
+  return (
+    <>
+      <PageHeader
+        title="Events"
+        meta="Filter och sortering sparas i URL:en"
+        actions={
+          <>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="secondary">
+                  <Columns3 /> Kolumner
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuLabel>Synliga kolumner</DropdownMenuLabel>
+                {(Object.keys(COLUMN_LABELS) as ColumnKey[])
+                  .filter((k) => k !== 'event' && k !== 'actions')
+                  .map((k) => (
+                    <DropdownMenuCheckboxItem
+                      key={k}
+                      checked={columns[k] !== false}
+                      onSelect={(e) => e.preventDefault()}
+                      onCheckedChange={(c) => setColumns((prev) => ({ ...prev, [k]: !!c }))}
+                    >
+                      {COLUMN_LABELS[k]}
+                    </DropdownMenuCheckboxItem>
+                  ))}
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onSelect={() => setColumns(DEFAULT_COLUMNS)}>Återställ</DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+            <Button variant="secondary" onClick={exportCsv} disabled={rows.length === 0}>
+              <Download /> Exportera
+            </Button>
+            <Button asChild>
+              <Link href="/events/new">
+                <Plus strokeWidth={2.5} /> Nytt event
+              </Link>
+            </Button>
+          </>
+        }
+      />
+
+      <Tabs
+        items={VIEWS.map((v) => ({ value: v.value, label: v.label, count: counts[v.value] ?? null }))}
+        value={view}
+        onChange={(v) => set({ view: v, dir: '' })}
+      />
+
+      <FilterBar onReset={reset} hasActive={hasActiveFilters}>
+        <SearchInput value={state.q} onChange={(q) => set({ q })} placeholder="Sök namn, plats, adress…" className="w-[300px]" />
+
+        {/* Datum */}
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <FilterChip label={dateLabel} active={!!(state.dateFrom || state.dateTo)} onClear={state.dateFrom || state.dateTo ? () => setRange(null, null) : undefined} />
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start">
+            <DropdownMenuItem onSelect={() => setRange(today, today)}>I dag</DropdownMenuItem>
+            <DropdownMenuItem
+              onSelect={() => {
+                const dow = (today.getDay() + 6) % 7 // måndag = 0
+                setRange(addDays(today, -dow), addDays(today, 6 - dow))
+              }}
+            >
+              Denna vecka
+            </DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => setRange(today, addDays(today, 7))}>Nästa 7 dagar</DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => setRange(today, addDays(today, 30))}>Nästa 30 dagar</DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem
+              onSelect={() => {
+                setRangeDraft({ from: state.dateFrom, to: state.dateTo })
+                setRangeOpen(true)
+              }}
+            >
+              Eget intervall…
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+
+        <SelectFilter label="Status" value={state.status} options={statusOptions('event')} onChange={(status) => set({ status })} allLabel="Alla statusar" />
+
+        <MultiFilter label="Kategori" value={cats} options={CATEGORIES.map((c) => ({ value: c, label: c }))} onChange={(v) => set({ cats: v.join(',') })} />
+
+        <FilterChip
+          label={selectedOrgName ? `Arrangör: ${selectedOrgName}` : 'Arrangör'}
+          active={!!state.org}
+          onClear={state.org ? () => set({ org: '' }) : undefined}
+          onClick={() => setOrgFilterOpen(true)}
+        />
+
+        <SelectFilter label="Område" value={state.area} options={AREAS.map((a) => ({ value: a, label: a }))} onChange={(area) => set({ area })} allLabel="Alla områden" />
+
+        <SelectFilter
+          label="Källa"
+          value={state.source}
+          options={[...SCRAPER_SOURCES.map((s) => ({ value: s, label: s })), { value: 'Manuell', label: 'Manuell' }]}
+          onChange={(source) => set({ source })}
+          allLabel="Alla källor"
+        />
+
+        {/* Fler */}
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <FilterChip
+              label={moreActive ? [featuredLabel, addedLabel].filter(Boolean).join(' · ') : 'Fler'}
+              active={moreActive}
+              onClear={moreActive ? () => set({ featured: '', addedFrom: '', addedTo: '' }) : undefined}
+            />
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start">
+            <DropdownMenuLabel>Featured</DropdownMenuLabel>
+            <DropdownMenuCheckboxItem checked={state.featured === 'yes'} onCheckedChange={(c) => set({ featured: c ? 'yes' : '' })}>
+              Endast featured
+            </DropdownMenuCheckboxItem>
+            <DropdownMenuCheckboxItem checked={state.featured === 'no'} onCheckedChange={(c) => set({ featured: c ? 'no' : '' })}>
+              Ej featured
+            </DropdownMenuCheckboxItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuLabel>Tillagt</DropdownMenuLabel>
+            <DropdownMenuItem onSelect={() => set({ addedFrom: toLocalDateInput(today), addedTo: toLocalDateInput(today) })}>Tillagt i dag</DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => set({ addedFrom: toLocalDateInput(addDays(today, -7)), addedTo: '' })}>Senaste 7 dagarna</DropdownMenuItem>
+            <DropdownMenuItem
+              onSelect={() => {
+                setAddedDraft({ from: state.addedFrom, to: state.addedTo })
+                setAddedOpen(true)
+              }}
+            >
+              Eget intervall…
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </FilterBar>
+
+      {error ? (
+        <ErrorState title="Kunde inte hämta events" description={error} onRetry={refresh} />
+      ) : (
+        <DataTable<EventRow>
+          columns={visibleColumns}
+          rows={rows}
+          rowKey={(r) => r.id}
+          loading={loading}
+          selectable
+          selected={selected}
+          onSelectedChange={setSelected}
+          sort={sort}
+          onSortChange={(s) => set({ sort: s.key, dir: s.dir }, { resetPage: true })}
+          emptyState={
+            <EmptyState
+              icon={<Calendar />}
+              title={hasActiveFilters ? 'Inga event matchar filtren' : 'Inga event här'}
+              description={hasActiveFilters ? 'Prova att rensa ett eller flera filter.' : 'Skapa ett nytt event eller kör scrapers.'}
+              action={
+                hasActiveFilters ? (
+                  <Button variant="secondary" onClick={reset}>
+                    Rensa filter
+                  </Button>
+                ) : (
+                  <Button asChild>
+                    <Link href="/events/new">
+                      <Plus strokeWidth={2.5} /> Nytt event
+                    </Link>
+                  </Button>
+                )
+              }
+            />
+          }
+          footer={
+            <Pagination
+              page={page}
+              pageSize={pageSize}
+              total={total}
+              itemLabel="event"
+              onPageChange={(p) => set({ page: p > 1 ? String(p) : '' }, { resetPage: false })}
+              onPageSizeChange={(s) => {
+                setStoredPageSize(s)
+                set({ pageSize: s === 50 ? '' : String(s) })
+              }}
+            />
+          }
+        />
+      )}
+
+      {/* Bulk-rad */}
+      <BulkBar count={selected.size} onClear={() => setSelected(new Set())} itemLabel={selected.size === 1 ? 'valt' : 'valda'}>
+        <BulkButton primary disabled={bulkBusy} onClick={() => bulkUpdate({ status: 'published' }, `${selected.size} event publicerade`)}>
+          Publicera
+        </BulkButton>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <BulkButton disabled={bulkBusy}>Ändra status</BulkButton>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start" side="top">
+            {statusOptions('event').map((o) => (
+              <DropdownMenuItem key={o.value} onSelect={() => bulkUpdate({ status: o.value }, `${selected.size} event: ${o.label}`)}>
+                <span className={cn('size-1.5 rounded-full', toneClasses[getStatus('event', o.value).tone].dot)} />
+                {o.label}
+              </DropdownMenuItem>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
+        <BulkButton
+          disabled={bulkBusy}
+          onClick={() => {
+            setBulkCats([])
+            setBulkCatsOpen(true)
+          }}
+        >
+          Kategorier
+        </BulkButton>
+        <BulkButton
+          disabled={bulkBusy}
+          onClick={() => {
+            setBulkOrg(null)
+            setBulkOrgOpen(true)
+          }}
+        >
+          Arrangör
+        </BulkButton>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <BulkButton disabled={bulkBusy}>Featured</BulkButton>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start" side="top">
+            <DropdownMenuItem onSelect={() => bulkUpdate({ featured: true }, `${selected.size} event markerade som featured`)}>Featured på</DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => bulkUpdate({ featured: false }, `${selected.size} event borttagna från featured`)}>Featured av</DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+        <BulkButton danger disabled={bulkBusy} onClick={bulkDelete}>
+          Ta bort
+        </BulkButton>
+      </BulkBar>
+
+      {/* Dialog: eget datumintervall */}
+      <Dialog open={rangeOpen} onOpenChange={setRangeOpen}>
+        <DialogContent
+          size="sm"
+          title="Eventdatum"
+          description="Visa event som äger rum i intervallet."
+          footer={
+            <>
+              <Button variant="ghost" onClick={() => setRangeOpen(false)}>
+                Avbryt
+              </Button>
+              <Button
+                onClick={() => {
+                  set({ dateFrom: rangeDraft.from, dateTo: rangeDraft.to })
+                  setRangeOpen(false)
+                }}
+              >
+                Använd
+              </Button>
+            </>
+          }
+        >
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Från" htmlFor="range-from">
+              <Input id="range-from" type="date" value={rangeDraft.from} onChange={(e) => setRangeDraft((d) => ({ ...d, from: e.target.value }))} />
+            </Field>
+            <Field label="Till" htmlFor="range-to">
+              <Input id="range-to" type="date" value={rangeDraft.to} onChange={(e) => setRangeDraft((d) => ({ ...d, to: e.target.value }))} />
+            </Field>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog: tillagt-intervall */}
+      <Dialog open={addedOpen} onOpenChange={setAddedOpen}>
+        <DialogContent
+          size="sm"
+          title="Tillagt"
+          description="Visa event som lades till i adminen under intervallet."
+          footer={
+            <>
+              <Button variant="ghost" onClick={() => setAddedOpen(false)}>
+                Avbryt
+              </Button>
+              <Button
+                onClick={() => {
+                  set({ addedFrom: addedDraft.from, addedTo: addedDraft.to })
+                  setAddedOpen(false)
+                }}
+              >
+                Använd
+              </Button>
+            </>
+          }
+        >
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Från" htmlFor="added-from">
+              <Input id="added-from" type="date" value={addedDraft.from} onChange={(e) => setAddedDraft((d) => ({ ...d, from: e.target.value }))} />
+            </Field>
+            <Field label="Till" htmlFor="added-to">
+              <Input id="added-to" type="date" value={addedDraft.to} onChange={(e) => setAddedDraft((d) => ({ ...d, to: e.target.value }))} />
+            </Field>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog: arrangörsfilter */}
+      <Dialog open={orgFilterOpen} onOpenChange={setOrgFilterOpen}>
+        <DialogContent size="sm" title="Filtrera på arrangör">
+          <OrganizerPicker
+            autoFocus
+            organizers={organizers}
+            value={state.org ? Number(state.org) : null}
+            onChange={(id) => {
+              set({ org: id ? String(id) : '' })
+              setOrgFilterOpen(false)
+            }}
+          />
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog: bulk-kategorier */}
+      <Dialog open={bulkCatsOpen} onOpenChange={setBulkCatsOpen}>
+        <DialogContent
+          title={`Sätt kategorier för ${selected.size} event`}
+          description="Första valda blir huvudkategori. Ersätter befintliga kategorier."
+          footer={
+            <>
+              <Button variant="ghost" onClick={() => setBulkCatsOpen(false)}>
+                Avbryt
+              </Button>
+              <Button
+                disabled={bulkCats.length === 0 || bulkBusy}
+                onClick={async () => {
+                  await bulkUpdate({ categories: bulkCats, category: bulkCats[0] }, `Kategorier satta på ${selected.size} event`)
+                  setBulkCatsOpen(false)
+                }}
+              >
+                Spara
+              </Button>
+            </>
+          }
+        >
+          <CategoryPicker value={bulkCats} onChange={setBulkCats} />
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog: bulk-arrangör */}
+      <Dialog open={bulkOrgOpen} onOpenChange={setBulkOrgOpen}>
+        <DialogContent
+          size="sm"
+          title={`Sätt arrangör för ${selected.size} event`}
+          footer={
+            <>
+              <Button variant="ghost" onClick={() => setBulkOrgOpen(false)}>
+                Avbryt
+              </Button>
+              <Button
+                disabled={bulkOrg == null || bulkBusy}
+                onClick={async () => {
+                  await bulkUpdate({ organizer_id: bulkOrg }, `Arrangör satt på ${selected.size} event`)
+                  setBulkOrgOpen(false)
+                }}
+              >
+                Spara
+              </Button>
+            </>
+          }
+        >
+          <OrganizerPicker organizers={organizers.filter((o) => o.status !== 'archived')} value={bulkOrg} onChange={setBulkOrg} autoFocus />
+        </DialogContent>
+      </Dialog>
+
+    </>
+  )
+}
+
+export default function EventsPage() {
+  return (
+    <Suspense fallback={<LoadingState />}>
+      <EventsPageInner />
+    </Suspense>
   )
 }

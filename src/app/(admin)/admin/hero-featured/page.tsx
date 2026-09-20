@@ -1,532 +1,319 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
+import Link from 'next/link'
+import { Plus, ChevronUp, ChevronDown, X, Calendar, MapPin, Pencil } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
-import { Event, HeroFeaturedEvent } from '@/types/database'
-import ProtectedLayout from '@/components/ProtectedLayout'
-import { Star, X, Plus, Search, Calendar, MapPin, ChevronUp, ChevronDown } from 'lucide-react'
-import { formatDate } from '@/lib/utils'
+import type { Event, HeroFeaturedEvent } from '@/types/database'
+import { formatDateTime, formatDay } from '@/lib/format'
+import { cn } from '@/lib/utils'
+import { PageHeader } from '@/components/ui/page-header'
+import { Card, CardBody, CardHeader, SectionLabel } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
+import { Dialog, DialogContent } from '@/components/ui/dialog'
+import { SearchInput } from '@/components/ui/search-input'
+import { Thumb } from '@/components/ui/data-table'
+import { EmptyState, ErrorState, LoadingState, Spinner } from '@/components/ui/states'
+import { IconButton } from '@/components/ui/tooltip'
+import { useToast } from '@/components/ui/toast'
+import { useConfirm } from '@/components/ui/confirm-dialog'
+
+type Featured = HeroFeaturedEvent & { event?: Event }
+const MAX_SECONDARY = 5
 
 export default function HeroFeaturedPage() {
-  const [mainFeatured, setMainFeatured] = useState<(HeroFeaturedEvent & { event?: Event }) | null>(null)
-  const [secondaryFeatured, setSecondaryFeatured] = useState<(HeroFeaturedEvent & { event?: Event })[]>([])
+  const toast = useToast()
+  const confirm = useConfirm()
+  const [main, setMain] = useState<Featured | null>(null)
+  const [secondary, setSecondary] = useState<Featured[]>([])
   const [loading, setLoading] = useState(true)
-  const [showEventSelector, setShowEventSelector] = useState<'main' | 'secondary' | null>(null)
-  const [availableEvents, setAvailableEvents] = useState<Event[]>([])
-  const [searchTerm, setSearchTerm] = useState('')
-  const [updating, setUpdating] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [picker, setPicker] = useState<'main' | 'secondary' | null>(null)
 
-  useEffect(() => {
-    fetchFeaturedEvents()
-  }, [])
-
-  const fetchFeaturedEvents = async () => {
+  const load = useCallback(async () => {
+    setError(null)
     try {
-      // Hämta main featured
-      const { data: mainData, error: mainError } = await supabase
-        .from('hero_featured_events')
-        .select(`
-          *,
-          event:events(*)
-        `)
-        .eq('position', 'main')
-        .single()
-
-      if (mainError && mainError.code !== 'PGRST116') throw mainError
-      setMainFeatured(mainData || null)
-
-      // Hämta secondary featured
-      const { data: secondaryData, error: secondaryError } = await supabase
-        .from('hero_featured_events')
-        .select(`
-          *,
-          event:events(*)
-        `)
-        .eq('position', 'secondary')
-        .order('priority', { ascending: true })
-
-      if (secondaryError) throw secondaryError
-      setSecondaryFeatured(secondaryData || [])
-    } catch (error) {
-      console.error('Error fetching featured events:', error)
+      const [m, s] = await Promise.all([
+        supabase.from('hero_featured_events').select('*, event:events(*)').eq('position', 'main').maybeSingle(),
+        supabase.from('hero_featured_events').select('*, event:events(*)').eq('position', 'secondary').order('priority', { ascending: true }),
+      ])
+      if (m.error) throw m.error
+      if (s.error) throw s.error
+      setMain((m.data as Featured) || null)
+      setSecondary((s.data as Featured[]) || [])
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Okänt fel')
     } finally {
       setLoading(false)
     }
-  }
+  }, [])
 
-  const fetchAvailableEvents = async () => {
+  useEffect(() => {
+    load()
+  }, [load])
+
+  const run = async (label: string, fn: () => Promise<void>) => {
+    setBusy(true)
     try {
-      // Hämta endast published events som är framtida
-      const { data, error } = await supabase
-        .from('events')
-        .select('*')
-        .eq('status', 'published')
-        .gte('date_time', new Date().toISOString())
-        .order('date_time', { ascending: true })
-        .limit(100)
-
-      if (error) throw error
-      setAvailableEvents(data || [])
-    } catch (error) {
-      console.error('Error fetching events:', error)
-    }
-  }
-
-  const setMainFeaturedEvent = async (eventId: number) => {
-    setUpdating(true)
-    try {
-      // Ta bort befintlig main featured
-      if (mainFeatured) {
-        await supabase
-          .from('hero_featured_events')
-          .delete()
-          .eq('id', mainFeatured.id)
-      }
-
-      // Lägg till ny main featured
-      const { error } = await supabase
-        .from('hero_featured_events')
-        .insert({
-          event_id: eventId,
-          position: 'main',
-          priority: null
-        })
-
-      if (error) throw error
-      
-      await fetchFeaturedEvents()
-      setShowEventSelector(null)
-      alert('Main featured event uppdaterad!')
-    } catch (error) {
-      console.error('Error setting main featured:', error)
-      alert('Fel vid uppdatering')
+      await fn()
+      await load()
+      toast.success(label)
+    } catch (e) {
+      toast.error('Något gick fel', e instanceof Error ? e.message : undefined)
     } finally {
-      setUpdating(false)
+      setBusy(false)
     }
   }
 
-  const removeMainFeaturedEvent = async () => {
-    if (!mainFeatured) return
-    
-    if (!confirm('Är du säker på att du vill ta bort main featured event?')) {
+  const setMainEvent = (eventId: number) =>
+    run('Huvudevent uppdaterat', async () => {
+      if (main) {
+        const { error } = await supabase.from('hero_featured_events').delete().eq('id', main.id)
+        if (error) throw error
+      }
+      const { error } = await supabase.from('hero_featured_events').insert({ event_id: eventId, position: 'main', priority: null })
+      if (error) throw error
+      setPicker(null)
+    })
+
+  const removeMain = async () => {
+    if (!main) return
+    const ok = await confirm({ title: 'Ta bort huvudeventet?', description: 'Hero-sektionen på startsidan visas utan huvudevent tills ett nytt väljs.', confirmLabel: 'Ta bort', destructive: true })
+    if (!ok) return
+    run('Huvudevent borttaget', async () => {
+      const { error } = await supabase.from('hero_featured_events').delete().eq('id', main.id)
+      if (error) throw error
+    })
+  }
+
+  const addSecondary = (eventId: number) => {
+    if (secondary.length >= MAX_SECONDARY) {
+      toast.error(`Max ${MAX_SECONDARY} sekundära event`)
       return
     }
-
-    setUpdating(true)
-    try {
-      const { error } = await supabase
-        .from('hero_featured_events')
-        .delete()
-        .eq('id', mainFeatured.id)
-
+    run('Sekundärt event tillagt', async () => {
+      const { error } = await supabase.from('hero_featured_events').insert({ event_id: eventId, position: 'secondary', priority: secondary.length + 1 })
       if (error) throw error
-      
-      await fetchFeaturedEvents()
-      alert('Main featured event borttagen!')
-    } catch (error) {
-      console.error('Error removing main featured:', error)
-      alert('Fel vid borttagning')
-    } finally {
-      setUpdating(false)
-    }
+      setPicker(null)
+    })
   }
 
-  const addSecondaryFeaturedEvent = async (eventId: number) => {
-    setUpdating(true)
-    try {
-      if (secondaryFeatured.length >= 5) {
-        alert('Maximum 5 secondary featured events!')
-        return
-      }
+  /** Skriver om prioriteterna 1..n för listan i given ordning, parallellt. */
+  const writePriorities = async (list: Featured[]) => {
+    const results = await Promise.all(list.map((f, i) => supabase.from('hero_featured_events').update({ priority: i + 1 }).eq('id', f.id)))
+    const failed = results.find((r) => r.error)
+    if (failed?.error) throw failed.error
+  }
 
-      // Beräkna ny prioritet
-      const newPriority = secondaryFeatured.length + 1
-
-      const { error } = await supabase
-        .from('hero_featured_events')
-        .insert({
-          event_id: eventId,
-          position: 'secondary',
-          priority: newPriority
-        })
-
+  const removeSecondary = async (item: Featured) => {
+    const ok = await confirm({ title: 'Ta bort från hero?', description: item.event?.name, confirmLabel: 'Ta bort', destructive: true })
+    if (!ok) return
+    run('Borttaget från hero', async () => {
+      const { error } = await supabase.from('hero_featured_events').delete().eq('id', item.id)
       if (error) throw error
-      
-      await fetchFeaturedEvents()
-      setShowEventSelector(null)
-      alert('Secondary featured event tillagd!')
-    } catch (error) {
-      console.error('Error adding secondary featured:', error)
-      alert('Fel vid tillägg')
-    } finally {
-      setUpdating(false)
-    }
+      await writePriorities(secondary.filter((s) => s.id !== item.id))
+    })
   }
 
-  const removeSecondaryFeaturedEvent = async (id: number) => {
-    if (!confirm('Är du säker på att du vill ta bort detta secondary featured event?')) {
-      return
-    }
-
-    setUpdating(true)
-    try {
-      const { error } = await supabase
-        .from('hero_featured_events')
-        .delete()
-        .eq('id', id)
-
-      if (error) throw error
-      
-      // Uppdatera prioriteter för återstående events
-      const remaining = secondaryFeatured.filter(e => e.id !== id)
-      for (let i = 0; i < remaining.length; i++) {
-        await supabase
-          .from('hero_featured_events')
-          .update({ priority: i + 1 })
-          .eq('id', remaining[i].id)
-      }
-      
-      await fetchFeaturedEvents()
-      alert('Secondary featured event borttagen!')
-    } catch (error) {
-      console.error('Error removing secondary featured:', error)
-      alert('Fel vid borttagning')
-    } finally {
-      setUpdating(false)
-    }
+  const move = (index: number, dir: -1 | 1) => {
+    const target = index + dir
+    if (target < 0 || target >= secondary.length) return
+    const next = [...secondary]
+    ;[next[index], next[target]] = [next[target], next[index]]
+    setSecondary(next) // optimistiskt
+    run('Ordningen sparad', () => writePriorities(next))
   }
 
-  const moveSecondaryEvent = async (index: number, direction: 'up' | 'down') => {
-    if (direction === 'up' && index === 0) return
-    if (direction === 'down' && index === secondaryFeatured.length - 1) return
+  const featuredIds = [main?.event_id, ...secondary.map((s) => s.event_id)].filter((x): x is number => typeof x === 'number')
 
-    const newIndex = direction === 'up' ? index - 1 : index + 1
-    const newOrder = [...secondaryFeatured]
-    const temp = newOrder[index]
-    newOrder[index] = newOrder[newIndex]
-    newOrder[newIndex] = temp
-
-    setUpdating(true)
-    try {
-      // Uppdatera prioriteter
-      for (let i = 0; i < newOrder.length; i++) {
-        await supabase
-          .from('hero_featured_events')
-          .update({ priority: i + 1 })
-          .eq('id', newOrder[i].id)
-      }
-      
-      await fetchFeaturedEvents()
-    } catch (error) {
-      console.error('Error reordering:', error)
-      alert('Fel vid omsortering')
-    } finally {
-      setUpdating(false)
-    }
-  }
-
-  const filteredEvents = availableEvents.filter(event => {
-    const matchesSearch = event.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      event.location.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      event.venue_name?.toLowerCase().includes(searchTerm.toLowerCase())
-    
-    // Filtrera bort events som redan är featured
-    const isAlreadyFeatured = 
-      mainFeatured?.event_id === event.id ||
-      secondaryFeatured.some(f => f.event_id === event.id)
-    
-    return matchesSearch && !isAlreadyFeatured
-  })
-
-  if (loading) {
-    return (
-      <ProtectedLayout>
-        <div className="flex items-center justify-center h-64">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-        </div>
-      </ProtectedLayout>
-    )
-  }
+  if (loading) return <LoadingState />
+  if (error) return <ErrorState title="Kunde inte hämta hero-event" description={error} onRetry={load} />
 
   return (
-    <ProtectedLayout>
-      <div className="space-y-6">
-        {/* Header */}
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Hero Featured Events</h1>
-          <p className="mt-1 text-sm text-gray-500">
-            Hantera featured events som visas på startsidans hero-sektion. Ett main featured event och upp till 5 secondary featured events.
-          </p>
-        </div>
+    <>
+      <PageHeader title="Hero på startsidan" description="Ett huvudevent och upp till fem sekundära som visas överst på ivarberg.nu." />
 
-        {/* Main Featured Event */}
-        <div className="bg-white rounded-lg shadow p-6">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-            <Star className="w-5 h-5 mr-2 text-yellow-500" />
-            Main Featured Event
-          </h2>
-          
-          {mainFeatured?.event ? (
-            <div className="border border-gray-200 rounded-lg p-4">
-              <div className="flex items-start gap-4">
-                {mainFeatured.event.image_url && (
-                  <img 
-                    src={mainFeatured.event.image_url} 
-                    alt={mainFeatured.event.name}
-                    className="w-32 h-32 object-cover rounded-lg flex-shrink-0"
-                  />
-                )}
-                <div className="flex-1">
-                  <h3 className="text-xl font-bold text-gray-900 mb-2">
-                    {mainFeatured.event.name}
-                  </h3>
-                  <div className="space-y-1 text-sm text-gray-600">
-                    <div className="flex items-center">
-                      <Calendar className="w-4 h-4 mr-2" />
-                      {formatDate(mainFeatured.event.date_time)}
-                    </div>
-                    <div className="flex items-center">
-                      <MapPin className="w-4 h-4 mr-2" />
-                      {mainFeatured.event.venue_name || mainFeatured.event.location}
-                    </div>
+      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
+        <div className="flex flex-col gap-4">
+          <Card>
+            <CardHeader
+              title="Huvudevent"
+              description="Det stora kortet överst i hero-sektionen."
+              actions={
+                main ? (
+                  <>
+                    <Button variant="secondary" size="sm" disabled={busy} onClick={() => setPicker('main')}>Byt</Button>
+                    <Button variant="destructive" size="sm" disabled={busy} onClick={removeMain}>Ta bort</Button>
+                  </>
+                ) : null
+              }
+            />
+            <CardBody>
+              {main?.event ? (
+                <EventPreview event={main.event} large />
+              ) : (
+                <button type="button" disabled={busy} onClick={() => setPicker('main')} className="flex w-full flex-col items-center justify-center gap-2 rounded-[10px] border border-dashed border-[#C9C0AE] bg-sand-soft py-12 text-ink-soft hover:border-sea hover:text-sea">
+                  <Plus className="size-5" />
+                  <span className="text-[13px] font-medium">Välj huvudevent</span>
+                </button>
+              )}
+            </CardBody>
+          </Card>
+
+          <Card>
+            <CardHeader
+              title={`Sekundära (${secondary.length}/${MAX_SECONDARY})`}
+              description="Ordningen här är ordningen på startsidan."
+              actions={
+                secondary.length < MAX_SECONDARY ? (
+                  <Button size="sm" disabled={busy} onClick={() => setPicker('secondary')}>
+                    <Plus strokeWidth={2.5} /> Lägg till
+                  </Button>
+                ) : null
+              }
+            />
+            <div className="flex flex-col">
+              {secondary.map((item, i) => (
+                <div key={item.id} className="flex items-center gap-3 border-b border-line-soft px-5 py-3 last:border-b-0">
+                  <span className="w-5 font-mono text-xs text-ink-muted">{i + 1}</span>
+                  <Thumb src={item.event?.image_url} size={44} />
+                  <div className="flex min-w-0 flex-1 flex-col">
+                    <Link href={item.event ? `/events/${item.event.id}/edit` : '#'} className="truncate text-[13px] font-medium text-ink hover:text-sea">{item.event?.name ?? 'Okänt event'}</Link>
+                    <span className="truncate text-[11px] text-ink-muted">{item.event ? `${formatDateTime(item.event.date_time)} · ${item.event.venue_name || item.event.location}` : ''}</span>
                   </div>
-                  <div className="mt-4 flex items-center gap-2">
-                    <button
-                      onClick={() => {
-                        fetchAvailableEvents()
-                        setShowEventSelector('main')
-                      }}
-                      disabled={updating}
-                      className="px-4 py-2 text-sm border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50"
-                    >
-                      Byt event
-                    </button>
-                    <button
-                      onClick={removeMainFeaturedEvent}
-                      disabled={updating}
-                      className="px-4 py-2 text-sm text-red-600 border border-red-300 rounded-md hover:bg-red-50 disabled:opacity-50"
-                    >
-                      Ta bort
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
-          ) : (
-            <div className="text-center py-12 border-2 border-dashed border-gray-300 rounded-lg">
-              <Star className="mx-auto h-12 w-12 text-gray-400" />
-              <p className="mt-2 text-sm text-gray-600">Inget main featured event valt</p>
-              <button
-                onClick={() => {
-                  fetchAvailableEvents()
-                  setShowEventSelector('main')
-                }}
-                disabled={updating}
-                className="mt-4 inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50"
-              >
-                <Plus className="w-4 h-4 mr-2" />
-                Välj event
-              </button>
-            </div>
-          )}
-        </div>
-
-        {/* Secondary Featured Events */}
-        <div className="bg-white rounded-lg shadow p-6">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold text-gray-900">
-              Secondary Featured Events ({secondaryFeatured.length}/5)
-            </h2>
-            {secondaryFeatured.length < 5 && (
-              <button
-                onClick={() => {
-                  fetchAvailableEvents()
-                  setShowEventSelector('secondary')
-                }}
-                disabled={updating}
-                className="inline-flex items-center px-3 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50"
-              >
-                <Plus className="w-4 h-4 mr-2" />
-                Lägg till
-              </button>
-            )}
-          </div>
-
-          {secondaryFeatured.length > 0 ? (
-            <div className="space-y-3">
-              {secondaryFeatured.map((featured, index) => (
-                <div
-                  key={featured.id}
-                  className="border border-gray-200 rounded-lg p-4 hover:border-gray-300 transition-colors"
-                >
-                  <div className="flex items-start gap-4">
-                    {/* Priority indicator & move buttons */}
-                    <div className="flex flex-col items-center gap-1">
-                      <span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-blue-100 text-blue-800 text-sm font-bold">
-                        {index + 1}
-                      </span>
-                      <button
-                        onClick={() => moveSecondaryEvent(index, 'up')}
-                        disabled={index === 0 || updating}
-                        className="p-1 hover:bg-gray-100 rounded disabled:opacity-30 disabled:cursor-not-allowed"
-                        title="Flytta upp"
-                      >
-                        <ChevronUp className="w-4 h-4" />
-                      </button>
-                      <button
-                        onClick={() => moveSecondaryEvent(index, 'down')}
-                        disabled={index === secondaryFeatured.length - 1 || updating}
-                        className="p-1 hover:bg-gray-100 rounded disabled:opacity-30 disabled:cursor-not-allowed"
-                        title="Flytta ner"
-                      >
-                        <ChevronDown className="w-4 h-4" />
-                      </button>
-                    </div>
-                    
-                    {/* Event image */}
-                    {featured.event?.image_url && (
-                      <img 
-                        src={featured.event.image_url} 
-                        alt={featured.event?.name}
-                        className="w-24 h-24 object-cover rounded flex-shrink-0"
-                      />
-                    )}
-                    
-                    {/* Event info */}
-                    <div className="flex-1 min-w-0">
-                      <h3 className="font-semibold text-gray-900 truncate">
-                        {featured.event?.name}
-                      </h3>
-                      <div className="mt-2 space-y-1 text-sm text-gray-600">
-                        <div className="flex items-center">
-                          <Calendar className="w-4 h-4 mr-2 flex-shrink-0" />
-                          <span className="truncate">{formatDate(featured.event?.date_time || '')}</span>
-                        </div>
-                        <div className="flex items-center">
-                          <MapPin className="w-4 h-4 mr-2 flex-shrink-0" />
-                          <span className="truncate">{featured.event?.venue_name || featured.event?.location}</span>
-                        </div>
-                      </div>
-                    </div>
-                    
-                    {/* Remove button */}
-                    <button
-                      onClick={() => removeSecondaryFeaturedEvent(featured.id)}
-                      disabled={updating}
-                      className="text-red-600 hover:bg-red-50 p-2 rounded disabled:opacity-50"
-                      title="Ta bort"
-                    >
-                      <X className="w-5 h-5" />
-                    </button>
+                  <div className="flex items-center gap-0.5">
+                    <IconButton label="Flytta upp" disabled={busy || i === 0} onClick={() => move(i, -1)}><ChevronUp /></IconButton>
+                    <IconButton label="Flytta ner" disabled={busy || i === secondary.length - 1} onClick={() => move(i, 1)}><ChevronDown /></IconButton>
+                    <IconButton label="Ta bort" disabled={busy} onClick={() => removeSecondary(item)} className="hover:bg-poppy-light hover:text-poppy"><X /></IconButton>
                   </div>
                 </div>
               ))}
+              {Array.from({ length: MAX_SECONDARY - secondary.length }).map((_, i) => (
+                <button
+                  key={`empty-${i}`}
+                  type="button"
+                  disabled={busy}
+                  onClick={() => setPicker('secondary')}
+                  className="mx-5 my-2 flex h-11 items-center justify-center gap-2 rounded-[8px] border border-dashed border-[#C9C0AE] text-[13px] text-ink-muted hover:border-sea hover:text-sea"
+                >
+                  <Plus className="size-4" /> Tom plats {secondary.length + i + 1}
+                </button>
+              ))}
             </div>
-          ) : (
-            <div className="text-center py-12 border-2 border-dashed border-gray-300 rounded-lg">
-              <p className="text-sm text-gray-600">Inga secondary featured events</p>
-              <button
-                onClick={() => {
-                  fetchAvailableEvents()
-                  setShowEventSelector('secondary')
-                }}
-                disabled={updating}
-                className="mt-4 inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50"
-              >
-                <Plus className="w-4 h-4 mr-2" />
-                Lägg till event
-              </button>
-            </div>
-          )}
+          </Card>
         </div>
 
-        {/* Event Selector Modal */}
-        {showEventSelector && (
-          <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50" onClick={() => setShowEventSelector(null)}>
-            <div className="relative top-10 mx-auto p-5 border w-full max-w-4xl shadow-lg rounded-md bg-white mb-10" onClick={(e) => e.stopPropagation()}>
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-medium text-gray-900">
-                  Välj Event för {showEventSelector === 'main' ? 'Main' : 'Secondary'} Featured
-                </h3>
-                <button
-                  onClick={() => setShowEventSelector(null)}
-                  className="text-gray-400 hover:text-gray-600"
-                >
-                  <X className="w-6 h-6" />
-                </button>
-              </div>
-
-              <p className="text-sm text-gray-500 mb-4">
-                Visar endast publicerade events som inte redan är featured
-              </p>
-
-              {/* Search */}
-              <div className="mb-4">
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-                  <input
-                    type="text"
-                    placeholder="Sök events..."
-                    className="pl-10 pr-4 py-2 w-full border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                  />
-                </div>
-              </div>
-
-              {/* Events List */}
-              <div className="max-h-96 overflow-y-auto space-y-2">
-                {filteredEvents.length > 0 ? (
-                  filteredEvents.map((event) => (
-                    <button
-                      key={event.id}
-                      onClick={() => {
-                        if (showEventSelector === 'main') {
-                          setMainFeaturedEvent(event.id)
-                        } else {
-                          addSecondaryFeaturedEvent(event.id)
-                        }
-                      }}
-                      disabled={updating}
-                      className="w-full text-left p-4 border border-gray-200 rounded-lg hover:bg-gray-50 hover:border-gray-300 transition-colors disabled:opacity-50"
-                    >
-                      <div className="flex items-start gap-4">
-                        {event.image_url && (
-                          <img 
-                            src={event.image_url} 
-                            alt={event.name}
-                            className="w-20 h-20 object-cover rounded flex-shrink-0"
-                          />
-                        )}
-                        <div className="flex-1 min-w-0">
-                          <h4 className="font-semibold text-gray-900 truncate">{event.name}</h4>
-                          <div className="mt-1 space-y-1 text-sm text-gray-600">
-                            <div className="flex items-center">
-                              <Calendar className="w-4 h-4 mr-2 flex-shrink-0" />
-                              <span className="truncate">{formatDate(event.date_time)}</span>
-                            </div>
-                            <div className="flex items-center">
-                              <MapPin className="w-4 h-4 mr-2 flex-shrink-0" />
-                              <span className="truncate">{event.venue_name || event.location}</span>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    </button>
-                  ))
-                ) : (
-                  <div className="text-center py-12 text-gray-500">
-                    <p>Inga events hittades</p>
-                    <p className="text-sm mt-1">Prova att ändra sökfilter</p>
-                  </div>
-                )}
+        <Card className="h-fit">
+          <CardHeader title="Så visas det på ivarberg.nu" />
+          <CardBody className="bg-sand">
+            <div className="flex flex-col gap-2">
+              <MockTile event={main?.event} tall label="Huvud" />
+              <div className="grid grid-cols-2 gap-2">
+                {Array.from({ length: MAX_SECONDARY }).map((_, i) => (
+                  <MockTile key={i} event={secondary[i]?.event} label={String(i + 1)} className={i === 4 ? 'col-span-2' : ''} />
+                ))}
               </div>
             </div>
-          </div>
-        )}
+          </CardBody>
+        </Card>
       </div>
-    </ProtectedLayout>
+
+      <EventPicker open={picker !== null} title={picker === 'main' ? 'Välj huvudevent' : 'Lägg till sekundärt event'} excludeIds={featuredIds} onClose={() => setPicker(null)} onPick={(id) => (picker === 'main' ? setMainEvent(id) : addSecondary(id))} busy={busy} />
+    </>
   )
 }
 
+function EventPreview({ event, large }: { event: Event; large?: boolean }) {
+  const [broken, setBroken] = useState(false)
+  return (
+    <div className="flex flex-col gap-3 overflow-hidden rounded-[10px] border border-line">
+      {event.image_url && !broken ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={event.image_url} alt="" onError={() => setBroken(true)} className={cn('w-full object-cover', large ? 'aspect-video' : 'aspect-[3/2]')} />
+      ) : (
+        <div className={cn('flex w-full items-center justify-center bg-poppy-light font-mono text-xs text-poppy', large ? 'aspect-video' : 'aspect-[3/2]')}>Bild saknas</div>
+      )}
+      <div className="flex flex-col gap-1.5 px-4 pb-4">
+        <Link href={`/events/${event.id}/edit`} className="inline-flex items-center gap-1.5 font-display text-lg font-semibold text-ink hover:text-sea">
+          {event.name} <Pencil className="size-3.5 text-ink-muted" />
+        </Link>
+        <div className="flex flex-wrap gap-x-4 gap-y-1 text-[13px] text-ink-soft">
+          <span className="inline-flex items-center gap-1.5"><Calendar className="size-3.5 text-ink-muted" /> {formatDateTime(event.date_time)}</span>
+          <span className="inline-flex items-center gap-1.5"><MapPin className="size-3.5 text-ink-muted" /> {event.venue_name || event.location}</span>
+        </div>
+      </div>
+    </div>
+  )
+}
 
+function MockTile({ event, tall, label, className }: { event?: Event; tall?: boolean; label: string; className?: string }) {
+  return (
+    <div className={cn('relative flex items-end overflow-hidden rounded-[8px] border border-line bg-white p-2', tall ? 'h-24' : 'h-14', !event && 'border-dashed', className)}>
+      {event?.image_url ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={event.image_url} alt="" className="absolute inset-0 size-full object-cover opacity-70" />
+      ) : null}
+      <span className="relative truncate rounded bg-white/90 px-1.5 py-0.5 text-[10px] font-medium text-ink">{event ? event.name : `${label} · tom`}</span>
+    </div>
+  )
+}
+
+function EventPicker({ open, title, excludeIds, onClose, onPick, busy }: { open: boolean; title: string; excludeIds: number[]; onClose: () => void; onPick: (id: number) => void; busy: boolean }) {
+  const [q, setQ] = useState('')
+  const [rows, setRows] = useState<Event[]>([])
+  const [loading, setLoading] = useState(false)
+
+  useEffect(() => {
+    if (!open) {
+      setQ('')
+      setRows([])
+      return
+    }
+    let alive = true
+    setLoading(true)
+    const like = `%${q.trim().replace(/[%_]/g, '')}%`
+    let query = supabase.from('events').select('*').eq('status', 'published').gte('date_time', new Date().toISOString()).order('date_time', { ascending: true }).limit(20)
+    if (q.trim()) query = query.ilike('name', like)
+    query.then(({ data }) => {
+      if (!alive) return
+      setRows(((data as Event[]) || []).filter((e) => !excludeIds.includes(e.id)))
+      setLoading(false)
+    })
+    return () => {
+      alive = false
+    }
+    // excludeIds ändras bara när listan laddas om; q och open styr sökningen
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, q])
+
+  return (
+    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent title={title} description="Endast publicerade, kommande event." size="md" className="h-[70vh]">
+        <div className="flex h-full flex-col gap-3">
+          <SearchInput value={q} onChange={setQ} placeholder="Sök på eventnamn…" autoFocus />
+          <div className="thin-scroll -mx-1 flex min-h-0 flex-1 flex-col overflow-y-auto">
+            {loading ? (
+              <div className="flex justify-center py-8"><Spinner /></div>
+            ) : rows.length === 0 ? (
+              <EmptyState title="Inga event hittades" description="Prova ett annat sökord." className="py-8" />
+            ) : (
+              rows.map((e) => (
+                <button key={e.id} type="button" disabled={busy} onClick={() => onPick(e.id)} className="flex items-center gap-3 rounded-[8px] px-2 py-2 text-left hover:bg-sand-soft disabled:opacity-50">
+                  <Thumb src={e.image_url} size={40} />
+                  <span className="flex min-w-0 flex-1 flex-col">
+                    <span className="truncate text-[13px] font-medium text-ink">{e.name}</span>
+                    <span className="truncate text-[11px] text-ink-muted">{formatDay(e.date_time)} · {e.venue_name || e.location}</span>
+                  </span>
+                  <Plus className="size-4 text-ink-muted" />
+                </button>
+              ))
+            )}
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+export { SectionLabel }
