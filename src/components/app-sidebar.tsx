@@ -15,7 +15,8 @@ import {
   Globe,
   PanelLeftClose,
   PanelLeftOpen,
-  Mail
+  Mail,
+  Instagram
 } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
@@ -42,6 +43,7 @@ const navigation = [
   { name: 'Duplicates', href: '/events/duplicates', icon: AlertCircle },
   { name: 'Statistik', href: '/events/statistics', icon: BarChart3 },
   { name: 'Scrapers', href: '/scrapers', icon: Download },
+  { name: 'Instagram', href: '/instagram', icon: Instagram },
   { name: 'Organizers', href: '/organizers', icon: Users },
   { name: 'Arrangörssidor', href: '/organizer-pages', icon: Globe },
   { name: 'Email-notifikationer', href: '/admin/settings/notifications', icon: Mail },

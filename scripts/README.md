@@ -81,9 +81,21 @@ Se [GITHUB_ACTIONS_SETUP.md](../docs/GITHUB_ACTIONS_SETUP.md) för mer info.
 
 ## Publish Instagram Post
 
-Daglig automatisk Instagram-post: "Det här händer i Varberg idag". AI rankar dagens event (text-ranking + vision-granskning av bilder) och bygger en **karusell med 1-5 kvadratiska bilder** - slide 1 är det primära eventet med bästa bilden, övriga slides är dagens andra event vars bilder klarar kvalitetsgaten. En svensk caption genereras och `{image_urls, image_url, caption}` skickas till en Make.com-webhook som postar till Instagram for Business (`image_url` = första sliden, bakåtkompatibilitet). Alla AI-anrop mäts i PostHog (features: `instagram-event-ranking`, `instagram-image-review`, `instagram-caption`).
+Daglig automatisk Instagram-post: "Det här händer i Varberg idag". AI rankar dagens event (text-ranking + vision-granskning av bilder) och bygger en **karusell med 1-5 bilder i ett av Instagrams format (1:1, 4:5 eller 1.91:1)** - slide 1 är det primära eventet med bästa bilden, övriga slides är dagens andra event vars bilder klarar kvalitetsgaten. En svensk caption genereras och `{image_urls, image_url, caption}` skickas till en Make.com-webhook som postar till Instagram for Business (`image_url` = första sliden, bakåtkompatibilitet). Alla AI-anrop mäts i PostHog (features: `instagram-event-ranking`, `instagram-image-review`, `instagram-caption`).
 
-Bildkvalitetsgate (programmatisk, före vision-granskningen): källbilden måste vara nära 1:1 (retention = kortsida/långsida ≥ 0.65, dvs. 4:5/4:3/3:2 ok men inte 16:9) och ha kortaste sida ≥ 800 px, eftersom alla slides croppas till 1080×1080. Om ingen bild klarar strikta gaten postas en enbildspost med relaxed-krav (retention ≥ 0.55, kortsida ≥ 640) som sista utväg.
+**Formatval:** alla slides i en karusell måste ha samma proportion (Graph API beskär barnen efter den första), så ett format väljs per post ur `INSTAGRAM_FORMATS` i preferensordning: `1:1` (1080×1080) → `4:5` (1080×1350) → `1.91:1` (1080×566). Första formatet som ger ett användbart huvudevent vinner, så en bra kvadratisk bild slår alltid en banner - men dagar där eventen bara har breda bannrar (Cruncho/Visit Varberg levererar t.ex. 2474×1028) blir liggande post i stället för ingen post alls.
+
+Bildkvalitetsgate (programmatisk, före vision-granskningen), bedöms per format:
+- `retention` = andel av bilden som överlever cover-croppen till formatet (≥ 0.65 strikt, ≥ 0.55 relaxed). En 16:9-banner har 0.56 mot kvadrat men 0.95 mot liggande.
+- `upscale` = hur mycket croppen måste skalas upp till formatets pixelmått (≤ 1.35 strikt, ≤ 1.7 relaxed), plus ett absolut golv på 400 px kortsida.
+
+Klarar ingen bild strikta gaten i något format postas en enbildspost med relaxed-krav som sista utväg; först då skippas dagen.
+
+**Dubblettregler** (långkörare får nytt event-id varje dag av scrapern, så allt matchas på normaliserat NAMN - inte bara id):
+- Huvudevent (slide 1): inte primärt de senaste 7 dagarna, och max 2 tidigare dagar i veckans poster (`MAX_PRIMARY_APPEARANCES_PER_WEEK = 3`).
+- Karusell-slides (2-N): minst 3 dagars karens (`SLIDE_LOOKBACK_DAYS`) och max 2 visningar per rullande vecka (`MAX_APPEARANCES_PER_WEEK`) i någon roll (primär, slide eller "Det händer också").
+- "Det händer också": 2 dagars karens (mjuk, kan fyllas på bort om listan blir för kort) + veckotaket (hårt).
+- `EXCLUDED_EVENT_NAME_PATTERNS` finns kvar som hård namnbaserad bannlysning för enskilda event.
 
 OBS: eventbilder som serveras via ImageKit (`ik.imagekit.io`) har en `?tr=...w-1440,h-660`-transformation som beskär allt till banner - pipelinen stryker den (`originalImageUrl()`) så att bedömning och crop utgår från originalbilden.
 
@@ -108,7 +120,7 @@ MAKE_WEBHOOK_URL=https://hook.eu2.make.com/...   # Make-webhook (krävs ej för 
 MAKE_WEBHOOK_API_KEY=...                          # Valfri: om webhooken har API Key authentication
 ```
 
-Varje slide croppas till kvadratisk 1080×1080 JPEG med sharp (attention-crop mot bildens mest intressanta region) och laddas upp till den publika Supabase Storage-bucketen `instagram-posts` (skapas automatiskt) som `{postDate}-{n}.jpg`. Gamla filer med samma datumprefix rensas först.
+Varje slide croppas till det valda formatets mått (1080×1080, 1080×1350 eller 1080×566) som JPEG med sharp (attention-crop mot bildens mest intressanta region) och laddas upp till den publika Supabase Storage-bucketen `instagram-posts` (skapas automatiskt) som `{postDate}-{n}.jpg`. Gamla filer med samma datumprefix rensas först.
 
 ### Förutsättningar
 
@@ -120,7 +132,7 @@ Varje slide croppas till kvadratisk 1080×1080 JPEG med sharp (attention-crop mo
 
 ### Schemaläggning
 
-Primär trigger är **Vercel cron**: `/api/cron/instagram-post` körs kl 06:00 och 07:00 UTC (se `vercel.json`); pipelinens timvakt (08–12 Europe/Stockholm) hanterar sommar-/vintertid. `.github/workflows/daily-instagram-post.yml` är enbart en backup-trigger (GitHub-cron är konsekvent 2–3 h försenad för det här repot) plus manuellt verktyg via workflow_dispatch. `instagram_posts`-tabellen ger idempotens (max en post per dag) så dubbla triggers är ofarliga, samt 7-dagars variationshistorik så samma event inte featuras flera dagar i rad.
+Primär trigger är **Vercel cron**: `/api/cron/instagram-post` körs kl 06:00 och 07:00 UTC (se `vercel.json`); pipelinens timvakt (08–12 Europe/Stockholm) hanterar sommar-/vintertid. `.github/workflows/daily-instagram-post.yml` är enbart en backup-trigger (GitHub-cron är konsekvent 2–3 h försenad för det här repot) plus manuellt verktyg via workflow_dispatch. `instagram_posts`-tabellen ger idempotens (max en post per dag) så dubbla triggers är ofarliga, samt 7-dagars variationshistorik (se dubblettreglerna ovan) så samma event inte återkommer flera dagar i rad.
 
 ---
 

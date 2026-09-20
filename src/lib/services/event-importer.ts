@@ -378,7 +378,7 @@ export class EventImporter {
 
     for (const event of events) {
       if (event.metadata) {
-        const match = await organizerMatcher.matchOrganizer(event.metadata, defaultOrganizerId);
+        const match = await organizerMatcher.matchOrganizer(event.metadata, defaultOrganizerId, source);
 
         // Logga endast om det INTE är default match
         if (match.matchType !== 'default') {
@@ -473,25 +473,65 @@ export class EventImporter {
       .lte('date_time', `${eventDate}T23:59:59Z`)
       .ilike('venue_name', `%${venueKeyword}%`);
 
-    if (!similarEvents || similarEvents.length === 0) {
-      return false;
+    if (similarEvents && similarEvents.length > 0) {
+      if (await this.matchByName(event, similarEvents, eventDate, venueKeyword)) return true;
     }
 
-    // Fuzzy matching på namn
-    for (const existing of similarEvents) {
+    // METHOD 3: Samma källa, samma dag, nästan identiskt namn - oavsett venue.
+    // Fångar fallet när källan ändrat hur venue anges (Visit Varberg skriver
+    // sedan plattformsbytet hösten 2026 ibland gatuadress i stället för lokal).
+    // Kräver samma host på organizer_event_url så att vi inte slår ihop
+    // olika arrangörers event som råkar heta lika samma dag.
+    const sourceHost = this.safeHost(event.organizer_event_url);
+    if (sourceHost) {
+      const { data: sameDayEvents } = await this.supabase
+        .from('events')
+        .select('id, name, organizer_event_url, venue_name, date_time')
+        .gte('date_time', `${eventDate}T00:00:00Z`)
+        .lte('date_time', `${eventDate}T23:59:59Z`)
+        .ilike('organizer_event_url', `%${sourceHost}%`);
+
+      const sameSource = (sameDayEvents ?? []).filter(x => this.safeHost(x.organizer_event_url) === sourceHost);
+      if (sameSource.length > 0) {
+        if (await this.matchByName(event, sameSource, eventDate, `källa ${sourceHost}`, 0.92)) return true;
+      }
+    }
+
+    return false;
+  }
+
+  private safeHost(url: string | null | undefined): string | null {
+    if (!url) return null;
+    try {
+      return new URL(url).host;
+    } catch {
+      return null;
+    }
+  }
+
+  /** Fuzzy namnjämförelse mot en kandidatlista; loggar och självläker URL vid träff */
+  private async matchByName(
+    event: ScrapedEvent,
+    candidates: Array<{ id: number | string; name: string; organizer_event_url: string | null }>,
+    eventDate: string,
+    context: string,
+    threshold = 0.85
+  ): Promise<boolean> {
+    for (const existing of candidates) {
       const similarity = stringSimilarity.compareTwoStrings(
         this.normalizeEventName(event.name),
         this.normalizeEventName(existing.name)
       );
 
-      if (similarity >= 0.85) { // 85% threshold
+      if (similarity >= threshold) {
         this.logDuplicate(event, existing, similarity, 'fuzzy_name');
+        await this.healOrganizerEventUrl(event, existing);
         
         console.log(
           `  ⊘ Fuzzy duplicate (${(similarity * 100).toFixed(0)}% match):\n` +
           `    New: "${event.name}"\n` +
           `    Existing: "${existing.name}"\n` +
-          `    Date: ${eventDate} | Venue: ${venueKeyword}`
+          `    Date: ${eventDate} | ${context}`
         );
         
         return true;
@@ -499,6 +539,42 @@ export class EventImporter {
     }
 
     return false;
+  }
+
+  /**
+   * När en fuzzy-dublett hittas och det befintliga eventet saknar URL eller har
+   * en URL från samma källa som inte längre stämmer, uppdatera till den nya.
+   * Bakgrund: Visit Varberg bytte eventplattform hösten 2026 och alla event-ID:n
+   * ändrades - utan detta skulle URL-dedupliceringen och Firecrawl-scrapernas
+   * knownUrls-filter aldrig känna igen eventen igen.
+   */
+  private async healOrganizerEventUrl(
+    event: ScrapedEvent,
+    existing: { id: number | string; organizer_event_url: string | null }
+  ): Promise<void> {
+    const newUrl = event.organizer_event_url;
+    if (!newUrl || existing.organizer_event_url === newUrl) return;
+
+    if (existing.organizer_event_url) {
+      try {
+        const oldHost = new URL(existing.organizer_event_url).host;
+        const newHost = new URL(newUrl).host;
+        if (oldHost !== newHost) return; // Annan källa - rör inte
+      } catch {
+        return;
+      }
+    }
+
+    const { error } = await this.supabase
+      .from('events')
+      .update({ organizer_event_url: newUrl })
+      .eq('id', existing.id);
+
+    if (error) {
+      console.warn(`  ⚠️ Kunde inte uppdatera organizer_event_url för event ${existing.id}: ${error.message}`);
+    } else {
+      console.log(`  🔗 Uppdaterade organizer_event_url för event ${existing.id} -> ${newUrl}`);
+    }
   }
 
   /**

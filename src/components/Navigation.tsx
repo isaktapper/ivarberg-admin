@@ -22,7 +22,8 @@ import {
   Globe,
   Mail,
   Settings,
-  Star
+  Star,
+  Instagram
 } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
@@ -45,6 +46,7 @@ const navigationGroups = [
       { name: 'Tips', href: '/admin/tips', icon: AlertCircle, badge: true },
       { name: 'Dubletter', href: '/events/duplicates', icon: AlertCircle },
       { name: 'Scrapers', href: '/scrapers', icon: Download },
+      { name: 'Instagram', href: '/instagram', icon: Instagram },
     ],
   },
   {

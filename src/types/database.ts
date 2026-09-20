@@ -194,7 +194,8 @@ export interface HeroFeaturedEvent {
   event?: Event
 }
 
-export type InstagramPostStatus = 'published' | 'skipped' | 'failed'
+export type InstagramPostStatus = 'pending' | 'published' | 'skipped' | 'failed'
+export type InstagramApprovalSource = 'manual' | 'ntfy' | 'auto' | 'direct'
 
 export interface InstagramPost {
   id: number
@@ -210,7 +211,12 @@ export interface InstagramPost {
   error?: string | null
   candidates_count?: number | null
   posted_at?: string | null
-  created_at: string
+  created_at: string  // Godkännandeflödet (ADD_INSTAGRAM_APPROVAL_FLOW.sql)
+  proposal?: import('@/lib/services/instagram-proposal').InstagramProposal | null
+  approval_token?: string | null
+  approved_at?: string | null
+  approval_source?: InstagramApprovalSource | null
+  notified_at?: string | null
 }
 
 export interface Database {

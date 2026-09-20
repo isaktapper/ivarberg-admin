@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "eslint",
     "scrape": "tsx --env-file=.env.local scripts/run-scrapers.ts",
+    "enrich-organizers": "tsx --env-file=.env.local scripts/enrich-pending-organizers.ts",
     "instagram-post": "tsx --env-file=.env.local scripts/publish-instagram-post.ts",
     "regenerate-pages": "tsx --env-file=.env.local scripts/regenerate-page-content.ts"
   },

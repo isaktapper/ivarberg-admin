@@ -230,7 +230,18 @@ async function main() {
   
   console.log(`${'='.repeat(60)}`);
   console.log('✅ Scraping complete!\n');
-  
+
+  // 🔎 Berika nya pending-arrangörer (auto-skapade av scrapers denna eller
+  // tidigare körningar). Använder vanlig fetch + DuckDuckGo (inga Firecrawl-credits),
+  // endast små OpenAI-anrop. Icke-fatalt - berikning får aldrig fälla scraper-körningen.
+  console.log('🔎 Berikar nya pending-arrangörer...');
+  try {
+    const { organizerEnricher } = await import('../src/lib/services/organizer-enricher');
+    await organizerEnricher.enrichPendingOrganizers({ limit: 15 });
+  } catch (error) {
+    console.error('⚠️ Arrangörsberikning misslyckades (fortsätter ändå):', error);
+  }
+
   // 📧 Skicka email-rapport (endast från GitHub Actions)
   if (isGitHubActions) {
     console.log('📧 Sending daily email report...');

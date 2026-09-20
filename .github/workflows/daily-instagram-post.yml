@@ -7,8 +7,10 @@ on:
     # försenad för det här repot, så tiderna nedan är valda så att de EFTER
     # försening landar i timvaktens fönster (08-12 Europe/Stockholm) och
     # fångar upp dagen om Vercel-cronen fallerat. Idempotenskollen
-    # (instagram_posts UNIQUE post_date) gör extra försök ofarliga, och en
-    # körning efter kl 12 utan dagens post larmar.
+    # (instagram_posts UNIQUE post_date) gör extra försök ofarliga.
+    # Med godkännandeflödet (NTFY_TOPIC satt) skapar första körningen dagens
+    # förslag + notis, och körningar från kl 10 auto-publicerar ett
+    # obesvarat förslag.
     - cron: '20 4 * * *'
     - cron: '20 5 * * *'
     - cron: '10 7 * * *'
@@ -62,6 +64,11 @@ jobs:
           ALERT_EMAIL: ${{ secrets.ALERT_EMAIL }}
           MAKE_WEBHOOK_URL: ${{ secrets.MAKE_WEBHOOK_URL }}
           MAKE_WEBHOOK_API_KEY: ${{ secrets.MAKE_WEBHOOK_API_KEY }}
+          # Godkännandeflödet: ntfy-notis med länk till admin (se instagram-post-runner.ts)
+          NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+          NTFY_SERVER: ${{ vars.NTFY_SERVER || 'https://ntfy.sh' }}
+          ADMIN_BASE_URL: ${{ vars.ADMIN_BASE_URL || 'https://admin.ivarberg.nu' }}
+          INSTAGRAM_AUTO_PUBLISH: ${{ vars.INSTAGRAM_AUTO_PUBLISH || 'true' }}
           FORCE_RUN: ${{ github.event.inputs.force || 'false' }}
           DRY_RUN: ${{ github.event.inputs.dry_run || 'false' }}
         run: pnpm tsx scripts/publish-instagram-post.ts

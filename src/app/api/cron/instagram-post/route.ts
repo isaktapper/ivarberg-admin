@@ -1,8 +1,11 @@
 /**
  * Vercel cron-endpoint för den dagliga Instagram-posten.
  *
- * Schemaläggs i vercel.json (06:00 + 07:00 UTC - timvakten i pipelinen
- * hanterar sommar-/vintertid och idempotenskollen stoppar dubbletter).
+ * Schemaläggs i vercel.json: 06:00 UTC skapar dagens förslag och skickar
+ * ntfy-notisen (07/08 Stockholm), 09:00 UTC auto-publicerar förslaget om
+ * ingen svarat (10/11 Stockholm). Timvakten i pipelinen hanterar sommar-/
+ * vintertid och idempotenskollen stoppar dubbletter. ?direct=true postar
+ * utan godkännande (gamla flödet).
  * Vercel skickar automatiskt "Authorization: Bearer ${CRON_SECRET}" om
  * env-variabeln CRON_SECRET är satt i projektet.
  *
@@ -31,9 +34,10 @@ export async function GET(request: NextRequest) {
 
   const force = request.nextUrl.searchParams.get('force') === 'true'
   const dryRun = request.nextUrl.searchParams.get('dry_run') === 'true'
+  const direct = request.nextUrl.searchParams.get('direct') === 'true'
 
   try {
-    const result = await runDailyInstagramPost({ force, dryRun })
+    const result = await runDailyInstagramPost({ force, dryRun, direct })
     return NextResponse.json(result, { status: result.ok ? 200 : 500 })
   } catch (error) {
     return NextResponse.json(

@@ -59,6 +59,12 @@ export async function middleware(req: NextRequest) {
     data: { session },
   } = await supabase.auth.getSession()
 
+  // Godkännandesidan för Instagram nås via engångstoken i URL:en (från
+  // ntfy-notisen på mobilen) - ingen inloggning krävs, token är behörigheten
+  if (req.nextUrl.pathname.startsWith('/instagram/approve/')) {
+    return response
+  }
+
   // If user is not signed in and trying to access protected routes
   if (!session && req.nextUrl.pathname !== '/login') {
     return NextResponse.redirect(new URL('/login', req.url))

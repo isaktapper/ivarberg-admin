@@ -7,6 +7,10 @@
  *   2. reviewImages()    - vision-granskar toppkandidaternas bilder
  *   3. generateCaption() - skriver den svenska captionen
  *
+ * Bildformat: posten publiceras i ETT av Instagram-formaten (1:1, 4:5 eller
+ * 1.91:1) - se INSTAGRAM_FORMATS. Kvadrat föredras, de andra räddar dagar där
+ * eventbilderna bara finns som stående affischer eller breda bannrar.
+ *
  * VIKTIG INNEHÅLLSREGEL: captions får ALDRIG hänvisa till arrangörens egen
  * webbplats eller biljettsida. Enda CTA är iVarberg ("länk i bio").
  * Därför skickas booking_url/event_website/organizer_event_url aldrig med
@@ -29,15 +33,52 @@ export const MAX_ALSO_COUNT = 6
 export const MAX_SLIDES = 5
 export const MAX_VISION_CANDIDATES = 8 // tak på bilder i vision-anropet
 
-// Bildkvalitet: alla slides croppas till kvadrat, så källbilden måste vara
-// nära 1:1 (retention = min(w,h)/max(w,h) = andel av långsidan som överlever
-// croppen). 4:5=0.8, 4:3=0.75, 3:2=0.667 klarar strikta gaten; 16:9=0.5625
-// gör det inte. Relaxed-nivån släpper in 16:9 som sista utväg för slide 1.
+// Dubblettregler utöver 7-dagarsregeln för primärt event: samma event får
+// inte återkomma som karusell-slide dag efter dag, och får inte synas mer än
+// MAX_APPEARANCES_PER_WEEK gånger på en rullande vecka. Matchning sker på
+// normaliserat NAMN - långkörare får nytt event-id varje dag av scrapern, så
+// id-jämförelsen ensam ser dem som nya event varje morgon (det var så
+// "TRYCKT!" kunde ligga med i praktiskt taget varje karusell).
+const SLIDE_LOOKBACK_DAYS = 3
+const MAX_APPEARANCES_PER_WEEK = 2
+// Huvudeventet har ett generösare tak än slides: ett event som fått några
+// slides i veckan får fortfarande bli hero när det är dess dag, men ett som
+// legat i halva veckans poster (långkörare) ska inte kunna det.
+const MAX_PRIMARY_APPEARANCES_PER_WEEK = 3
+
+/**
+ * Instagram-format. Alla slides i en karusell måste ha SAMMA proportion
+ * (Graph API beskär barnen efter den första), så ett format väljs per post.
+ * Listan är preferensordning: kvadrat är säkrast i flödet, stående 4:5 tar
+ * mest plats, liggande 1.91:1 är sista utvägen men räddar dagar där
+ * eventbilderna bara finns som bredbild/banner.
+ */
+export type InstagramFormatKey = 'square' | 'portrait' | 'landscape'
+
+export interface InstagramFormat {
+  key: InstagramFormatKey
+  label: string
+  width: number
+  height: number
+  aspect: number // width / height
+}
+
+export const INSTAGRAM_FORMATS: InstagramFormat[] = [
+  { key: 'square', label: '1:1', width: 1080, height: 1080, aspect: 1080 / 1080 },
+  { key: 'portrait', label: '4:5', width: 1080, height: 1350, aspect: 1080 / 1350 },
+  { key: 'landscape', label: '1.91:1', width: 1080, height: 566, aspect: 1080 / 566 },
+]
+
+// Bildkvalitet bedöms per format:
+//   retention = andel av bilden som överlever cover-croppen till formatet
+//   upscale   = hur mycket croppen måste skalas upp till formatets pixelmått
+// En 16:9-banner har retention 0.56 mot kvadrat (faller) men 0.95 mot
+// liggande (klarar), medan en 4:5-affisch är perfekt stående och 0.8 kvadrat.
 const MIN_CROP_RETENTION = 0.65
 const RELAXED_CROP_RETENTION = 0.55
-// Kortaste sida styr uppskalningen till 1080x1080: 800 → max ~1.35x
-const MIN_SOURCE_SIDE = 800
-const RELAXED_SOURCE_SIDE = 640
+const MAX_UPSCALE = 1.35 // som tidigare: 800px kortsida → 1080 kvadrat
+const RELAXED_MAX_UPSCALE = 1.7
+const ABSOLUTE_MIN_SIDE = 400 // golv mot rena tumnaglar, oavsett format
 
 export interface RankingResult {
   primaryCandidates: number[] // Event-id:n i prioritetsordning (bäst först)
@@ -48,6 +89,8 @@ export interface RecentlyFeatured {
   recentPrimaryIds: Map<number, string> // event_id -> post_date (senaste)
   recentMentionIds: Map<number, string> // primär ELLER också-listad -> post_date
   recentPrimaryNames: Map<string, string> // normaliserat eventnamn -> post_date
+  recentMentionNames: Map<string, string> // normaliserat namn -> senaste datum i NÅGON roll
+  appearanceDatesByName: Map<string, Set<string>> // normaliserat namn -> alla datum eventet synts
 }
 
 /**
@@ -165,38 +208,111 @@ export async function getRecentlyFeatured(supabase: SupabaseClient): Promise<Rec
 
   const recentPrimaryIds = new Map<number, string>()
   const recentMentionIds = new Map<number, string>()
+  const datesByEventId = new Map<number, Set<string>>()
+  const noteAppearance = (id: number, date: string) => {
+    const dates = datesByEventId.get(id) ?? new Set<string>()
+    dates.add(date)
+    datesByEventId.set(id, dates)
+  }
   for (const row of data || []) {
     if (row.event_id) {
       recentPrimaryIds.set(row.event_id, row.post_date)
       recentMentionIds.set(row.event_id, row.post_date)
+      noteAppearance(row.event_id, row.post_date)
     }
     for (const id of row.also_event_ids || []) {
       recentMentionIds.set(id, row.post_date)
+      noteAppearance(id, row.post_date)
     }
     // Event som fått en foto-slide räknas som "sedda" minst lika starkt
     // som ett textomnämnande (endast slide 1 räknas som primärt)
     for (const id of row.slide_event_ids || []) {
       recentMentionIds.set(id, row.post_date)
+      noteAppearance(id, row.post_date)
     }
   }
 
-  // Slå upp namnen på nyligen primära event: återkommande event får nya
-  // id:n varje dag, så dubbletter måste även blockeras på namn.
+  // Slå upp namnen på ALLA event som synts (inte bara de primära):
+  // återkommande event får nya id:n varje dag, så både karensen och
+  // veckotaket måste räknas på namn för att fånga långkörarna.
   const recentPrimaryNames = new Map<string, string>()
-  if (recentPrimaryIds.size > 0) {
+  const recentMentionNames = new Map<string, string>()
+  const appearanceDatesByName = new Map<string, Set<string>>()
+  const seenEventIds = [...datesByEventId.keys()]
+  if (seenEventIds.length > 0) {
     const { data: namedEvents, error: nameError } = await supabase
       .from('events')
       .select('id, name')
-      .in('id', [...recentPrimaryIds.keys()])
+      .in('id', seenEventIds)
     if (nameError) {
       throw new Error(`Kunde inte hämta namn för Instagram-historik: ${nameError.message}`)
     }
+    const latest = (map: Map<string, string>, key: string, date: string) => {
+      const known = map.get(key)
+      if (!known || date > known) map.set(key, date)
+    }
     for (const e of namedEvents || []) {
-      recentPrimaryNames.set(normalizeEventName(e.name), recentPrimaryIds.get(e.id)!)
+      const name = normalizeEventName(e.name)
+      const primaryDate = recentPrimaryIds.get(e.id)
+      if (primaryDate) latest(recentPrimaryNames, name, primaryDate)
+
+      const dates = appearanceDatesByName.get(name) ?? new Set<string>()
+      for (const date of datesByEventId.get(e.id) ?? []) {
+        dates.add(date)
+        latest(recentMentionNames, name, date)
+      }
+      appearanceDatesByName.set(name, dates)
     }
   }
 
-  return { recentPrimaryIds, recentMentionIds, recentPrimaryNames }
+  return {
+    recentPrimaryIds,
+    recentMentionIds,
+    recentPrimaryNames,
+    recentMentionNames,
+    appearanceDatesByName,
+  }
+}
+
+// ============ Dubblettspärrar ============
+
+/** Senaste datum (YYYY-MM-DD) eventet synts i en post, '' om aldrig */
+export function lastAppearance(event: Event, recent: RecentlyFeatured): string {
+  const byName = recent.recentMentionNames.get(normalizeEventName(event.name)) || ''
+  const byId = recent.recentMentionIds.get(event.id) || ''
+  return byId > byName ? byId : byName
+}
+
+/** Antal dagar eventet (matchat på namn) synts i en post senaste veckan */
+export function appearanceCount(event: Event, recent: RecentlyFeatured): number {
+  return recent.appearanceDatesByName.get(normalizeEventName(event.name))?.size ?? 0
+}
+
+/** Har eventet nått veckotaket för antal visningar? Hård spärr. */
+export function hasHitWeeklyCap(event: Event, recent: RecentlyFeatured): boolean {
+  return appearanceCount(event, recent) >= MAX_APPEARANCES_PER_WEEK
+}
+
+/**
+ * Får eventet komma med som karusell-slide (2-N)? Blockeras av veckotaket
+ * eller av att det synts inom karensen. Slide 1 har egna regler nedan.
+ */
+export function isSlideRepeatBlocked(event: Event, recent: RecentlyFeatured): boolean {
+  if (hasHitWeeklyCap(event, recent)) return true
+  const last = lastAppearance(event, recent)
+  return !!last && last >= daysAgoDateString(SLIDE_LOOKBACK_DAYS)
+}
+
+/**
+ * Får eventet bli huvudevent (slide 1)? Nej om det varit primärt senaste 7
+ * dagarna (id ELLER namn), och nej om det synts i posterna för många dagar
+ * den senaste veckan - då är det en långkörare som redan fått sin plats.
+ */
+export function isPrimaryRepeatBlocked(event: Event, recent: RecentlyFeatured): boolean {
+  const wasPrimary =
+    recent.recentPrimaryIds.has(event.id) ||
+    recent.recentPrimaryNames.has(normalizeEventName(event.name))
+  return wasPrimary || appearanceCount(event, recent) >= MAX_PRIMARY_APPEARANCES_PER_WEEK
 }
 
 /**
@@ -286,20 +402,30 @@ export async function rankEvents(
   events: Event[],
   recentlyFeatured: RecentlyFeatured
 ): Promise<RankingResult> {
+  const eventById = new Map(events.map((e) => [e.id, e]))
   const alsoCutoff = daysAgoDateString(ALSO_LOOKBACK_DAYS)
+  // Namnmedveten karens: id-jämförelsen ensam ser långkörare som nya event
+  // varje dag och släppte därför igenom samma event dag efter dag.
   const isRecentlyMentioned = (id: number) => {
-    const date = recentlyFeatured.recentMentionIds.get(id)
-    return !!date && date >= alsoCutoff
+    const event = eventById.get(id)
+    if (!event) return false
+    const last = lastAppearance(event, recentlyFeatured)
+    return !!last && last >= alsoCutoff
+  }
+  // Veckotaket är en hård spärr (karensen kan fyllas på bort nedan, taket inte)
+  const isCapped = (id: number) => {
+    const event = eventById.get(id)
+    return !!event && hasHitWeeklyCap(event, recentlyFeatured)
   }
 
-  // Variationsregel: event som varit primärt senaste 7 dagarna utesluts ur
-  // primärkandidaturen - både på id OCH på namn (återkommande event får
-  // nya id:n varje dag av scrapern).
+  // Variationsregel: event som varit primärt senaste 7 dagarna (på id ELLER
+  // namn) och långkörare som redan synts för många dagar i veckans poster
+  // utesluts ur primärkandidaturen.
   const lastFeatured = (e: Event) =>
     recentlyFeatured.recentPrimaryIds.get(e.id) ||
     recentlyFeatured.recentPrimaryNames.get(normalizeEventName(e.name)) ||
     ''
-  const primaryEligible = events.filter((e) => !lastFeatured(e))
+  const primaryEligible = events.filter((e) => !isPrimaryRepeatBlocked(e, recentlyFeatured))
   // Fallback (lugn dag med bara långkörare): tillåt alla, minst nyligen visade först
   const primaryPool =
     primaryEligible.length > 0
@@ -307,7 +433,7 @@ export async function rankEvents(
       : [...events].sort((a, b) => lastFeatured(a).localeCompare(lastFeatured(b)))
 
   if (primaryEligible.length === 0 && events.length > 0) {
-    console.warn('  ⚠️ Alla dagens event har varit primära senaste 7 dagarna - använder minst nyligen visade')
+    console.warn('  ⚠️ Alla dagens event är blockerade av variationsreglerna - använder minst nyligen visade')
   }
 
   const eventList = events.map((e) => eventSummary(e, isRecentlyMentioned(e.id))).join('\n')
@@ -381,6 +507,7 @@ Svara ENDAST med JSON:
   let alsoToday: number[] = (parsed.also_today || [])
     .filter((id: unknown): id is number => typeof id === 'number' && validIds.has(id))
     .filter((id: number) => !primaryCandidates.includes(id))
+    .filter((id: number) => !isCapped(id))
 
   // Kodenforcerad variationsregel för "också"-listan: undvik event nämnda
   // senaste 2 dagarna om listan ändå får minst MIN_ALSO_COUNT poster
@@ -438,27 +565,69 @@ export function originalImageUrl(imageUrl: string): string {
   }
 }
 
+export interface FormatFit {
+  ok: boolean // klarar strikta gaten i detta format (slide-duglig)
+  relaxedOk: boolean // klarar relaxed-gaten (bara som enbildspost)
+  retention: number // andel av bilden som överlever cover-croppen
+  upscale: number // hur mycket croppen måste skalas upp till formatets mått
+  reason?: 'too-small' | 'too-elongated'
+}
+
 export interface ImageQualityResult {
-  ok: boolean // klarar strikta gaten (slide-duglig)
-  relaxedOk: boolean // klarar minst relaxed-gaten (endast primär-fallback)
   width: number
   height: number
-  retention: number // min(w,h)/max(w,h) - andel som överlever kvadrat-crop
-  reason?: 'unreachable' | 'too-small' | 'too-elongated'
+  unreachable: boolean
+  fits: Record<InstagramFormatKey, FormatFit> // bedömning per Instagram-format
+  ok: boolean // klarar strikta gaten i MINST ett format
+  relaxedOk: boolean // klarar relaxed-gaten i minst ett format
+  bestFormat: InstagramFormatKey | null // första formatet i preferensordning som klarar strikt
+}
+
+/** Hur väl en källbild med givna mått passar ett format efter cover-crop */
+export function fitToFormat(width: number, height: number, format: InstagramFormat): FormatFit {
+  const sourceAspect = width / height
+  const retention = Math.min(format.aspect / sourceAspect, sourceAspect / format.aspect)
+  // Cover-crop: den axel som är "för lång" beskärs, den andra behålls helt
+  const cropHeight = sourceAspect >= format.aspect ? height : width / format.aspect
+  const upscale = format.height / cropHeight
+  const tooSmall = (maxUpscale: number) =>
+    upscale > maxUpscale || Math.min(width, height) < ABSOLUTE_MIN_SIDE
+
+  const relaxedOk = !tooSmall(RELAXED_MAX_UPSCALE) && retention >= RELAXED_CROP_RETENTION
+  const ok = !tooSmall(MAX_UPSCALE) && retention >= MIN_CROP_RETENTION
+  return {
+    ok,
+    relaxedOk,
+    retention,
+    upscale,
+    reason: ok ? undefined : tooSmall(MAX_UPSCALE) ? 'too-small' : 'too-elongated',
+  }
 }
 
 /**
- * Programmatisk kvalitetsbedömning: nåbar, avkodbar, tillräcklig upplösning
- * och nära nog 1:1 för att kvadrat-croppen inte ska förstöra bilden.
+ * Programmatisk kvalitetsbedömning: nåbar, avkodbar, och tillräckligt nära
+ * något av Instagram-formaten för att croppen inte ska förstöra bilden.
+ * Bedöms mot ALLA format - runnern väljer sedan format för hela posten.
  */
 export async function assessImageQuality(imageUrl: string): Promise<ImageQualityResult> {
-  const failed = (reason: ImageQualityResult['reason'], width = 0, height = 0, retention = 0): ImageQualityResult => ({
+  const buildFits = (width: number, height: number): Record<InstagramFormatKey, FormatFit> =>
+    Object.fromEntries(
+      INSTAGRAM_FORMATS.map((f) => [
+        f.key,
+        width && height
+          ? fitToFormat(width, height, f)
+          : { ok: false, relaxedOk: false, retention: 0, upscale: Infinity, reason: 'too-small' as const },
+      ])
+    ) as Record<InstagramFormatKey, FormatFit>
+
+  const unreachable = (): ImageQualityResult => ({
+    width: 0,
+    height: 0,
+    unreachable: true,
+    fits: buildFits(0, 0),
     ok: false,
     relaxedOk: false,
-    width,
-    height,
-    retention,
-    reason,
+    bestFormat: null,
   })
 
   try {
@@ -468,7 +637,7 @@ export async function assessImageQuality(imageUrl: string): Promise<ImageQuality
       },
       signal: AbortSignal.timeout(15000),
     })
-    if (!response.ok) return failed('unreachable')
+    if (!response.ok) return unreachable()
 
     const buffer = Buffer.from(await response.arrayBuffer())
     const metadata = await sharp(buffer).metadata()
@@ -478,26 +647,21 @@ export async function assessImageQuality(imageUrl: string): Promise<ImageQuality
     if ((metadata.orientation ?? 1) >= 5) {
       ;[width, height] = [height, width]
     }
-    if (!width || !height) return failed('unreachable')
+    if (!width || !height) return unreachable()
 
-    const shortSide = Math.min(width, height)
-    const retention = shortSide / Math.max(width, height)
-
-    if (shortSide < RELAXED_SOURCE_SIDE) return failed('too-small', width, height, retention)
-    if (retention < RELAXED_CROP_RETENTION) return failed('too-elongated', width, height, retention)
-
-    const strictOk = shortSide >= MIN_SOURCE_SIDE && retention >= MIN_CROP_RETENTION
+    const fits = buildFits(width, height)
     return {
-      ok: strictOk,
-      relaxedOk: true,
       width,
       height,
-      retention,
-      reason: strictOk ? undefined : shortSide < MIN_SOURCE_SIDE ? 'too-small' : 'too-elongated',
+      unreachable: false,
+      fits,
+      ok: INSTAGRAM_FORMATS.some((f) => fits[f.key].ok),
+      relaxedOk: INSTAGRAM_FORMATS.some((f) => fits[f.key].relaxedOk),
+      bestFormat: INSTAGRAM_FORMATS.find((f) => fits[f.key].ok)?.key ?? null,
     }
   } catch (error) {
     console.warn(`  ⚠️ Bildbedömning misslyckades för ${imageUrl}:`, error instanceof Error ? error.message : error)
-    return failed('unreachable')
+    return unreachable()
   }
 }
 
@@ -708,19 +872,19 @@ Svara ENDAST med captionen, ingen annan text.`
 // ============ Bildkonvertering + uppladdning ============
 
 const STORAGE_BUCKET = 'instagram-posts'
-const SQUARE_SIZE = 1080 // Instagram-nativ 1:1
 
 /**
- * Hämta eventbilden, croppa till kvadratisk 1080x1080 JPEG och ladda upp
- * till en publik Supabase Storage-bucket som `{postDate}-{slideIndex}.jpg`.
+ * Hämta eventbilden, croppa till formatets mått (JPEG) och ladda upp till en
+ * publik Supabase Storage-bucket som `{postDate}-{slideIndex}.jpg`.
  * Kvalitetsgaten (assessImageQuality) har redan sorterat bort bilder som
- * skulle croppas för hårt. Returnerar den publika URL:en.
+ * skulle croppas för hårt i det valda formatet. Returnerar publika URL:en.
  */
 export async function uploadInstagramImage(
   supabase: SupabaseClient,
   imageUrl: string,
   postDate: string,
-  slideIndex: number // 1-baserat
+  slideIndex: number, // 1-baserat
+  format: InstagramFormat
 ): Promise<string> {
   const response = await fetch(imageUrl, {
     headers: {
@@ -738,8 +902,8 @@ export async function uploadInstagramImage(
   const jpegBuffer = await sharp(sourceBuffer, { failOn: 'error' })
     .rotate()
     .resize({
-      width: SQUARE_SIZE,
-      height: SQUARE_SIZE,
+      width: format.width,
+      height: format.height,
       fit: 'cover',
       position: sharp.strategy.attention,
     })
@@ -777,7 +941,8 @@ export async function uploadInstagramImage(
 export async function uploadInstagramSlides(
   supabase: SupabaseClient,
   slides: { event: Event; imageUrl: string }[],
-  postDate: string
+  postDate: string,
+  format: InstagramFormat
 ): Promise<{ event: Event; url: string }[]> {
   const { data: existingFiles } = await supabase.storage
     .from(STORAGE_BUCKET)
@@ -792,7 +957,13 @@ export async function uploadInstagramSlides(
   const uploaded: { event: Event; url: string }[] = []
   for (const [i, slide] of slides.entries()) {
     try {
-      const url = await uploadInstagramImage(supabase, slide.imageUrl, postDate, uploaded.length + 1)
+      const url = await uploadInstagramImage(
+        supabase,
+        slide.imageUrl,
+        postDate,
+        uploaded.length + 1,
+        format
+      )
       uploaded.push({ event: slide.event, url })
     } catch (error) {
       if (i === 0) throw error // primära slidens bild är obligatorisk

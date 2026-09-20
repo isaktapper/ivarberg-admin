@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import * as stringSimilarity from 'string-similarity';
+import { normalizeWebsiteUrl } from './organizer-enricher';
 
 /**
  * Service för att matcha events till rätt arrangör
@@ -38,7 +39,8 @@ export class OrganizerMatcher {
    */
   async matchOrganizer(
     metadata: OrganizerMetadata,
-    defaultOrganizerId: number
+    defaultOrganizerId: number,
+    scraperSource?: string
   ): Promise<OrganizerMatch> {
 
     // 1. Om organizerName finns, försök exakt match
@@ -96,7 +98,7 @@ export class OrganizerMatcher {
     // 5. Om vi har organizerName men ingen match: Skapa ny arrangör
     if (metadata.organizerName) {
       try {
-        const newOrganizerId = await this.createPendingOrganizer(metadata);
+        const newOrganizerId = await this.createPendingOrganizer(metadata, scraperSource);
         return {
           organizerId: newOrganizerId,
           matchType: 'auto_created',
@@ -291,7 +293,7 @@ export class OrganizerMatcher {
   /**
    * Skapa en ny arrangör med pending-status (auto-created från scraper)
    */
-  private async createPendingOrganizer(metadata: OrganizerMetadata): Promise<number> {
+  private async createPendingOrganizer(metadata: OrganizerMetadata, scraperSource?: string): Promise<number> {
     if (!metadata.organizerName) {
       throw new Error('Cannot create organizer without name');
     }
@@ -303,6 +305,8 @@ export class OrganizerMatcher {
     }
 
     // Skapa arrangör med pending-status
+    // Webbplatsen normaliseras till rotdomän - scraped URL pekar ofta på en
+    // eventsida (t.ex. sonjasveranda.se/jul) och förmedlardomäner filtreras bort
     const { data, error } = await this.supabase
       .from('organizers')
       .insert({
@@ -311,10 +315,10 @@ export class OrganizerMatcher {
         venue_name: metadata.venueName,
         email: metadata.email || null,
         phone: metadata.phone || null,
-        website: metadata.organizerWebsite || null,
+        website: normalizeWebsiteUrl(metadata.organizerWebsite),
         created_from_scraper: true,
         needs_review: true,
-        scraper_source: 'Visit Varberg', // Hårdkodat för nu, kan göras dynamiskt senare
+        scraper_source: scraperSource || 'Visit Varberg',
       })
       .select('id')
       .single();
