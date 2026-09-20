@@ -1,15 +1,35 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
+import { Poppins, IBM_Plex_Sans, IBM_Plex_Mono } from "next/font/google";
 import "./globals.css";
 import { AuthProvider } from "@/contexts/AuthContext";
+import { ToastProvider } from "@/components/ui/toast";
+import { ConfirmProvider } from "@/components/ui/confirm-dialog";
+import { TooltipProvider } from "@/components/ui/tooltip";
 
-const inter = Inter({
+const poppins = Poppins({
   subsets: ["latin"],
+  weight: ["500", "600", "700"],
+  variable: "--font-poppins",
+  display: "swap",
+});
+
+const plexSans = IBM_Plex_Sans({
+  subsets: ["latin", "latin-ext"],
+  weight: ["400", "500", "600"],
+  variable: "--font-plex-sans",
+  display: "swap",
+});
+
+const plexMono = IBM_Plex_Mono({
+  subsets: ["latin"],
+  weight: ["400", "500"],
+  variable: "--font-plex-mono",
+  display: "swap",
 });
 
 export const metadata: Metadata = {
-  title: "Ivarberg Admin Panel",
-  description: "Admin panel för event-hantering",
+  title: "iVarberg Admin",
+  description: "Admin för ivarberg.nu",
 };
 
 export default function RootLayout({
@@ -18,10 +38,14 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="sv">
-      <body className={`${inter.className} antialiased`}>
+    <html lang="sv" className={`${poppins.variable} ${plexSans.variable} ${plexMono.variable}`}>
+      <body className="antialiased">
         <AuthProvider>
-          {children}
+          <TooltipProvider delayDuration={300}>
+            <ToastProvider>
+              <ConfirmProvider>{children}</ConfirmProvider>
+            </ToastProvider>
+          </TooltipProvider>
         </AuthProvider>
       </body>
     </html>
