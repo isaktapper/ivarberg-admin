@@ -22,7 +22,9 @@ import {
   PROPOSAL_FORMATS,
   PROPOSAL_MAX_SLIDES,
   ProposalCandidate,
-  defaultFormatFor,
+  bestCommonFormat,
+  candidateFits,
+  commonFormats,
   formatLabel,
   validateSelection,
 } from '@/lib/services/instagram-proposal'
@@ -68,26 +70,53 @@ export default function ApprovalClient({ token, initial }: { token: string; init
   }, [proposal, suggestion])
 
   const [primaryId, setPrimaryId] = useState<number | null>(suggestion?.primaryEventId ?? orderedCandidates[0]?.eventId ?? null)
-  const [format, setFormat] = useState<InstagramFormatKey>(suggestion?.format ?? 'square')
+  // Formatet räknas ut från de valda bilderna (alla slides i en karusell
+  // måste dela format). formatOverride = användarens val bland de möjliga.
+  const [formatOverride, setFormatOverride] = useState<InstagramFormatKey | null>(suggestion?.format ?? null)
   const [slideIds, setSlideIds] = useState<number[]>(suggestion?.slideEventIds ?? [])
   const [caption, setCaption] = useState<string>(suggestion?.caption ?? '')
   const [busy, setBusy] = useState<'publish' | 'skip' | 'caption' | null>(null)
   const [message, setMessage] = useState<{ kind: 'error' | 'info'; text: string } | null>(null)
 
   const primary = primaryId != null ? candidatesById.get(primaryId) ?? null : null
+  const chosenCandidates = useMemo(
+    () => slideIds.map((id) => candidatesById.get(id)).filter((c): c is ProposalCandidate => !!c),
+    [slideIds, candidatesById]
+  )
+  const selectionCandidates = useMemo(
+    () => (primary ? [primary, ...chosenCandidates] : chosenCandidates),
+    [primary, chosenCandidates]
+  )
+  // Format som hela urvalet klarar, i preferensordning
+  const availableFormats = useMemo(() => commonFormats(selectionCandidates), [selectionCandidates])
+  const format: InstagramFormatKey =
+    formatOverride && availableFormats.includes(formatOverride)
+      ? formatOverride
+      : bestCommonFormat(selectionCandidates) ?? formatOverride ?? 'square'
 
-  const availableFormats = useMemo(() => {
-    if (!primary) return []
-    return PROPOSAL_FORMATS.filter((f) => primary.fits[f.key].ok || (primary.fits[f.key].relaxedOk && slideIds.length === 0))
-  }, [primary, slideIds.length])
+  /** Går kandidaten att lägga till utan att urvalet tappar alla gemensamma format? */
+  const canAddSlide = (c: ProposalCandidate) =>
+    c.eventId !== primaryId &&
+    slideIds.length < PROPOSAL_MAX_SLIDES - 1 &&
+    commonFormats([...selectionCandidates, c]).length > 0
 
-  const isEligibleSlide = (c: ProposalCandidate) => c.eventId !== primaryId && c.fits[format].ok
+  /** Behåll bara slides som fortfarande delar ett format med det nya huvudeventet */
+  function reconcileSlides(newPrimary: ProposalCandidate, ids: number[]): number[] {
+    const kept: ProposalCandidate[] = [newPrimary]
+    const result: number[] = []
+    for (const id of ids) {
+      const c = candidatesById.get(id)
+      if (!c || c.eventId === newPrimary.eventId) continue
+      if (commonFormats([...kept, c]).length === 0) continue
+      kept.push(c)
+      result.push(id)
+    }
+    return result
+  }
 
   function choosePrimary(c: ProposalCandidate) {
     setPrimaryId(c.eventId)
-    const keepFormat = c.fits[format].ok ? format : defaultFormatFor(c) ?? format
-    setFormat(keepFormat)
-    setSlideIds((prev) => prev.filter((id) => id !== c.eventId && candidatesById.get(id)?.fits[keepFormat].ok))
+    setSlideIds((prev) => reconcileSlides(c, prev))
     setMessage(
       c.eventId === suggestion?.primaryEventId
         ? null
@@ -95,15 +124,11 @@ export default function ApprovalClient({ token, initial }: { token: string; init
     )
   }
 
-  function chooseFormat(key: InstagramFormatKey) {
-    setFormat(key)
-    setSlideIds((prev) => prev.filter((id) => candidatesById.get(id)?.fits[key].ok))
-  }
-
   function toggleSlide(id: number) {
     setSlideIds((prev) => {
       if (prev.includes(id)) return prev.filter((x) => x !== id)
-      if (prev.length >= PROPOSAL_MAX_SLIDES - 1) return prev
+      const c = candidatesById.get(id)
+      if (!c || !canAddSlide(c)) return prev
       return [...prev, id]
     })
   }
@@ -280,8 +305,8 @@ export default function ApprovalClient({ token, initial }: { token: string; init
   function Editor() {
     if (!proposal) return null
     const slideCandidates = orderedCandidates.filter((c) => c.eventId !== primaryId)
-    const chosen = slideIds.map((id) => candidatesById.get(id)).filter((c): c is ProposalCandidate => !!c)
-    const previewSlides = primary ? [primary, ...chosen] : chosen
+    const chosen = chosenCandidates
+    const previewSlides = selectionCandidates
 
     return (
       <div className="space-y-8">
@@ -297,18 +322,27 @@ export default function ApprovalClient({ token, initial }: { token: string; init
                   <span className="absolute top-1 left-1 text-[10px] font-semibold bg-black/60 text-white rounded px-1.5 py-0.5">
                     {i === 0 ? 'Featured' : `Slide ${i + 1}`}
                   </span>
+                  {!c.fits[format].ok && (
+                    <span className="absolute bottom-1 left-1 text-[10px] font-semibold bg-amber-500 text-white rounded px-1.5 py-0.5">
+                      hård crop
+                    </span>
+                  )}
                 </div>
                 <p className="text-xs text-gray-700 truncate">{c.name}</p>
               </div>
             ))}
           </div>
+          <p className="text-xs text-gray-500">
+            Alla bilder i en karusell måste ha samma format. Formatet väljs automatiskt utifrån bilderna du väljer
+            {availableFormats.length > 1 ? ' - du kan byta bland de som passar:' : '.'}
+          </p>
           {availableFormats.length > 1 && (
             <div className="flex gap-2 flex-wrap">
-              {availableFormats.map((f) => (
+              {PROPOSAL_FORMATS.filter((f) => availableFormats.includes(f.key)).map((f) => (
                 <button
                   key={f.key}
                   type="button"
-                  onClick={() => chooseFormat(f.key)}
+                  onClick={() => setFormatOverride(f.key)}
                   className={`text-xs rounded-full px-3 py-1 border ${format === f.key ? 'bg-gray-900 text-white border-gray-900' : 'bg-white text-gray-700 border-gray-300'}`}
                 >
                   {f.label}
@@ -368,7 +402,10 @@ export default function ApprovalClient({ token, initial }: { token: string; init
           <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">
             Övriga slides ({slideIds.length}/{PROPOSAL_MAX_SLIDES - 1})
           </h2>
-          <p className="text-xs text-gray-500">Alla slides måste klara formatet {formatLabel(format)}. Byt format ovan om något saknas.</p>
+          <p className="text-xs text-gray-500">
+            Bocka i de event som ska vara med och ordna dem med pilarna. Gråade bilder går inte att kombinera med det du redan valt
+            (inget gemensamt format) - ta bort något annat för att få plats med dem.
+          </p>
           <ul className="divide-y rounded-xl border bg-white">
             {chosen.map((c, i) => (
               <SlideRow key={c.eventId} c={c} index={i} total={chosen.length} onToggle={() => toggleSlide(c.eventId)} onMove={(d) => moveSlide(c.eventId, d)} checked />
@@ -380,8 +417,18 @@ export default function ApprovalClient({ token, initial }: { token: string; init
                   key={c.eventId}
                   c={c}
                   checked={false}
-                  disabled={!isEligibleSlide(c) || slideIds.length >= PROPOSAL_MAX_SLIDES - 1}
-                  reason={!c.fits[format].ok ? `Bilden klarar inte ${formatLabel(format)}` : c.slideRepeatBlocked ? 'Visad nyligen' : undefined}
+                  disabled={!canAddSlide(c)}
+                  reason={
+                    !canAddSlide(c)
+                      ? slideIds.length >= PROPOSAL_MAX_SLIDES - 1
+                        ? 'Max antal slides valda'
+                        : 'Inget gemensamt format med valda bilder'
+                      : !candidateFits(c, format, false)
+                        ? `Hård crop i ${formatLabel(format)}`
+                        : c.slideRepeatBlocked
+                          ? 'Visad nyligen'
+                          : undefined
+                  }
                   onToggle={() => toggleSlide(c.eventId)}
                 />
               ))}

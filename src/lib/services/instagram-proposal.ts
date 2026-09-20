@@ -94,6 +94,22 @@ export function formatsFor(candidate: ProposalCandidate): InstagramFormatKey[] {
   )
 }
 
+/** Kan kandidaten användas i formatet? Strikt, eller relaxed (hård crop) om tillåtet */
+export function candidateFits(c: ProposalCandidate, format: InstagramFormatKey, allowRelaxed = true): boolean {
+  const f = c.fits[format]
+  return f.ok || (allowRelaxed && f.relaxedOk)
+}
+
+/** Format (i preferensordning) som ALLA kandidater klarar - karusellkravet */
+export function commonFormats(candidates: ProposalCandidate[], allowRelaxed = true): InstagramFormatKey[] {
+  return PROPOSAL_FORMATS.filter((f) => candidates.every((c) => candidateFits(c, f.key, allowRelaxed))).map((f) => f.key)
+}
+
+/** Bästa gemensamma format: först det där alla klarar strikt, annars med relaxed */
+export function bestCommonFormat(candidates: ProposalCandidate[]): InstagramFormatKey | null {
+  return commonFormats(candidates, false)[0] ?? commonFormats(candidates, true)[0] ?? null
+}
+
 export function selectionFromSuggestion(proposal: InstagramProposal): InstagramSelection | null {
   const s = proposal.suggestion
   if (!s) return null
@@ -109,7 +125,14 @@ export type SelectionValidation =
  * formatet, övriga slides klarar samma format (karusellkrav), inga dubbletter,
  * max 5 slides, caption inom Instagrams gräns.
  */
-export function validateSelection(proposal: InstagramProposal, selection: InstagramSelection): SelectionValidation {
+export function validateSelection(
+  proposal: InstagramProposal,
+  selection: InstagramSelection,
+  options: { allowRelaxed?: boolean } = {}
+): SelectionValidation {
+  // Manuellt val får använda relaxed-kvalitet (hård crop) - människan har
+  // sett förhandsvisningen. AI-förslaget är strikt redan när det byggs.
+  const allowRelaxed = options.allowRelaxed ?? true
   const byId = new Map(proposal.candidates.map((c) => [c.eventId, c]))
   const primary = byId.get(selection.primaryEventId)
   if (!primary) return { ok: false, error: 'Huvudeventet finns inte bland dagens kandidater' }
@@ -124,21 +147,15 @@ export function validateSelection(proposal: InstagramProposal, selection: Instag
     return { ok: false, error: `Max ${PROPOSAL_MAX_SLIDES} slides totalt` }
   }
 
-  const primaryFit = primary.fits[selection.format]
-  if (!primaryFit.ok) {
-    if (!(primaryFit.relaxedOk && slideIds.length === 0)) {
-      return {
-        ok: false,
-        error: `Bilden för "${primary.name}" klarar inte formatet ${formatLabel(selection.format)}${primaryFit.relaxedOk ? ' i en karusell (fungerar bara som enbildspost)' : ''}`,
-      }
-    }
+  if (!candidateFits(primary, selection.format, allowRelaxed)) {
+    return { ok: false, error: `Bilden för "${primary.name}" klarar inte formatet ${formatLabel(selection.format)}` }
   }
 
   const slides: ProposalCandidate[] = []
   for (const id of slideIds) {
     const c = byId.get(id)
     if (!c) return { ok: false, error: `Slide-event ${id} finns inte bland dagens kandidater` }
-    if (!c.fits[selection.format].ok) {
+    if (!candidateFits(c, selection.format, allowRelaxed)) {
       return { ok: false, error: `Bilden för "${c.name}" klarar inte formatet ${formatLabel(selection.format)}` }
     }
     slides.push(c)
