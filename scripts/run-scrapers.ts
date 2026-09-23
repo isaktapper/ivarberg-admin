@@ -136,13 +136,20 @@ async function main() {
       );
       const importDuration = ((Date.now() - importStart) / 1000).toFixed(1);
       
-      totalFound += result.eventsFound;
+      // Event som Firecrawl-varianten såg men hoppade över som redan kända
+      // räknas som hittade + dubbletter, annars ser "4 events" ut som att
+      // källan bara hade 4 när den i själva verket hade 130.
+      const skippedKnown = scraper.getSkippedKnown();
+      const eventsFound = result.eventsFound + skippedKnown;
+      const duplicatesSkipped = result.duplicatesSkipped + skippedKnown;
+
+      totalFound += eventsFound;
       totalImported += result.eventsImported;
-      totalDuplicates += result.duplicatesSkipped;
+      totalDuplicates += duplicatesSkipped;
       
       console.log(`\n  📊 Results for ${config.name}:`);
       console.log(`     • Imported: ${result.eventsImported} new events`);
-      console.log(`     • Duplicates: ${result.duplicatesSkipped} skipped`);
+      console.log(`     • Duplicates: ${duplicatesSkipped} skipped${skippedKnown ? ` (${skippedKnown} redan kända, ej hämtade)` : ''}`);
       console.log(`     • Import time: ${importDuration}s`);
       
       if (result.errors.length > 0) {
@@ -168,9 +175,9 @@ async function main() {
             status,
             completed_at: new Date().toISOString(),
             duration_ms: endTime - scrapeStart,
-            events_found: result.eventsFound,
+            events_found: eventsFound,
             events_imported: result.eventsImported,
-            duplicates_skipped: result.duplicatesSkipped,
+            duplicates_skipped: duplicatesSkipped,
             errors: result.errors.length > 0 ? result.errors : null
           })
           .eq('id', logId);

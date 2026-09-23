@@ -89,6 +89,9 @@ async function fetchFollowingRedirects(startUrl: string): Promise<Response> {
   const chain: string[] = [startUrl];
   let url = startUrl;
   let referer: string | undefined;
+  // Diagnostik för första redirecten - avslöjar t.ex. F5-utmaningar
+  // (Set-Cookie + JS-body) som en vanlig fetch aldrig kan lösa
+  let firstRedirectInfo = '';
 
   for (let hop = 0; hop <= MAX_REDIRECTS; hop++) {
     const response = await fetchOnce(url, referer);
@@ -96,8 +99,14 @@ async function fetchFollowingRedirects(startUrl: string): Promise<Response> {
     if (response.status >= 300 && response.status < 400) {
       const location = response.headers.get('location');
       if (!location) return response;
-      // Töm bodyn så att anslutningen kan återanvändas
-      await response.arrayBuffer().catch(() => undefined);
+      const bodyText = await response.text().catch(() => '');
+      if (!firstRedirectInfo) {
+        const headers = response.headers as Headers & { getSetCookie?: () => string[] };
+        const cookieNames = (headers.getSetCookie?.() ?? []).map((c) => c.split('=')[0]).join(', ');
+        firstRedirectInfo =
+          `server=${response.headers.get('server') ?? '-'} content-type=${response.headers.get('content-type') ?? '-'} ` +
+          `set-cookie=[${cookieNames}] body(${bodyText.length} tecken)="${bodyText.replace(/\s+/g, ' ').slice(0, 300)}"`;
+      }
 
       const next = new URL(location, url).toString();
       chain.push(`${response.status} -> ${next}`);
@@ -109,8 +118,11 @@ async function fetchFollowingRedirects(startUrl: string): Promise<Response> {
     return response;
   }
 
+  // Kedjan är nästan alltid samma URL om och om igen - visa den komprimerat
+  const uniqueHops = [...new Set(chain.slice(1))];
   throw new Error(
-    `Redirect-loop (>${MAX_REDIRECTS} hopp) för ${startUrl}. Kedja:\n    ${chain.join('\n    ')}`
+    `Redirect-loop (>${MAX_REDIRECTS} hopp) för ${startUrl}. ` +
+      `Hopp: ${uniqueHops.join(' | ')} (x${chain.length - 1}). Första svaret: ${firstRedirectInfo}`
   );
 }
 

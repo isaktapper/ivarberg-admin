@@ -19,7 +19,14 @@ export class FallbackScraper extends BaseScraper {
     super(config);
   }
 
+  private usedScraper: BaseScraper | null = null;
+
+  getSkippedKnown(): number {
+    return this.usedScraper?.getSkippedKnown() ?? 0;
+  }
+
   async scrape(): Promise<ScrapedEvent[]> {
+    this.usedScraper = this.primary;
     try {
       return await this.primary.scrape();
     } catch (primaryError) {
@@ -35,6 +42,7 @@ export class FallbackScraper extends BaseScraper {
 
       try {
         const fallback = await this.createFallback();
+        this.usedScraper = fallback;
         const events = await fallback.scrape();
         console.log(`✅ ${this.config.name}: Firecrawl-fallback lyckades (${events.length} events)`);
         return events;

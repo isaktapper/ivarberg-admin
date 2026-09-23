@@ -9,7 +9,6 @@
  *
  * All parsning återanvänds från VisitVarbergScraper (scrapeEventPage).
  */
-import * as cheerio from 'cheerio';
 import { VisitVarbergScraper } from './visit-varberg-scraper';
 import { ScrapedEvent, ScraperConfig } from './types';
 import { fcFetchHTML } from './firecrawl-fetcher';
@@ -42,28 +41,10 @@ export class VisitVarbergFirecrawlScraper extends VisitVarbergScraper {
 
     console.log(`🔥 [Firecrawl] Starting scrape of ${this.config.name}...`);
 
-    // STEG 1: Hämta lista-sidan (1 Firecrawl-credit)
-    const listHtml = await this.fetchHTML(this.config.url);
-    const $list = cheerio.load(listHtml);
-
-    // STEG 2: Extrahera event-URLs (samma selektor som originalet)
-    const eventUrls: string[] = [];
-    $list('a[href*="/evenemang/tillfalle"]').each((_, element) => {
-      const href = $list(element).attr('href');
-      if (href && href.includes('eventId=')) {
-        const absoluteUrl = href.startsWith('http')
-          ? href
-          : `https://visitvarberg.se${href}`;
-        if (!seenUrls.has(absoluteUrl)) {
-          seenUrls.add(absoluteUrl);
-          eventUrls.push(absoluteUrl);
-        }
-      }
-    });
-
-    if (eventUrls.length === 0) {
-      throw new Error(`[Firecrawl] Inga event-länkar hittades på ${this.config.url} - trolig felsida eller ändrad sidstruktur`);
-    }
+    // STEG 1-2: Hämta listsidorna (1 Firecrawl-credit per sida, normalt 2)
+    // med samma paginering som originalet
+    const eventUrls = await this.collectEventUrls();
+    for (const url of eventUrls) seenUrls.add(url);
 
     // STEG 3: Filtrera bort events som redan finns i databasen
     const newUrls = eventUrls.filter(url => !this.knownUrls.has(url));

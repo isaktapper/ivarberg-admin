@@ -86,6 +86,10 @@ export function pickEventData(candidate: unknown): VisitVarbergEventData | null 
   return null;
 }
 
+/** Event per listsida - sajten tål 200 men inte 500; 100 ger marginal */
+const LIST_PAGE_SIZE = 100;
+const MAX_LIST_PAGES = 10;
+
 export class VisitVarbergScraper extends BaseScraper {
   async scrape(): Promise<ScrapedEvent[]> {
     const events: ScrapedEvent[] = [];
@@ -94,37 +98,9 @@ export class VisitVarbergScraper extends BaseScraper {
     try {
       console.log(`🎭 Starting scrape of ${this.config.name}...`);
 
-      // STEG 1: Hämta lista-sidan med alla events
-      const listHtml = await this.fetchHTML(this.config.url);
-      const $list = cheerio.load(listHtml);
-
-      // STEG 2: Extrahera alla event-URLs från lista-sidan
-      const eventUrls: string[] = [];
-      
-      $list('a[href*="/evenemang/tillfalle"]').each((_, element) => {
-        const href = $list(element).attr('href');
-        if (href && href.includes('eventId=')) {
-          const absoluteUrl = href.startsWith('http')
-            ? href
-            : `https://visitvarberg.se${href}`;
-          
-          if (!seenUrls.has(absoluteUrl)) {
-            seenUrls.add(absoluteUrl);
-            eventUrls.push(absoluteUrl);
-          }
-        }
-      });
-
-      console.log(`📋 Found ${eventUrls.length} event URLs`);
-
-      // Listsidan har normalt 100+ event. 0 länkar betyder att vi fått en
-      // block-/felsida med HTTP 200 eller att sidstrukturen ändrats - kasta så
-      // att Firecrawl-fallbacken provas och körningen inte loggas som lyckad.
-      if (eventUrls.length === 0) {
-        throw new Error(
-          `Inga event-länkar hittades på ${this.config.url} (HTML ${listHtml.length} tecken) - trolig blockering eller ändrad sidstruktur`
-        );
-      }
+      // STEG 1-2: Hämta listsidorna och samla alla event-URL:er
+      const eventUrls = await this.collectEventUrls();
+      for (const url of eventUrls) seenUrls.add(url);
 
       // STEG 3: Scrapa varje event-sida
       for (const url of eventUrls) {
@@ -152,6 +128,64 @@ export class VisitVarbergScraper extends BaseScraper {
     }
 
     return events;
+  }
+
+  /**
+   * Samla alla event-URL:er från listsidan.
+   *
+   * Sedan 2026-09-21 ger ?limit=500 en tom lista ("Inga evenemang matchade
+   * din sökning") - sajten har ett tak någonstans över 200. Vi hämtar därför
+   * LIST_PAGE_SIZE i taget med ?page=N, där page är kumulativ (page=1 ger de
+   * första 2*limit eventen), tills vi nått totalEvents från sidans initial
+   * state eller inga nya länkar dyker upp.
+   *
+   * Kastar om första sidan inte ger några länkar: det är antingen en
+   * block-/felsida med HTTP 200 eller en ändrad sidstruktur, och då ska
+   * Firecrawl-fallbacken provas och körningen inte loggas som lyckad.
+   */
+  protected async collectEventUrls(): Promise<string[]> {
+    const base = this.config.url.split('?')[0];
+    const urls: string[] = [];
+    const seen = new Set<string>();
+    let totalEvents: number | null = null;
+
+    for (let page = 0; page < MAX_LIST_PAGES; page++) {
+      const pageUrl = `${base}?limit=${LIST_PAGE_SIZE}&page=${page}`;
+      const html = await this.fetchHTML(pageUrl);
+      const $ = cheerio.load(html);
+
+      if (totalEvents === null) {
+        const m = html.match(/"totalEvents"\s*:\s*(\d+)/);
+        totalEvents = m ? parseInt(m[1], 10) : null;
+      }
+
+      let newOnPage = 0;
+      $('a[href*="/evenemang/tillfalle"]').each((_, element) => {
+        const href = $(element).attr('href');
+        if (!href || !href.includes('eventId=')) return;
+        const absoluteUrl = href.startsWith('http') ? href : `https://visitvarberg.se${href}`;
+        if (seen.has(absoluteUrl)) return;
+        seen.add(absoluteUrl);
+        urls.push(absoluteUrl);
+        newOnPage++;
+      });
+
+      console.log(
+        `📋 Listsida ${page + 1}: ${newOnPage} nya event-URL:er (totalt ${urls.length}${totalEvents !== null ? ` av ${totalEvents}` : ''})`
+      );
+
+      if (page === 0 && urls.length === 0) {
+        throw new Error(
+          `Inga event-länkar hittades på ${pageUrl} (HTML ${html.length} tecken) - trolig blockering eller ändrad sidstruktur`
+        );
+      }
+      if (newOnPage === 0) break;
+      if (totalEvents !== null && urls.length >= totalEvents) break;
+      await this.delay(500);
+    }
+
+    console.log(`📋 Found ${urls.length} event URLs`);
+    return urls;
   }
 
   /**

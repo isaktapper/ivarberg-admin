@@ -35,7 +35,7 @@ export const SCRAPER_CONFIGS: ScraperConfig[] = [
   },
   {
     name: 'Visit Varberg',
-    url: 'https://visitvarberg.se/evenemang?limit=500',
+    url: 'https://visitvarberg.se/evenemang', // scrapern paginerar själv med ?limit=100&page=N
     enabled: true,
     organizerId: 7,
     defaultCategory: 'Okategoriserad' // Visit Varberg har blandade evenemang
