@@ -1,8 +1,14 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { ScraperProgressLog, ProgressStep } from '@/types/database'
-import { X, Loader2, CheckCircle, XCircle, Clock } from 'lucide-react'
+import { Loader2, CheckCircle2, XCircle, Clock } from 'lucide-react'
+import { Dialog, DialogContent } from '@/components/ui/dialog'
+import { StatusBadge } from '@/components/ui/status-badge'
+import { Button } from '@/components/ui/button'
+import { LoadingState, ErrorState } from '@/components/ui/states'
+import { formatDuration, formatTime } from '@/lib/format'
+import { cn } from '@/lib/utils'
 
 interface ScraperProgressModalProps {
   logId: number
@@ -20,18 +26,14 @@ interface ProgressData {
     duration_ms?: number
   }
   progressLogs: ScraperProgressLog[]
-  totalProgress: {
-    current: number
-    total: number
-    percentage: number
-  } | null
+  totalProgress: { current: number; total: number; percentage: number } | null
   isRunning: boolean
   estimatedTimeRemaining: number | null
 }
 
 const stepLabels: Record<ProgressStep, string> = {
   starting: 'Startar',
-  scraping: 'Scrapar',
+  scraping: 'Hämtar',
   deduplicating: 'Rensar dubletter',
   categorizing: 'Kategoriserar',
   matching_organizers: 'Matchar arrangörer',
@@ -40,275 +42,143 @@ const stepLabels: Record<ProgressStep, string> = {
   failed: 'Misslyckades',
 }
 
-const stepIcons: Record<ProgressStep, React.ReactNode> = {
-  starting: <Loader2 className="w-4 h-4 animate-spin" />,
-  scraping: <Loader2 className="w-4 h-4 animate-spin" />,
-  deduplicating: <Loader2 className="w-4 h-4 animate-spin" />,
-  categorizing: <Loader2 className="w-4 h-4 animate-spin" />,
-  matching_organizers: <Loader2 className="w-4 h-4 animate-spin" />,
-  importing: <Loader2 className="w-4 h-4 animate-spin" />,
-  completed: <CheckCircle className="w-4 h-4 text-green-600" />,
-  failed: <XCircle className="w-4 h-4 text-red-600" />,
+function StepIcon({ step, active }: { step: ProgressStep; active: boolean }) {
+  if (step === 'completed') return <CheckCircle2 className="size-4 text-kelp" />
+  if (step === 'failed') return <XCircle className="size-4 text-poppy" />
+  if (active) return <Loader2 className="size-4 animate-spin text-sea" />
+  return <CheckCircle2 className="size-4 text-ink-faint" />
 }
 
-export default function ScraperProgressModal({
-  logId,
-  scraperName,
-  onClose,
-}: ScraperProgressModalProps) {
+/** Förloppet för en scraper-körning. Pollar varje sekund så länge den kör. */
+export default function ScraperProgressModal({ logId, scraperName, onClose }: ScraperProgressModalProps) {
   const [data, setData] = useState<ProgressData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [running, setRunning] = useState(true)
+
+  const fetchProgress = useCallback(async () => {
+    try {
+      const response = await fetch(`/api/scrape/${logId}/progress`)
+      if (!response.ok) throw new Error('Kunde inte hämta förloppet')
+      const progressData: ProgressData = await response.json()
+      setData(progressData)
+      setRunning(progressData.isRunning)
+      setError(null)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Kunde inte hämta förloppet')
+      setRunning(false)
+    } finally {
+      setLoading(false)
+    }
+  }, [logId])
 
   useEffect(() => {
     fetchProgress()
+  }, [fetchProgress])
 
-    // Poll varje sekund om scraper fortfarande kör
-    const interval = setInterval(() => {
-      if (data?.isRunning) {
-        fetchProgress()
-      }
-    }, 1000)
-
+  useEffect(() => {
+    if (!running) return
+    const interval = setInterval(fetchProgress, 1000)
     return () => clearInterval(interval)
-  }, [logId, data?.isRunning])
+  }, [running, fetchProgress])
 
-  const fetchProgress = async () => {
-    try {
-      const response = await fetch(`/api/scrape/${logId}/progress`)
-
-      if (!response.ok) {
-        throw new Error('Failed to fetch progress')
-      }
-
-      const progressData = await response.json()
-      setData(progressData)
-      setLoading(false)
-
-      // Sluta polla när scraper är klar
-      if (!progressData.isRunning) {
-        setError(null)
-      }
-    } catch (err) {
-      console.error('Error fetching progress:', err)
-      setError('Kunde inte hämta progress')
-      setLoading(false)
-    }
-  }
-
-  const formatDuration = (ms: number): string => {
-    const seconds = Math.floor(ms / 1000)
-    const minutes = Math.floor(seconds / 60)
-    const hours = Math.floor(minutes / 60)
-
-    if (hours > 0) {
-      return `${hours}h ${minutes % 60}m ${seconds % 60}s`
-    } else if (minutes > 0) {
-      return `${minutes}m ${seconds % 60}s`
-    } else {
-      return `${seconds}s`
-    }
-  }
-
-  const formatTime = (dateStr: string): string => {
-    return new Date(dateStr).toLocaleTimeString('sv-SE')
-  }
-
-  const formatEstimatedTime = (ms: number): string => {
-    const seconds = Math.floor(ms / 1000)
-    const minutes = Math.floor(seconds / 60)
-
-    if (minutes > 0) {
-      return `~${minutes}m ${seconds % 60}s kvar`
-    } else {
-      return `~${seconds}s kvar`
-    }
-  }
-
-  if (loading) {
-    return (
-      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-        <div className="bg-white rounded-lg p-8 max-w-2xl w-full mx-4">
-          <div className="flex items-center justify-center">
-            <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
-            <span className="ml-3 text-lg">Laddar progress...</span>
-          </div>
-        </div>
-      </div>
-    )
-  }
-
-  if (error) {
-    return (
-      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-        <div className="bg-white rounded-lg p-8 max-w-2xl w-full mx-4">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-xl font-semibold text-red-600">Fel</h2>
-            <button
-              onClick={onClose}
-              className="text-gray-400 hover:text-gray-600"
-            >
-              <X className="w-6 h-6" />
-            </button>
-          </div>
-          <p className="text-gray-700">{error}</p>
-          <button
-            onClick={onClose}
-            className="mt-4 px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700"
-          >
-            Stäng
-          </button>
-        </div>
-      </div>
-    )
-  }
-
-  if (!data) return null
-
-  const currentLog = data.progressLogs[data.progressLogs.length - 1]
-  const isCompleted = data.scraperLog.status !== 'running'
+  const currentLog = data?.progressLogs[data.progressLogs.length - 1]
+  const isCompleted = data ? data.scraperLog.status !== 'running' : false
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg max-w-3xl w-full max-h-[90vh] overflow-hidden flex flex-col">
-        {/* Header */}
-        <div className="p-6 border-b border-gray-200">
-          <div className="flex items-center justify-between">
-            <div>
-              <h2 className="text-2xl font-bold text-gray-900">{scraperName}</h2>
-              <p className="text-sm text-gray-500 mt-1">
-                Startad: {formatTime(data.scraperLog.started_at)}
-              </p>
-            </div>
-            <button
-              onClick={onClose}
-              className="text-gray-400 hover:text-gray-600 transition-colors"
-            >
-              <X className="w-6 h-6" />
-            </button>
-          </div>
-
-          {/* Status badge */}
-          <div className="mt-4">
-            {data.isRunning ? (
-              <div className="inline-flex items-center px-3 py-1 rounded-full bg-blue-100 text-blue-800">
-                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                <span className="text-sm font-medium">Pågår...</span>
-              </div>
-            ) : data.scraperLog.status === 'success' ? (
-              <div className="inline-flex items-center px-3 py-1 rounded-full bg-green-100 text-green-800">
-                <CheckCircle className="w-4 h-4 mr-2" />
-                <span className="text-sm font-medium">Klar</span>
-              </div>
-            ) : (
-              <div className="inline-flex items-center px-3 py-1 rounded-full bg-red-100 text-red-800">
-                <XCircle className="w-4 h-4 mr-2" />
-                <span className="text-sm font-medium">Misslyckades</span>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Progress bar */}
-        {data.totalProgress && (
-          <div className="px-6 pt-6">
-            <div className="space-y-2">
-              <div className="flex justify-between text-sm">
-                <span className="text-gray-700 font-medium">
-                  {currentLog?.message || 'Bearbetar...'}
-                </span>
-                <span className="text-gray-500">
-                  {data.totalProgress.percentage}%
-                </span>
-              </div>
-              <div className="w-full bg-gray-200 rounded-full h-2">
-                <div
-                  className="bg-blue-600 h-2 rounded-full transition-all duration-500"
-                  style={{ width: `${data.totalProgress.percentage}%` }}
-                />
-              </div>
-              <div className="flex justify-between text-xs text-gray-500">
-                <span>
+    <Dialog open onOpenChange={(o) => !o && onClose()}>
+      <DialogContent
+        size="lg"
+        title={scraperName}
+        description={data ? `Startad ${formatTime(data.scraperLog.started_at)}` : undefined}
+        footer={
+          <>
+            {isCompleted && data?.scraperLog.duration_ms ? (
+              <span className="mr-auto text-[13px] text-ink-soft">
+                Total tid: <span className="font-mono text-ink">{formatDuration(data.scraperLog.duration_ms)}</span>
+              </span>
+            ) : null}
+            <Button variant="secondary" onClick={onClose}>
+              Stäng
+            </Button>
+          </>
+        }
+      >
+        {loading ? (
+          <LoadingState label="Hämtar förlopp…" />
+        ) : error ? (
+          <ErrorState title="Kunde inte hämta förloppet" description={error} onRetry={fetchProgress} />
+        ) : data ? (
+          <div className="flex flex-col gap-4">
+            <div className="flex items-center gap-3">
+              <StatusBadge domain="scraper" value={data.scraperLog.status} />
+              {data.totalProgress ? (
+                <span className="font-mono text-xs text-ink-muted">
                   {data.totalProgress.current} / {data.totalProgress.total}
                 </span>
-                {data.estimatedTimeRemaining && data.isRunning && (
-                  <span className="flex items-center">
-                    <Clock className="w-3 h-3 mr-1" />
-                    {formatEstimatedTime(data.estimatedTimeRemaining)}
-                  </span>
-                )}
-              </div>
+              ) : null}
+              {data.estimatedTimeRemaining && data.isRunning ? (
+                <span className="inline-flex items-center gap-1 font-mono text-xs text-ink-muted">
+                  <Clock className="size-3" />~{formatDuration(data.estimatedTimeRemaining)} kvar
+                </span>
+              ) : null}
             </div>
-          </div>
-        )}
 
-        {/* Progress logs */}
-        <div className="flex-1 overflow-y-auto p-6">
-          <div className="space-y-3">
-            {data.progressLogs.map((log, index) => (
-              <div
-                key={log.id}
-                className={`flex items-start space-x-3 p-3 rounded-lg transition-all ${
-                  index === data.progressLogs.length - 1 && data.isRunning
-                    ? 'bg-blue-50 border border-blue-200'
-                    : 'bg-gray-50'
-                }`}
-              >
-                <div className="mt-0.5">{stepIcons[log.step]}</div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center justify-between">
-                    <p className="text-sm font-medium text-gray-900">
-                      {stepLabels[log.step]}
-                    </p>
-                    <span className="text-xs text-gray-500">
-                      {formatTime(log.created_at)}
-                    </span>
-                  </div>
-                  <p className="text-sm text-gray-600 mt-1">{log.message}</p>
-
-                  {log.progress_total && (
-                    <div className="mt-2">
-                      <div className="text-xs text-gray-500 mb-1">
-                        {log.progress_current} / {log.progress_total}
-                      </div>
-                      <div className="w-full bg-gray-200 rounded-full h-1">
-                        <div
-                          className="bg-blue-500 h-1 rounded-full transition-all"
-                          style={{
-                            width: `${
-                              ((log.progress_current || 0) /
-                                log.progress_total) *
-                              100
-                            }%`,
-                          }}
-                        />
-                      </div>
-                    </div>
-                  )}
-
-                  {log.metadata && Object.keys(log.metadata).length > 0 && (
-                    <div className="mt-2 text-xs text-gray-500">
-                      {JSON.stringify(log.metadata)}
-                    </div>
-                  )}
+            {data.totalProgress ? (
+              <div className="flex flex-col gap-1.5">
+                <div className="flex items-center justify-between text-[13px]">
+                  <span className="font-medium text-ink">{currentLog?.message || 'Bearbetar…'}</span>
+                  <span className="font-mono text-ink-muted">{data.totalProgress.percentage}%</span>
+                </div>
+                <div className="h-1.5 w-full overflow-hidden rounded-full bg-stone">
+                  <div className="h-full rounded-full bg-sea transition-all duration-500" style={{ width: `${data.totalProgress.percentage}%` }} />
                 </div>
               </div>
-            ))}
-          </div>
-        </div>
+            ) : null}
 
-        {/* Footer */}
-        {isCompleted && data.scraperLog.duration_ms && (
-          <div className="p-6 border-t border-gray-200 bg-gray-50">
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-gray-600">Total tid:</span>
-              <span className="font-medium text-gray-900">
-                {formatDuration(data.scraperLog.duration_ms)}
-              </span>
-            </div>
+            <ol className="flex flex-col gap-2">
+              {data.progressLogs.map((log, index) => {
+                const active = index === data.progressLogs.length - 1 && data.isRunning
+                const pct = log.progress_total ? Math.round(((log.progress_current || 0) / log.progress_total) * 100) : null
+                return (
+                  <li key={log.id} className={cn('flex items-start gap-3 rounded-[10px] border px-3 py-2.5', active ? 'border-sea-light bg-sea-lightest' : 'border-line-soft bg-sand-soft')}>
+                    <span className="mt-0.5">
+                      <StepIcon step={log.step} active={active} />
+                    </span>
+                    <div className="flex min-w-0 flex-1 flex-col gap-1">
+                      <div className="flex items-center justify-between gap-3">
+                        <span className="text-[13px] font-medium text-ink">{stepLabels[log.step] ?? log.step}</span>
+                        <span className="font-mono text-[11px] text-ink-muted">{formatTime(log.created_at)}</span>
+                      </div>
+                      <span className="text-[13px] text-ink-soft">{log.message}</span>
+                      {pct != null ? (
+                        <div className="flex items-center gap-2">
+                          <div className="h-1 flex-1 overflow-hidden rounded-full bg-stone">
+                            <div className="h-full rounded-full bg-sea" style={{ width: `${pct}%` }} />
+                          </div>
+                          <span className="font-mono text-[11px] text-ink-muted">
+                            {log.progress_current} / {log.progress_total}
+                          </span>
+                        </div>
+                      ) : null}
+                      {log.metadata && Object.keys(log.metadata).length > 0 ? (
+                        <dl className="flex flex-wrap gap-x-3 gap-y-0.5 font-mono text-[11px] text-ink-muted">
+                          {Object.entries(log.metadata).map(([k, v]) => (
+                            <span key={k}>
+                              {k}: {typeof v === 'object' ? JSON.stringify(v) : String(v)}
+                            </span>
+                          ))}
+                        </dl>
+                      ) : null}
+                    </div>
+                  </li>
+                )
+              })}
+              {data.progressLogs.length === 0 ? <li className="text-[13px] text-ink-muted">Inga förloppsrader ännu.</li> : null}
+            </ol>
           </div>
-        )}
-      </div>
-    </div>
+        ) : null}
+      </DialogContent>
+    </Dialog>
   )
 }

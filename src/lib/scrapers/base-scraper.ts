@@ -25,6 +25,17 @@ export abstract class BaseScraper {
   }
   
   abstract scrape(): Promise<ScrapedEvent[]>;
+
+  /**
+   * Antal event som scrapern såg i källan men hoppade över utan att hämta
+   * detaljer eftersom de redan finns i databasen (Firecrawl-varianterna).
+   * Räknas med som "hittade" + "dubbletter" i loggen så att t.ex. "4 events"
+   * inte ser ut som att källan bara hade 4.
+   */
+  getSkippedKnown(): number {
+    const value = (this as unknown as { skippedKnown?: number }).skippedKnown;
+    return typeof value === 'number' ? value : 0;
+  }
   
   protected async fetchHTML(url: string): Promise<string> {
     // Webbläsarlika headers, cookie-jar, manuell redirect-följning och retries

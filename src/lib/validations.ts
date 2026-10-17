@@ -37,6 +37,8 @@ export const eventSchema = z.object({
   is_free: z.enum(['auto', 'free', 'paid']).optional(), // auto = härled från pris (priceResolver)
   image_url: z.string().url('Ogiltig URL').optional().or(z.literal('')),
   organizer_event_url: z.string().url('Ogiltig URL').optional().or(z.literal('')),
+  booking_url: z.string().url('Ogiltig URL').optional().or(z.literal('')), // Biljettlänk
+  event_website: z.string().url('Ogiltig URL').optional().or(z.literal('')), // Arrangörens eventsida
   categories: z.array(z.enum(eventCategories)).min(1, 'Minst en kategori krävs').max(3, 'Max 3 kategorier'),
   organizer_id: z.number().optional(),
   featured: z.boolean(),
