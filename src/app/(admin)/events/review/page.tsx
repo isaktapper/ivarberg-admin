@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { AlertTriangle, Check, CheckCircle2, ChevronLeft, ChevronRight, ExternalLink, Image as ImageIcon, Pencil } from 'lucide-react'
+import { AlertTriangle, Check, CheckCircle2, ChevronLeft, ChevronRight, ExternalLink, Image as ImageIcon, Pencil, Sparkles } from 'lucide-react'
 import * as stringSimilarity from 'string-similarity'
 import { supabase } from '@/lib/supabase'
 import { fetchAllRows } from '@/lib/supabase-fetch-all'
@@ -20,6 +20,7 @@ import { CategoryChip, QualityDot, StatusBadge } from '@/components/ui/status-ba
 import { SelectFilter } from '@/components/ui/filter-chip'
 import { Banner, EmptyState, ErrorState, LoadingState } from '@/components/ui/states'
 import { Input, Textarea, Field } from '@/components/ui/input'
+import { CategoryPicker } from '@/components/ui/category-picker'
 import { Thumb } from '@/components/ui/data-table'
 import { qualityTone, toneClasses } from '@/lib/status'
 
@@ -62,6 +63,7 @@ export default function EventReviewPage() {
   const [edited, setEdited] = useState<Partial<Event>>({})
   const [dupes, setDupes] = useState<DupeMatch[]>([])
   const [dismissedDupes, setDismissedDupes] = useState<Set<string>>(new Set())
+  const [suggesting, setSuggesting] = useState(false)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -277,11 +279,26 @@ export default function EventReviewPage() {
     toast.success('Dubletten borttagen', m.name)
   }
 
-  const toggleCategory = (cat: EventCategory) => {
-    const cur = (val('categories') ?? []) as EventCategory[]
-    if (cur.includes(cat)) return setField('categories', cur.filter((c) => c !== cat))
-    if (cur.length >= 3) return toast.info('Max 3 kategorier')
-    setField('categories', [...cur, cat])
+  const suggestCategories = async () => {
+    if (!current) return
+    setSuggesting(true)
+    try {
+      const res = await fetch('/api/admin/events/suggest-categories', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: val('name'), description: val('description'), venue_name: val('venue_name') }),
+      })
+      const json = await res.json()
+      if (!res.ok) throw new Error(json.error || 'Fel')
+      const cats = (json.categories as string[]).filter((c) => c !== 'Okategoriserad') as EventCategory[]
+      if (cats.length === 0) return toast.info('AI:n kunde inte föreslå någon kategori')
+      setEdited((p) => ({ ...p, categories: cats.slice(0, 3), category_scores: json.scores || {} }))
+      toast.success('Kategorier föreslagna', cats.join(', '))
+    } catch (e) {
+      toast.error('Kunde inte föreslå kategorier', e instanceof Error ? e.message : undefined)
+    } finally {
+      setSuggesting(false)
+    }
   }
 
   const goodCount = queue.filter((e) => (e.quality_score ?? 0) >= 80).length
@@ -347,12 +364,7 @@ export default function EventReviewPage() {
 
   const c = current
   const categories = (c ? (val('categories') ?? []) : []) as EventCategory[]
-  const scoreEntries = c
-    ? Object.entries(c.category_scores ?? {})
-        .sort((a, b) => b[1] - a[1])
-        .slice(0, 6)
-    : []
-  for (const cat of categories) if (!scoreEntries.some(([k]) => k === cat)) scoreEntries.push([cat, 0])
+  const pickedCategories = categories.filter((cat) => cat !== 'Okategoriserad')
   const issues = (c?.quality_issues ?? '')
     .split(/[;\n]/)
     .map((s) => s.trim())
@@ -510,28 +522,15 @@ export default function EventReviewPage() {
 
                 <Card>
                   <CardBody className="flex flex-col gap-3">
-                    <SectionLabel>Kategorier · AI-förslag med säkerhet</SectionLabel>
-                    <div className="flex flex-col gap-2">
-                      {scoreEntries.length === 0 ? <span className="text-[13px] text-ink-muted">Ingen AI-kategorisering gjord.</span> : null}
-                      {scoreEntries.map(([cat, score]) => {
-                        const on = categories.includes(cat as EventCategory)
-                        const main = categories[0] === cat
-                        return (
-                          <label key={cat} className="grid cursor-pointer grid-cols-[150px_minmax(0,1fr)_44px_24px] items-center gap-3">
-                            <span className={cn('truncate text-[13px] text-ink', on ? 'font-medium' : '')}>
-                              {main ? '★ ' : ''}
-                              {cat}
-                            </span>
-                            <div className="h-1.5 overflow-hidden rounded-full bg-stone">
-                              <div className={cn('h-full', on ? 'bg-sea' : 'bg-[#C9C0AE]')} style={{ width: `${Math.round(score * 100)}%` }} />
-                            </div>
-                            <span className="text-right font-mono text-xs text-ink-soft">{score.toFixed(2).replace('.', ',')}</span>
-                            <input type="checkbox" checked={on} onChange={() => toggleCategory(cat as EventCategory)} className="size-4 accent-sea" aria-label={cat} />
-                          </label>
-                        )
-                      })}
+                    <div className="flex items-center justify-between gap-3">
+                      <SectionLabel>Kategorier</SectionLabel>
+                      <Button size="sm" variant="secondary" loading={suggesting} onClick={suggestCategories}>
+                        <Sparkles className="text-sea" />
+                        Föreslå med AI
+                      </Button>
                     </div>
-                    <span className="text-xs text-ink-muted">Max 3. Första valda är huvudkategori.</span>
+                    <CategoryPicker value={pickedCategories} onChange={(v) => setField('categories', v)} scores={val('category_scores')} />
+                    <span className="text-xs text-ink-muted">Max 3. ★ = huvudkategori, klicka på en vald kategori för att göra den till huvud. Siffran är AI:ns säkerhet.</span>
                   </CardBody>
                 </Card>
 
