@@ -3,12 +3,14 @@ import { ScrapedEvent } from './types';
 import { resolveIsFree } from '../services/priceResolver';
 import * as cheerio from 'cheerio';
 
+interface VisitVarbergDate {
+  startDate: string; // ISO 8601, UTC
+  endDate?: string;
+}
+
 interface VisitVarbergEventData {
   name: string;
-  dates: Array<{
-    startDate: string; // ISO 8601
-    endDate: string;
-  }>;
+  dates: VisitVarbergDate[];
   venue: string;
   address: string;
   description: string;
@@ -84,6 +86,51 @@ export function pickEventData(candidate: unknown): VisitVarbergEventData | null 
     return inner as unknown as VisitVarbergEventData;
   }
   return null;
+}
+
+/** "2026-10-26T03:30:00Z" -> { date: "2026-10-26", time: "04:30:00" } i svensk tid */
+function toStockholm(iso: string): { date: string; time: string } {
+  const local = new Date(iso).toLocaleString('sv-SE', {
+    timeZone: 'Europe/Stockholm',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false,
+  });
+  const [date, time] = local.split(' ');
+  return { date, time };
+}
+
+/** Starttider före 06:00 räknas som "öppet hela dagen" om tillfället varar så här länge */
+const OPEN_HOURS_MIN_DURATION_MS = 12 * 60 * 60 * 1000;
+
+/**
+ * Lokal starttid ("YYYY-MM-DDTHH:MM:SS", utan tidszon) för ett tillfälle.
+ * 00:00 betyder heldag/okänd tid i resten av systemet.
+ *
+ * Tidszonen anges explicit: tidigare användes toLocaleDateString('sv-SE') utan
+ * timeZone för heldagar, vilket på GitHub Actions (UTC) gjorde att källans
+ * lokala midnatt (t.ex. 2026-10-23T22:00Z = 24 okt) sparades som dagen innan.
+ *
+ * Arrangörer lägger ibland in öppettider i stället för en starttid, t.ex.
+ * Friskis "gratis träning under höstlovet" med 04:30-23:00 (källan har
+ * startDate 03:30Z/endDate 22:00Z och visitvarberg.se visar själv 04.30).
+ * Sådana tillfällen - start före 06:00 och minst 12 timmar långa - sparas
+ * som heldag så att vi inte visar en uppenbart missvisande tid som 04:30.
+ */
+export function resolveLocalDateTime(dateObj: VisitVarbergDate, useDefaultStartTime?: boolean): string {
+  const start = toStockholm(dateObj.startDate);
+  if (useDefaultStartTime) return `${start.date}T00:00:00`;
+
+  const [hour] = start.time.split(':').map(Number);
+  if (hour < 6 && start.time !== '00:00:00' && dateObj.endDate) {
+    const durationMs = new Date(dateObj.endDate).getTime() - new Date(dateObj.startDate).getTime();
+    if (durationMs >= OPEN_HOURS_MIN_DURATION_MS) return `${start.date}T00:00:00`;
+  }
+  return `${start.date}T${start.time}`;
 }
 
 /** Event per listsida - sajten tål 200 men inte 500; 100 ger marginal */
@@ -285,16 +332,12 @@ export class VisitVarbergScraper extends BaseScraper {
     const now = new Date();
     const maxDate = new Date(now.getTime() + 60 * 24 * 60 * 60 * 1000); // 60 dagar framåt
 
-    // Filtrera bort events i det förflutna
-    // OBS: Visit Varberg använder UTC, konvertera till lokal tid för jämförelse
-    let datesToUse = eventData.dates.filter(d => {
-      const startDate = new Date(d.startDate);
-      // Sätt tillbaka till midnatt lokal tid om det är en heldag
-      const localDate = eventData.useDefaultStartTime
-        ? new Date(startDate.toLocaleDateString('sv-SE'))
-        : startDate;
-      return localDate >= now;
-    });
+    // Filtrera bort events i det förflutna. Heldagar jämförs på svenskt datum
+    // (explicit tidszon - GitHub Actions kör i UTC)
+    const today = toStockholm(now.toISOString()).date;
+    let datesToUse = eventData.dates.filter(d =>
+      eventData.useDefaultStartTime ? toStockholm(d.startDate).date >= today : new Date(d.startDate) >= now
+    );
     
     // För långtidsevent, begränsa till nästa 60 dagar
     if (eventData.longTerm && datesToUse.length > 30) {
@@ -321,33 +364,7 @@ export class VisitVarbergScraper extends BaseScraper {
       if (!dateObj.startDate) continue;
 
       try {
-        // FIX: Konvertera UTC till lokal svensk tid
-        const utcDate = new Date(dateObj.startDate);
-
-        let date_time: string;
-
-        if (eventData.useDefaultStartTime) {
-          // Heldag-event: Använd lokal svensk tid vid midnatt (00:00)
-          // "2025-03-21T23:00:00.000Z" (UTC) → "2025-03-22T00:00:00" (lokal)
-          const localDateStr = utcDate.toLocaleDateString('sv-SE'); // "2025-03-22"
-          date_time = `${localDateStr}T00:00:00`; // ISO format utan tidszon
-        } else {
-          // Specifik tid: Konvertera UTC till svensk tid
-          // "2025-11-30T09:00:00.000Z" (UTC) → "2025-11-30T10:00:00" (svensk tid)
-          const swedishTime = utcDate.toLocaleString('sv-SE', { 
-            timeZone: 'Europe/Stockholm',
-            year: 'numeric',
-            month: '2-digit',
-            day: '2-digit',
-            hour: '2-digit',
-            minute: '2-digit',
-            second: '2-digit',
-            hour12: false
-          });
-          
-          // Konvertera "2025-11-30 10:00:00" till "2025-11-30T10:00:00"
-          date_time = swedishTime.replace(' ', 'T');
-        }
+        const date_time = resolveLocalDateTime(dateObj, eventData.useDefaultStartTime);
 
         events.push({
           ...baseEventData,
