@@ -20,6 +20,21 @@ export interface VarbergTeaternAPIResponse {
   }>;
 }
 
+/**
+ * Bild-URL från en varberg.se-detaljsida (og:image).
+ *
+ * Kalender-API:ets förhandsbilder har adresser som /images/200.<id>/<version>/...
+ * - kopior som Sitevision genererar om när listan renderas om, varpå den gamla
+ * adressen ger 404 (18 av 124 varberg.se-bilder var döda 2026-10-31).
+ * og:image pekar på originalet i bildarkivet (/images/18.<id>/...), som bara
+ * ändras när redaktören faktiskt byter bild.
+ */
+export function extractVarbergDetailImage($: ReturnType<typeof cheerio.load>): string | undefined {
+  const content = $('meta[property="og:image"]').attr('content')?.trim();
+  if (!content || !content.includes('/images/')) return undefined;
+  return content.startsWith('http') ? content : `https://varberg.se${content}`;
+}
+
 export class VarbergsTeaternScraper extends BaseScraper {
   protected baseUrl = 'https://varberg.se';
   protected apiUrl = 'https://varberg.se/kulturhuset-komedianten/kalender?sv.target=12.2b514d9b18a92e6fafcf397&sv.12.2b514d9b18a92e6fafcf397.route=/filter';
@@ -213,28 +228,11 @@ export class VarbergsTeaternScraper extends BaseScraper {
         }
       }
 
-      // Bild - extrahera från preview data (redan i HTML-format)
+      // Bild: detaljsidans og:image först (stabil arkiv-URL), annars listans förhandsbild
       let imageUrl = '';
-      if (previewData.image) {
-        const $img = cheerio.load(previewData.image);
-        const srcset = $img('img').attr('srcset');
-        if (srcset) {
-          // Ta högsta upplösningen från srcset
-          const srcsetParts = srcset.split(',');
-          if (srcsetParts.length > 0) {
-            const lastSrc = srcsetParts[srcsetParts.length - 1].trim().split(' ')[0];
-            imageUrl = lastSrc;
-          }
-        }
-        // Fallback till src
-        if (!imageUrl) {
-          imageUrl = $img('img').attr('src') || '';
-        }
-      }
-
-      // Fixa relativa URL:er för bilder
-      if (imageUrl && !imageUrl.startsWith('http')) {
-        imageUrl = this.baseUrl + imageUrl;
+      const previewImageUrl = this.extractPreviewImage(previewData.image);
+      if (previewImageUrl) {
+        imageUrl = extractVarbergDetailImage($) || previewImageUrl;
       }
 
       // Parse datum - använd från detaljsida om tillgängligt, annars från preview
@@ -269,6 +267,29 @@ export class VarbergsTeaternScraper extends BaseScraper {
       console.error(`Error parsing event details for ${url}:`, error);
       return null;
     }
+  }
+
+  /** Största bilden i listans förhandsbild (HTML-sträng med <img srcset>) */
+  private extractPreviewImage(imageHtml: string | undefined): string {
+    if (!imageHtml) return '';
+    const $img = cheerio.load(imageHtml);
+    let imageUrl = '';
+    const srcset = $img('img').attr('srcset');
+    if (srcset) {
+      // Ta högsta upplösningen från srcset. Matcha "url 160w" i stället för att
+      // splitta på komma - filnamn kan innehålla komman ("Family,%20Foto...")
+      const candidates = [...srcset.matchAll(/(\S+)\s+(\d+)w/g)];
+      if (candidates.length > 0) {
+        imageUrl = candidates.reduce((best, c) => (Number(c[2]) > Number(best[2]) ? c : best))[1];
+      }
+    }
+    if (!imageUrl) {
+      imageUrl = $img('img').attr('src') || '';
+    }
+    if (imageUrl && !imageUrl.startsWith('http')) {
+      imageUrl = this.baseUrl + imageUrl;
+    }
+    return imageUrl;
   }
 
   private parseSwedishDate(dateStr: string, timeStr: string): string {

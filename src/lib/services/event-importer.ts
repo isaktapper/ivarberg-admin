@@ -7,6 +7,7 @@ import { resolveIsFree } from './priceResolver';
 import { eventQualityChecker } from './eventQualityChecker';
 import { organizerMatcher } from './organizerMatcher';
 import { progressLogger } from './progressLogger';
+import { checkImageUrl, ImageCheckResult } from './imageValidator';
 import * as stringSimilarity from 'string-similarity';
 
 // Interface för duplicate logging
@@ -28,6 +29,7 @@ export class EventImporter {
   private categoryCache: Map<string, { categories: string[], scores: Record<string, number> }> = new Map(); // Cache för AI-kategorisering
   private logId?: number; // För progress logging
   private isCancelled: boolean = false; // För avbrytning
+  private imageChecks: Map<string, Promise<ImageCheckResult>> = new Map(); // HEAD-cache per bild-URL
 
   constructor() {
     this.supabase = createClient(
@@ -95,6 +97,10 @@ export class EventImporter {
     const internallyUnique = await this.deduplicateInternally(events);
     console.log(`✓ Efter intern deduplicering: ${internallyUnique.length} unika events`);
 
+    // 1b. Kända events: uppdatera image_url om källan bytt bild (de hoppas annars
+    // över som dubbletter och behåller en adress som kan ha slutat fungera)
+    await this.refreshKnownEventImages(internallyUnique);
+
     // 2. Enhanced duplicate check mot databasen
     if (this.logId) {
       await progressLogger.log({
@@ -107,6 +113,7 @@ export class EventImporter {
     }
     const uniqueEvents = await this.checkDatabaseDuplicates(internallyUnique);
     console.log(`✓ Efter databas-deduplicering: ${uniqueEvents.length} nya events`);
+    await this.dropDeadImages(uniqueEvents);
     result.duplicatesSkipped = events.length - uniqueEvents.length;
 
     if (this.logId) {
@@ -240,6 +247,83 @@ export class EventImporter {
     return result;
   }
   
+  private isImageDead(url: string): Promise<boolean> {
+    if (!this.imageChecks.has(url)) this.imageChecks.set(url, checkImageUrl(url));
+    return this.imageChecks.get(url)!.then(r => r.status === 'dead');
+  }
+
+  /** Nya events: spara inte en bild-URL som redan är död (kvalitetskollen flaggar då saknad bild) */
+  private async dropDeadImages(events: ScrapedEvent[]): Promise<void> {
+    for (const event of events) {
+      if (event.image_url && (await this.isImageDead(event.image_url))) {
+        console.log(`  🖼️ Död bild ignoreras för "${event.name}": ${event.image_url}`);
+        event.image_url = undefined;
+      }
+    }
+  }
+
+  /**
+   * Uppdaterar image_url på kommande events som redan finns (matchas på
+   * organizer_event_url) när scrapern hittat en annan bild.
+   *
+   * Bakgrund: varberg.se byter bildadresser och redaktörer byter bilder, men
+   * kända events hoppades tidigare över helt vid import - den sparade adressen
+   * blev kvar tills den gav 404 på sajten.
+   *
+   * Byter bara när den nya bilden fungerar, och bara om den gamla saknas, ligger
+   * på samma värd som den nya (källans egen bild) eller är död - en bild som
+   * lagts in manuellt från annat håll lämnas orörd.
+   */
+  private async refreshKnownEventImages(events: ScrapedEvent[]): Promise<void> {
+    const imageByUrl = new Map<string, string>();
+    for (const event of events) {
+      if (event.organizer_event_url && event.image_url && !imageByUrl.has(event.organizer_event_url)) {
+        imageByUrl.set(event.organizer_event_url, event.image_url);
+      }
+    }
+    if (imageByUrl.size === 0) return;
+
+    const today = new Date().toLocaleDateString('sv-SE', { timeZone: 'Europe/Stockholm' });
+    const urls = [...imageByUrl.keys()];
+    let updated = 0;
+
+    for (let i = 0; i < urls.length; i += 100) {
+      const { data, error } = await this.supabase
+        .from('events')
+        .select('id, name, image_url, organizer_event_url')
+        .in('organizer_event_url', urls.slice(i, i + 100))
+        .gte('date_time', `${today}T00:00:00`);
+
+      if (error) {
+        console.warn(`  ⚠️ Kunde inte läsa befintliga bilder: ${error.message}`);
+        return;
+      }
+
+      for (const existing of data ?? []) {
+        const newImage = imageByUrl.get(existing.organizer_event_url);
+        if (!newImage || existing.image_url === newImage) continue;
+
+        const sameHost = existing.image_url && this.safeHost(existing.image_url) === this.safeHost(newImage);
+        const replaceable = !existing.image_url || sameHost || (await this.isImageDead(existing.image_url));
+        if (!replaceable || (await this.isImageDead(newImage))) continue;
+
+        const { error: updateError } = await this.supabase
+          .from('events')
+          .update({ image_url: newImage })
+          .eq('id', existing.id);
+
+        if (updateError) {
+          console.warn(`  ⚠️ Kunde inte uppdatera bild för event ${existing.id}: ${updateError.message}`);
+        } else {
+          updated++;
+          console.log(`  🖼️ Ny bild för event ${existing.id} "${existing.name}": ${newImage}`);
+        }
+      }
+    }
+
+    if (updated > 0) console.log(`✓ Uppdaterade bild på ${updated} befintliga events`);
+  }
+
   private validateEvent(event: ScrapedEvent): boolean {
     return !!(event.name && event.date_time && event.location);
   }
