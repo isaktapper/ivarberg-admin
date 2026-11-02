@@ -262,6 +262,24 @@ Vänta några minuter och försök igen. Free tier: 500 requests/månad.
 
 ---
 
+## Check Image URLs
+
+`scripts/check-image-urls.ts` letar upp kommande publicerade events vars `image_url` är död (404/410 eller HTML i stället för bild) och hämtar om bilden från källsidan (`organizer_event_url`). Vanlig fetch, inga Firecrawl-credits. Körs dagligen med `--apply` efter scrapern.
+
+```bash
+npx tsx --env-file=.env.local scripts/check-image-urls.ts                 # dry run, listar ändringar
+npx tsx --env-file=.env.local scripts/check-image-urls.ts --apply         # sparar nya bild-URL:er
+npx tsx --env-file=.env.local scripts/check-image-urls.ts --apply --clear-unfixable  # tömmer döda bilder utan ersättning
+```
+
+Bakgrund: [docs/DATAKVALITET_BILDER_OCH_TIDER.md](../docs/DATAKVALITET_BILDER_OCH_TIDER.md).
+
+## Fix Visit Varberg Times
+
+`scripts/fix-visitvarberg-times.ts` rättar engångsvis kommande Visit Varberg-events som sparats med den gamla tidslogiken (heldagar en dag för tidigt, öppettider som 04:30). Dry run som standard, `--apply` för att spara.
+
+---
+
 ## Recategorize Events
 
 Script för att rekategorisera alla befintliga events med det nya multi-kategori systemet (1-3 kategorier per event).

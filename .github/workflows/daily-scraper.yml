@@ -51,6 +51,16 @@ jobs:
           ALERT_EMAIL: ${{ secrets.ALERT_EMAIL }}
         run: pnpm tsx scripts/run-scrapers.ts
 
+      # Döda bild-URL:er på kommande publicerade events: hämta om källsidan och
+      # byt till fungerande bild. Inte kritiskt - får inte fälla körningen.
+      - name: Check and repair dead image URLs
+        if: always()
+        continue-on-error: true
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: pnpm tsx scripts/check-image-urls.ts --apply
+
       - name: Upload logs on failure
         if: failure()
         uses: actions/upload-artifact@v4
