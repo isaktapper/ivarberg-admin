@@ -249,6 +249,17 @@ async function main() {
     console.error('⚠️ Arrangörsberikning misslyckades (fortsätter ändå):', error);
   }
 
+  // 🧹 Slå ihop dubletter bland kommande event (även mellan källor och sådana
+  // som slank igenom tidigare). Icke-fatalt, och allt går att ångra i admin.
+  console.log('🧹 Letar dubletter bland kommande event...');
+  try {
+    const { DuplicateDetector } = await import('../src/lib/services/dedup/detector');
+    const summary = await new DuplicateDetector(supabase).cleanupExisting();
+    console.log(`✓ Dubblettstädning: ${summary.merged} sammanslagna (${summary.aiCalls} AI-bedömningar)\n`);
+  } catch (error) {
+    console.error('⚠️ Dubblettstädning misslyckades (fortsätter ändå):', error);
+  }
+
   // 📧 Skicka email-rapport (endast från GitHub Actions)
   if (isGitHubActions) {
     console.log('📧 Sending daily email report...');

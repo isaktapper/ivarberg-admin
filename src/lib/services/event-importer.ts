@@ -7,24 +7,10 @@ import { resolveIsFree } from './priceResolver';
 import { eventQualityChecker } from './eventQualityChecker';
 import { organizerMatcher } from './organizerMatcher';
 import { progressLogger } from './progressLogger';
-import * as stringSimilarity from 'string-similarity';
-
-// Interface för duplicate logging
-interface DuplicateLog {
-  scraper_name: string;
-  scraped_event_name: string;
-  scraped_event_url: string;
-  existing_event_id: number;
-  existing_event_name: string;
-  existing_event_url: string;
-  similarity_score: number;
-  match_type: 'url' | 'fuzzy_name';
-  scraped_at: string;
-}
+import { DuplicateDetector, type PoolEvent } from './dedup/detector';
 
 export class EventImporter {
   private supabase;
-  private duplicateLogs: DuplicateLog[] = [];
   private categoryCache: Map<string, { categories: string[], scores: Record<string, number> }> = new Map(); // Cache för AI-kategorisering
   private logId?: number; // För progress logging
   private isCancelled: boolean = false; // För avbrytning
@@ -62,7 +48,8 @@ export class EventImporter {
     events: ScrapedEvent[],
     source: string,
     organizerId: number,
-    logId?: number // Optional: scraper_logs ID för progress tracking
+    logId?: number, // Optional: scraper_logs ID för progress tracking
+    options: { skipDedup?: boolean } = {} // skipDedup: återställning av ångrad dublett
   ): Promise<ScraperResult> {
     this.logId = logId;
     const result: ScraperResult = {
@@ -73,8 +60,6 @@ export class EventImporter {
       duplicatesSkipped: 0,
       errors: []
     };
-    
-    this.duplicateLogs = []; // Reset logs
 
     console.log(`\n📦 Importerar ${events.length} events...`);
 
@@ -84,7 +69,7 @@ export class EventImporter {
       progressLogger.initTimeEstimator(this.logId, events.length);
     }
 
-    // 1. Deduplicate internt först (samma scrape-session)
+    // 1. Deduplicate internt först (samma scrape-session, exakt samma namn/tid/plats)
     if (this.logId) {
       await progressLogger.log({
         logId: this.logId,
@@ -95,7 +80,7 @@ export class EventImporter {
     const internallyUnique = await this.deduplicateInternally(events);
     console.log(`✓ Efter intern deduplicering: ${internallyUnique.length} unika events`);
 
-    // 2. Enhanced duplicate check mot databasen
+    // 2. Dubblettkontroll mot databasen och inom körningen (URL → regler → AI)
     if (this.logId) {
       await progressLogger.log({
         logId: this.logId,
@@ -105,7 +90,10 @@ export class EventImporter {
         progressTotal: internallyUnique.length,
       });
     }
-    const uniqueEvents = await this.checkDatabaseDuplicates(internallyUnique);
+    const dedup = options.skipDedup
+      ? { uniqueEvents: internallyUnique, detector: null, logs: [] }
+      : await this.checkDuplicates(internallyUnique, source, organizerId);
+    const uniqueEvents = dedup.uniqueEvents;
     console.log(`✓ Efter databas-deduplicering: ${uniqueEvents.length} nya events`);
     result.duplicatesSkipped = events.length - uniqueEvents.length;
 
@@ -159,6 +147,7 @@ export class EventImporter {
     }
 
     let importCount = 0;
+    const insertedIds = new Map<string, number>();
     for (const eventData of eventsWithOrganizers) {
       // Kontrollera avbrytning innan varje event
       if (await this.checkCancellation()) {
@@ -174,7 +163,8 @@ export class EventImporter {
         }
 
         // Skapa event med rätt organizer
-        await this.createEvent(eventData.event, source, eventData.organizerId);
+        const id = await this.createEvent(eventData.event, source, eventData.organizerId);
+        insertedIds.set(eventKey(eventData.event), id);
         result.eventsImported++;
         importCount++;
 
@@ -219,9 +209,12 @@ export class EventImporter {
     console.log(`  - ${stats.draft} markerade som draft`);
     console.log(`  - Genomsnittlig kvalitetspoäng: ${stats.avgScore}/100`);
 
-    // Spara duplicate logs
-    if (this.duplicateLogs.length > 0) {
-      await this.saveDuplicateLogs(source);
+    // Spara dubblettbeslut (mål som importerades i samma körning har fått id först nu)
+    if (dedup.detector) {
+      const rows = dedup.logs
+        .map(({ target, log }) => ({ ...log, existing_event_id: target.id ?? insertedIds.get(eventKey(target)) }))
+        .filter((row) => row.existing_event_id !== undefined);
+      await dedup.detector.saveLogs(rows);
     }
 
     // Progress: Slutrapport
@@ -420,189 +413,30 @@ export class EventImporter {
   }
 
   /**
-   * Enhanced duplicate check mot databas med URL + Fuzzy matching
+   * Generisk dubblettkontroll (se dedup/detector.ts). Dubletter importeras
+   * inte; deras URL och saknade fält förs över till det befintliga eventet.
    */
-  private async checkDatabaseDuplicates(events: ScrapedEvent[]): Promise<ScrapedEvent[]> {
+  private async checkDuplicates(events: ScrapedEvent[], source: string, organizerId: number) {
+    const detector = new DuplicateDetector(this.supabase);
+    const logs: Array<{ target: PoolEvent; log: Record<string, unknown> }> = [];
+    if (events.length === 0) return { uniqueEvents: events, detector, logs };
+
+    const dates = events.map((e) => e.date_time.slice(0, 10)).sort();
+    await detector.init({ from: dates[0], to: dates[dates.length - 1] });
+    await detector.prepareVenues(events);
+
     const uniqueEvents: ScrapedEvent[] = [];
-    
     for (const event of events) {
-      const isDuplicate = await this.checkDuplicateEnhanced(event);
-      
-      if (!isDuplicate) {
+      const dup = await detector.findDuplicate(event);
+      if (!dup) {
+        detector.registerPending(event);
         uniqueEvents.push(event);
+        continue;
       }
+      const absorbed = await detector.absorbScraped(event, dup, source, organizerId);
+      if (absorbed) logs.push(absorbed);
     }
-    
-    return uniqueEvents;
-  }
-
-  /**
-   * Enhanced duplicate detection using URL + Fuzzy matching
-   */
-  private async checkDuplicateEnhanced(event: ScrapedEvent): Promise<boolean> {
-    // METHOD 1: URL-based check (100% accuracy)
-    if (event.organizer_event_url) {
-      const { data: urlMatch } = await this.supabase
-        .from('events')
-        .select('id, name, organizer_event_url')
-        .eq('organizer_event_url', event.organizer_event_url)
-        .single();
-
-      if (urlMatch) {
-        this.logDuplicate(event, urlMatch, 1.0, 'url');
-        console.log(`  ⊘ URL duplicate: ${event.organizer_event_url}`);
-        return true;
-      }
-    }
-
-    // METHOD 2: Fuzzy name + date + venue matching
-    const eventDate = event.date_time.split('T')[0];
-    const venueKeyword = this.extractVenueKeyword(
-      event.venue_name || event.location
-    );
-
-    if (!venueKeyword) {
-      return false; // Kan inte fuzzy matcha utan venue
-    }
-
-    // Hämta alla events samma dag på liknande plats
-    const { data: similarEvents } = await this.supabase
-      .from('events')
-      .select('id, name, organizer_event_url, venue_name, date_time')
-      .gte('date_time', `${eventDate}T00:00:00Z`)
-      .lte('date_time', `${eventDate}T23:59:59Z`)
-      .ilike('venue_name', `%${venueKeyword}%`);
-
-    if (similarEvents && similarEvents.length > 0) {
-      if (await this.matchByName(event, similarEvents, eventDate, venueKeyword)) return true;
-    }
-
-    // METHOD 3: Samma källa, samma dag, nästan identiskt namn - oavsett venue.
-    // Fångar fallet när källan ändrat hur venue anges (Visit Varberg skriver
-    // sedan plattformsbytet hösten 2026 ibland gatuadress i stället för lokal).
-    // Kräver samma host på organizer_event_url så att vi inte slår ihop
-    // olika arrangörers event som råkar heta lika samma dag.
-    const sourceHost = this.safeHost(event.organizer_event_url);
-    if (sourceHost) {
-      const { data: sameDayEvents } = await this.supabase
-        .from('events')
-        .select('id, name, organizer_event_url, venue_name, date_time')
-        .gte('date_time', `${eventDate}T00:00:00Z`)
-        .lte('date_time', `${eventDate}T23:59:59Z`)
-        .ilike('organizer_event_url', `%${sourceHost}%`);
-
-      const sameSource = (sameDayEvents ?? []).filter(x => this.safeHost(x.organizer_event_url) === sourceHost);
-      if (sameSource.length > 0) {
-        if (await this.matchByName(event, sameSource, eventDate, `källa ${sourceHost}`, 0.92)) return true;
-      }
-    }
-
-    return false;
-  }
-
-  private safeHost(url: string | null | undefined): string | null {
-    if (!url) return null;
-    try {
-      return new URL(url).host;
-    } catch {
-      return null;
-    }
-  }
-
-  /** Fuzzy namnjämförelse mot en kandidatlista; loggar och självläker URL vid träff */
-  private async matchByName(
-    event: ScrapedEvent,
-    candidates: Array<{ id: number | string; name: string; organizer_event_url: string | null }>,
-    eventDate: string,
-    context: string,
-    threshold = 0.85
-  ): Promise<boolean> {
-    for (const existing of candidates) {
-      const similarity = stringSimilarity.compareTwoStrings(
-        this.normalizeEventName(event.name),
-        this.normalizeEventName(existing.name)
-      );
-
-      if (similarity >= threshold) {
-        this.logDuplicate(event, existing, similarity, 'fuzzy_name');
-        await this.healOrganizerEventUrl(event, existing);
-        
-        console.log(
-          `  ⊘ Fuzzy duplicate (${(similarity * 100).toFixed(0)}% match):\n` +
-          `    New: "${event.name}"\n` +
-          `    Existing: "${existing.name}"\n` +
-          `    Date: ${eventDate} | ${context}`
-        );
-        
-        return true;
-      }
-    }
-
-    return false;
-  }
-
-  /**
-   * När en fuzzy-dublett hittas och det befintliga eventet saknar URL eller har
-   * en URL från samma källa som inte längre stämmer, uppdatera till den nya.
-   * Bakgrund: Visit Varberg bytte eventplattform hösten 2026 och alla event-ID:n
-   * ändrades - utan detta skulle URL-dedupliceringen och Firecrawl-scrapernas
-   * knownUrls-filter aldrig känna igen eventen igen.
-   */
-  private async healOrganizerEventUrl(
-    event: ScrapedEvent,
-    existing: { id: number | string; organizer_event_url: string | null }
-  ): Promise<void> {
-    const newUrl = event.organizer_event_url;
-    if (!newUrl || existing.organizer_event_url === newUrl) return;
-
-    if (existing.organizer_event_url) {
-      try {
-        const oldHost = new URL(existing.organizer_event_url).host;
-        const newHost = new URL(newUrl).host;
-        if (oldHost !== newHost) return; // Annan källa - rör inte
-      } catch {
-        return;
-      }
-    }
-
-    const { error } = await this.supabase
-      .from('events')
-      .update({ organizer_event_url: newUrl })
-      .eq('id', existing.id);
-
-    if (error) {
-      console.warn(`  ⚠️ Kunde inte uppdatera organizer_event_url för event ${existing.id}: ${error.message}`);
-    } else {
-      console.log(`  🔗 Uppdaterade organizer_event_url för event ${existing.id} -> ${newUrl}`);
-    }
-  }
-
-  /**
-   * Normalize event name for comparison
-   */
-  private normalizeEventName(name: string): string {
-    return name
-      .toLowerCase()
-      .replace(/[^\w\såäö]/g, '') // Ta bort specialtecken, behåll svenska bokstäver
-      .replace(/\s+/g, ' ') // Normalisera whitespace
-      .replace(/\b(med|och|i|på|till|från|live|konsert|show|presenterar)\b/g, '') // Ta bort vanliga ord
-      .trim();
-  }
-
-  /**
-   * Extract venue keyword for matching
-   */
-  private extractVenueKeyword(venue: string): string {
-    if (!venue) return '';
-    
-    // "Sparbankshallen Varberg" → "Sparbankshallen"
-    // "Arena Varberg, Getterövägen 2" → "Arena"
-    const cleaned = venue
-      .split(/[,\-]/)[0] // Ta första delen före komma/streck
-      .trim()
-      .split(' ')[0]; // Ta första ordet
-
-    return cleaned;
+    return { uniqueEvents, detector, logs };
   }
 
   /**
@@ -616,57 +450,11 @@ export class EventImporter {
     return `${name}|${date}|${venue}`;
   }
 
-  /**
-   * Log duplicate for admin review
-   */
-  private logDuplicate(
-    scrapedEvent: ScrapedEvent,
-    existingEvent: any,
-    similarity: number,
-    matchType: 'url' | 'fuzzy_name'
-  ): void {
-    this.duplicateLogs.push({
-      scraper_name: 'Unknown', // Will be set in saveDuplicateLogs
-      scraped_event_name: scrapedEvent.name,
-      scraped_event_url: scrapedEvent.organizer_event_url || '',
-      existing_event_id: existingEvent.id,
-      existing_event_name: existingEvent.name,
-      existing_event_url: existingEvent.organizer_event_url || '',
-      similarity_score: similarity,
-      match_type: matchType,
-      scraped_at: new Date().toISOString()
-    });
-  }
-
-  /**
-   * Save duplicate logs to database for admin review
-   */
-  private async saveDuplicateLogs(scraperName: string): Promise<void> {
-    try {
-      const logsWithScraper = this.duplicateLogs.map(log => ({
-        ...log,
-        scraper_name: scraperName
-      }));
-
-      const { error } = await this.supabase
-        .from('duplicate_event_logs')
-        .insert(logsWithScraper);
-
-      if (error) {
-        console.error('Failed to save duplicate logs:', error);
-      } else {
-        console.log(`💾 Saved ${this.duplicateLogs.length} duplicate logs to database`);
-      }
-    } catch (error) {
-      console.error('Error saving duplicate logs:', error);
-    }
-  }
-  
   private async createEvent(
     event: ScrapedEvent,
     source: string,
     organizerId: number
-  ) {
+  ): Promise<number> {
     // Generera unikt event_id baserat på eventnamn och källa
     const finalEventId = await generateUniqueEventId(event.name, source, this.supabase);
     
@@ -698,17 +486,27 @@ export class EventImporter {
       quality_issues: event.quality_issues,
       auto_published: event.auto_published || false,
       featured: false,
-      tags: event.tags || []
+      tags: event.tags || [],
+      // Bara när dubblettkontrollen fyllt i den - kolumnen kräver ADD_GENERIC_DEDUP.sql
+      ...(event.alternate_urls?.length ? { alternate_urls: event.alternate_urls } : {})
     };
     
-    const { error } = await this.supabase
+    const { data, error } = await this.supabase
       .from('events')
-      .insert(eventData);
+      .insert(eventData)
+      .select('id')
+      .single();
     
     if (error) {
       console.error('Supabase insert error:', error);
       console.error('Event data:', JSON.stringify(eventData, null, 2));
       throw new Error(`Supabase error: ${error.message} (code: ${error.code})`);
     }
+    return data.id;
   }
+}
+
+/** Stabil nyckel för ett event genom kopiering mellan importstegen */
+function eventKey(e: { name: string; date_time: string; organizer_event_url?: string | null }): string {
+  return `${e.name}|${e.date_time}|${e.organizer_event_url ?? ''}`;
 }

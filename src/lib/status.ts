@@ -26,6 +26,7 @@ const registry: Record<StatusDomain, Record<string, StatusMeta>> = {
     pending_approval: { label: 'Väntar', tone: 'wait' },
     draft: { label: 'Utkast', tone: 'neutral' },
     cancelled: { label: 'Inställd', tone: 'bad' },
+    duplicate: { label: 'Dublett', tone: 'neutral' },
   },
   organizer: {
     active: { label: 'Aktiv', tone: 'ok' },

@@ -32,8 +32,13 @@ interface DuplicateLog {
   existing_event_name: string
   existing_event_url: string | null
   similarity_score: number
-  match_type: 'url' | 'fuzzy_name' | string
+  match_type: 'url' | 'fuzzy_name' | 'rules' | 'ai' | string
   scraped_at: string
+  // Finns efter ADD_GENERIC_DEDUP.sql
+  action?: 'skipped' | 'merged' | 'undone'
+  duplicate_event_id?: number | null
+  reasons?: { reason?: string; ai?: { explanation?: string; confidence?: number } } | null
+  scraped_payload?: unknown
 }
 
 type DupEvent = Event & { organizer?: { name: string; scraper_source?: string | null } | null }
@@ -70,6 +75,15 @@ const venueSimilarity = (v1?: string | null, v2?: string | null) => {
 
 const simTone = (s: number): StatusTone => (s >= 0.95 ? 'bad' : s >= 0.85 ? 'wait' : 'info')
 
+const ACTION_META: Record<string, { label: string; tone: StatusTone }> = {
+  skipped: { label: 'Ej importerad', tone: 'neutral' },
+  merged: { label: 'Sammanslagen', tone: 'info' },
+  undone: { label: 'Ångrad', tone: 'wait' },
+}
+
+const canUndo = (l: DuplicateLog) =>
+  (l.action === 'merged' && !!l.duplicate_event_id) || (l.action === 'skipped' && !!l.scraped_payload)
+
 export default function DuplicatesPage() {
   const toast = useToast()
   const confirm = useConfirm()
@@ -81,6 +95,7 @@ export default function DuplicatesPage() {
   const [scraper, setScraper] = useState('')
   const [matchType, setMatchType] = useState('')
   const [autoPage, setAutoPage] = useState(1)
+  const [undoing, setUndoing] = useState<number | null>(null)
 
   const [events, setEvents] = useState<DupEvent[] | null>(null)
   const [eventsLoading, setEventsLoading] = useState(false)
@@ -185,17 +200,43 @@ export default function DuplicatesPage() {
     toast.info('Markerad som inte dublett', 'Paret döljs på den här enheten.')
   }
 
-  const matchTypeLabel = (t: string) => (t === 'url' ? 'Samma URL' : t === 'fuzzy_name' ? 'Liknande namn' : t)
+  const undo = async (l: DuplicateLog) => {
+    const ok = await confirm({
+      title: 'Ångra dubblettbeslutet?',
+      description:
+        l.action === 'merged'
+          ? `”${l.scraped_event_name}” visas igen som ett eget event. Paret slås inte ihop automatiskt igen.`
+          : `”${l.scraped_event_name}” importeras som ett eget event. Paret slås inte ihop automatiskt igen.`,
+      confirmLabel: 'Ångra',
+    })
+    if (!ok) return
+    setUndoing(l.id)
+    try {
+      const res = await fetch(`/api/admin/duplicates/${l.id}/undo`, { method: 'POST' })
+      const body = await res.json().catch(() => ({}))
+      if (!res.ok) return toast.error('Kunde inte ångra', body.error)
+      setLogs((prev) => prev.map((x) => (x.id === l.id ? { ...x, action: 'undone' } : x)))
+      toast.success('Ångrat', l.scraped_event_name)
+    } finally {
+      setUndoing(null)
+    }
+  }
+
+  const matchTypeLabel = (t: string) =>
+    ({ url: 'Samma URL', fuzzy_name: 'Liknande namn', rules: 'Regler', ai: 'AI-bedömning' })[t] ?? t
 
   return (
     <div className="flex flex-col gap-5">
-      <PageHeader title="Dubletter" description="Event som scrapers har stoppat som dubletter, och publicerade event som liknar varandra." />
+      <PageHeader
+        title="Dubletter"
+        description="Dubletter hanteras automatiskt vid import och varje natt. Här ser du besluten och kan ångra dem som blev fel."
+      />
 
       <Tabs
         value={tab}
         onChange={(v) => setTab(v as 'auto' | 'potential')}
         items={[
-          { value: 'auto', label: 'Stoppade av scrapers', count: logs.length },
+          { value: 'auto', label: 'Automatiska beslut', count: logs.length },
           { value: 'potential', label: 'Potentiella', count: events ? pairs.length : null },
         ]}
       />
@@ -208,6 +249,8 @@ export default function DuplicatesPage() {
               label="Typ"
               value={matchType}
               options={[
+                { value: 'rules', label: 'Regler' },
+                { value: 'ai', label: 'AI-bedömning' },
                 { value: 'fuzzy_name', label: 'Liknande namn' },
                 { value: 'url', label: 'Samma URL' },
               ]}
@@ -222,21 +265,24 @@ export default function DuplicatesPage() {
             <ErrorState description={logsError} onRetry={loadLogs} />
           ) : filteredLogs.length === 0 ? (
             <Card>
-              <EmptyState icon={<Copy />} title="Inga stoppade dubletter" description="När en scraper hittar ett event som redan finns loggas det här." />
+              <EmptyState icon={<Copy />} title="Inga dubblettbeslut" description="När ett event känns igen som dublett, vid import eller i nattens städning, loggas det här." />
             </Card>
           ) : (
             <Card className="overflow-hidden">
-              <div className="hidden h-10 grid-cols-[minmax(0,1fr)_minmax(0,1fr)_90px_130px_130px] items-center gap-3 border-b border-line bg-sand-soft px-4 text-[11px] font-semibold uppercase tracking-[0.08em] text-ink-muted md:grid">
-                <span>Scrapat event</span>
-                <span>Befintligt event</span>
-                <span>Likhet</span>
-                <span>Typ · scraper</span>
+              <div className="hidden h-10 grid-cols-[minmax(0,1fr)_minmax(0,1fr)_70px_140px_120px] items-center gap-3 border-b border-line bg-sand-soft px-4 text-[11px] font-semibold uppercase tracking-[0.08em] text-ink-muted md:grid">
+                <span>Dublett</span>
+                <span>Behållet event</span>
+                <span>Namn</span>
+                <span>Beslut</span>
                 <span>När</span>
               </div>
               {pagedLogs.map((l) => (
-                <div key={l.id} className="grid gap-2 border-b border-line-soft px-4 py-3 last:border-b-0 md:min-h-12 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_90px_130px_130px] md:items-center md:gap-3">
+                <div key={l.id} className="grid gap-2 border-b border-line-soft px-4 py-3 last:border-b-0 md:min-h-12 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_70px_140px_120px] md:items-center md:gap-3">
                   <div className="flex min-w-0 flex-col">
                     <span className="truncate text-[13px] font-medium text-ink">{l.scraped_event_name}</span>
+                    {l.reasons?.ai?.explanation || l.reasons?.reason ? (
+                      <span className="line-clamp-2 text-[11px] text-ink-muted">{l.reasons.ai?.explanation || l.reasons.reason}</span>
+                    ) : null}
                     {l.scraped_event_url ? (
                       <a href={l.scraped_event_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 truncate text-[11px] text-ink-muted hover:text-sea">
                         <ExternalLink className="size-3" /> källa
@@ -254,11 +300,22 @@ export default function DuplicatesPage() {
                   <ToneBadge tone={simTone(l.similarity_score)} dot={false}>
                     {Math.round(l.similarity_score * 100)} %
                   </ToneBadge>
-                  <div className="flex min-w-0 flex-col">
-                    <span className="truncate text-[13px] text-ink">{matchTypeLabel(l.match_type)}</span>
-                    <span className="truncate text-[11px] text-ink-muted">{l.scraper_name}</span>
+                  <div className="flex min-w-0 flex-col items-start gap-1">
+                    {l.action ? (
+                      <ToneBadge tone={ACTION_META[l.action]?.tone ?? 'neutral'}>{ACTION_META[l.action]?.label ?? l.action}</ToneBadge>
+                    ) : null}
+                    <span className="truncate text-[11px] text-ink-muted">
+                      {matchTypeLabel(l.match_type)} · {l.scraper_name}
+                    </span>
                   </div>
-                  <span className="font-mono text-xs text-ink-soft">{formatRelative(l.scraped_at)}</span>
+                  <div className="flex flex-col items-start gap-1">
+                    <span className="font-mono text-xs text-ink-soft">{formatRelative(l.scraped_at)}</span>
+                    {canUndo(l) ? (
+                      <Button size="sm" variant="ghost" disabled={undoing === l.id} onClick={() => undo(l)}>
+                        {undoing === l.id ? 'Ångrar…' : 'Ångra'}
+                      </Button>
+                    ) : null}
+                  </div>
                 </div>
               ))}
               {filteredLogs.length > PAGE ? (

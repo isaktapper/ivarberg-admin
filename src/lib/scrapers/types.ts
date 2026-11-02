@@ -11,6 +11,7 @@ export interface ScrapedEvent {
   is_free?: boolean | null; // true = säkert gratis, false = säkert kostar, null/undefined = härleds av event-importer via priceResolver
   image_url?: string;
   organizer_event_url?: string; // Scraper-URL (används för deduplicering)
+  alternate_urls?: string[]; // Käll-URL:er från andra källor för samma event (sätts av dubblettkontrollen)
   event_website?: string; // Arrangörens event-sida (visas för användaren, används av Visit Varberg)
   booking_url?: string; // Länk till biljettsida (används av Visit Varberg m.fl.)
   categories?: EventCategory[]; // 1-3 kategorier, fylls i av AI
