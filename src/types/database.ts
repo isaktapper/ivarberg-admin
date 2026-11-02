@@ -3,7 +3,7 @@ export type EventCategory = 'Scen' | 'Nattliv' | 'Sport' | 'Utställningar' | 'K
 export interface CategoryScore {
   [category: string]: number; // 0.0 - 1.0
 }
-export type EventStatus = 'draft' | 'pending_approval' | 'published' | 'cancelled'
+export type EventStatus = 'draft' | 'pending_approval' | 'published' | 'cancelled' | 'duplicate' // duplicate = dold dublett, se duplicate_of
 export type DescriptionFormat = 'markdown' | 'html' | 'plaintext'
 export type ScraperLogStatus = 'running' | 'success' | 'failed' | 'partial' | 'cancelled'
 export type ScraperTriggerType = 'manual' | 'cron' | 'api'
@@ -56,6 +56,8 @@ export interface Event {
   quality_score?: number // Kvalitetspoäng 0-100
   quality_issues?: string // Lista över kvalitetsproblem
   auto_published?: boolean // TRUE om auto-publicerat
+  duplicate_of?: number | null // Satt när status = duplicate: id för eventet som behålls
+  alternate_urls?: string[] // Käll-URL:er från andra källor för samma event
   created_at: string
   updated_at: string
   organizer?: Organizer

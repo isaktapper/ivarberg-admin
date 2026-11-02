@@ -43,6 +43,9 @@ import {
 
 type View = 'kommande' | 'alla' | 'atgard' | 'utanbild' | 'okategoriserade' | 'passerade'
 
+// Dolda dubletter (status 'duplicate') visas bara när man filtrerar på dem
+const LISTED_STATUSES = ['draft', 'pending_approval', 'published', 'cancelled']
+
 const VIEWS: { value: View; label: string }[] = [
   { value: 'kommande', label: 'Kommande' },
   { value: 'alla', label: 'Alla' },
@@ -305,7 +308,9 @@ function EventsPageInner() {
     let alive = true
     const load = async () => {
       const results = await Promise.all(
-        VIEWS.map((v) => applyView(supabase.from('events').select('id', { count: 'exact', head: true }), v.value))
+        VIEWS.map((v) =>
+          applyView(supabase.from('events').select('id', { count: 'exact', head: true }).in('status', LISTED_STATUSES), v.value)
+        )
       )
       if (!alive) return
       const next: Partial<Record<View, number>> = {}
@@ -338,6 +343,7 @@ function EventsPageInner() {
         q = q.or(`name.ilike.${like},venue_name.ilike.${like},location.ilike.${like}`)
       }
       if (state.status) q = q.eq('status', state.status)
+      else q = q.in('status', LISTED_STATUSES)
       if (cats.length) q = q.overlaps('categories', cats)
       if (state.org === 'none') q = q.is('organizer_id', null)
       else if (state.org) q = q.eq('organizer_id', Number(state.org))

@@ -33,5 +33,26 @@ export async function loadKnownEventUrls(pattern: string): Promise<Set<string>> 
     }
     if (!data || data.length < pageSize) break;
   }
+
+  // URL:er som dubblettkontrollen kopplat till ett annat event räknas också som
+  // kända. Kolumnen finns först efter ADD_GENERIC_DEDUP.sql - saknas den hoppas
+  // steget över.
+  const likeToRegex = new RegExp(
+    '^' + pattern.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/%/g, '.*').replace(/_/g, '.') + '$',
+    'i'
+  );
+  for (let from = 0; ; from += pageSize) {
+    const { data, error } = await supabase
+      .from('events')
+      .select('alternate_urls')
+      .neq('alternate_urls', '{}')
+      .range(from, from + pageSize - 1);
+
+    if (error) break;
+    for (const row of data ?? []) {
+      for (const url of row.alternate_urls ?? []) if (likeToRegex.test(url)) urls.add(url);
+    }
+    if (!data || data.length < pageSize) break;
+  }
   return urls;
 }

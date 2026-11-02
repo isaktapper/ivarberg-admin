@@ -22,7 +22,8 @@ export const eventStatuses = [
   'draft',
   'pending_approval',
   'published',
-  'cancelled'
+  'cancelled',
+  'duplicate' // Sätts av dubblettkontrollen; kan väljas bort här för att visa eventet igen
 ] as const
 
 export const eventSchema = z.object({
