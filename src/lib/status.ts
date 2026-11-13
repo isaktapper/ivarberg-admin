@@ -18,6 +18,7 @@ export type StatusDomain =
   | 'tip'
   | 'alert'
   | 'instagram'
+  | 'newsletter'
   | 'alertSeverity'
 
 const registry: Record<StatusDomain, Record<string, StatusMeta>> = {
@@ -65,6 +66,14 @@ const registry: Record<StatusDomain, Record<string, StatusMeta>> = {
   instagram: {
     pending: { label: 'Väntar', tone: 'wait' },
     published: { label: 'Publicerad', tone: 'ok' },
+    skipped: { label: 'Hoppad', tone: 'neutral' },
+    failed: { label: 'Misslyckad', tone: 'bad' },
+  },
+  newsletter: {
+    proposed: { label: 'Väntar', tone: 'wait' },
+    approved: { label: 'Godkänns', tone: 'running' },
+    scheduled: { label: 'Schemalagd', tone: 'info' },
+    sent: { label: 'Skickad', tone: 'ok' },
     skipped: { label: 'Hoppad', tone: 'neutral' },
     failed: { label: 'Misslyckad', tone: 'bad' },
   },

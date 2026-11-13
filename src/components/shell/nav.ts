@@ -6,6 +6,7 @@ import {
   Copy,
   Star,
   Instagram,
+  Mail,
   Users,
   Globe,
   Download,
@@ -47,6 +48,7 @@ export const NAV: NavGroup[] = [
     label: 'Innehåll',
     items: [
       { key: 'instagram', label: 'Instagram', href: '/instagram', icon: Instagram, prefix: true },
+      { key: 'newsletter', label: 'Nyhetsbrev', href: '/newsletter', icon: Mail, prefix: true },
       { key: 'organizers', label: 'Arrangörer', href: '/organizers', icon: Users, prefix: true },
       { key: 'pages', label: 'Arrangörssidor', href: '/organizer-pages', icon: Globe, prefix: true },
     ],
@@ -81,6 +83,7 @@ export const CRUMBS: { prefix: string; crumbs: string[] }[] = [
   { prefix: '/admin/alerts', crumbs: ['Källor', 'Larm'] },
   { prefix: '/admin/settings', crumbs: ['Analys', 'Inställningar'] },
   { prefix: '/instagram', crumbs: ['Innehåll', 'Instagram'] },
+  { prefix: '/newsletter', crumbs: ['Innehåll', 'Nyhetsbrev'] },
   { prefix: '/organizer-pages/new', crumbs: ['Innehåll', 'Arrangörssidor', 'Ny sida'] },
   { prefix: '/organizer-pages', crumbs: ['Innehåll', 'Arrangörssidor'] },
   { prefix: '/organizers/new', crumbs: ['Innehåll', 'Arrangörer', 'Ny arrangör'] },

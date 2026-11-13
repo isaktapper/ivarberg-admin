@@ -59,9 +59,10 @@ export async function middleware(req: NextRequest) {
     data: { session },
   } = await supabase.auth.getSession()
 
-  // Godkännandesidan för Instagram nås via engångstoken i URL:en (från
-  // ntfy-notisen på mobilen) - ingen inloggning krävs, token är behörigheten
-  if (req.nextUrl.pathname.startsWith('/instagram/approve/')) {
+  // Godkännandesidorna för Instagram och Torsdagsbrevet nås via engångstoken
+  // i URL:en (från ntfy-notisen på mobilen) - ingen inloggning krävs, token
+  // är behörigheten
+  if (req.nextUrl.pathname.startsWith('/instagram/approve/') || req.nextUrl.pathname.startsWith('/newsletter/approve/')) {
     return response
   }
 

@@ -1,0 +1,117 @@
+name: Weekly Newsletter (Torsdagsbrevet)
+
+on:
+  schedule:
+    # Enda schemaläggaren för Torsdagsbrevet (inget Vercel-cron). GitHubs
+    # schemalagda körningar kan bli upp till ett par timmar sena, så varje
+    # steg får två försök. Tiderna är UTC och valda så att de hamnar i
+    # pipelinens fönster (Europe/Stockholm) både sommar- och vintertid:
+    #   onsdag 14:15 och 16:15 UTC   -> förslaget skapas (fönster: onsdag från kl 15)
+    #   onsdag 19:15 UTC             -> kvällspåminnelsen (fönster: onsdag från kl 20)
+    #   torsdag 05:15 och 07:15 UTC  -> morgonpåminnelsen (fönster: torsdag kl 06-12)
+    # Allt är idempotent per torsdag (newsletter_issues UNIQUE issue_date och
+    # reminders_sent), så extra försök är ofarliga.
+    #
+    # Körningen skapar förslag och påminner. Den skickar ALDRIG brevet - det
+    # gör bara ett godkännande på /newsletter/approve/<token>, och Resend
+    # håller sedan utskicket till torsdag 07:00.
+    - cron: '15 14 * * 3'
+    - cron: '15 16 * * 3'
+    - cron: '15 19 * * 3'
+    - cron: '15 5 * * 4'
+    - cron: '15 7 * * 4'
+  workflow_dispatch:  # Tillåter manuell körning från GitHub Actions UI
+    inputs:
+      force:
+        description: 'Skapa förslaget oavsett veckodag och klockslag'
+        required: false
+        default: 'false'
+      dry_run:
+        description: 'Dry run - ta fram förslaget men spara inget och skicka ingen notis'
+        required: false
+        default: 'false'
+
+# Add write permissions for issues
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  run-newsletter:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run newsletter pipeline
+        env:
+          # Huvudbrytaren: utan repo-variabeln NEWSLETTER_ENABLED=true gör körningen ingenting
+          NEWSLETTER_ENABLED: ${{ vars.NEWSLETTER_ENABLED || 'false' }}
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          POSTHOG_API_KEY: ${{ secrets.POSTHOG_API_KEY }}
+          POSTHOG_HOST: ${{ vars.POSTHOG_HOST || 'https://eu.i.posthog.com' }}
+          # Resend används här bara för larm och för att läsa av om ett
+          # schemalagt utskick har gått ut
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          ALERT_EMAIL: ${{ secrets.ALERT_EMAIL }}
+          # ntfy-notis med länk till godkännandesidan (se src/lib/newsletter/runner.ts)
+          NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+          NTFY_SERVER: ${{ vars.NTFY_SERVER || 'https://ntfy.sh' }}
+          ADMIN_BASE_URL: ${{ vars.ADMIN_BASE_URL || 'https://admin.ivarberg.nu' }}
+          NEWSLETTER_SIGNOFF: ${{ vars.NEWSLETTER_SIGNOFF }}
+          FORCE_RUN: ${{ github.event.inputs.force || 'false' }}
+          DRY_RUN: ${{ github.event.inputs.dry_run || 'false' }}
+        run: pnpm tsx scripts/run-newsletter.ts
+
+  notify-on-failure:
+    needs: run-newsletter
+    if: failure()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Create issue on failure
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const title = '🚨 Weekly Newsletter Run Failed';
+            const body = `The newsletter pipeline (Torsdagsbrevet) failed on ${new Date().toISOString()}.
+
+            **Run:** ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+            Please check the logs and investigate.`;
+
+            // Check if issue already exists
+            const issues = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              labels: 'newsletter-failure'
+            });
+
+            // Only create if no open issue exists
+            if (issues.data.length === 0) {
+              await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title: title,
+                body: body,
+                labels: ['newsletter-failure', 'automated']
+              });
+            }
