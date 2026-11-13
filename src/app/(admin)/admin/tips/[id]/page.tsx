@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useParams, useRouter } from 'next/navigation'
-import { ArrowLeft, ExternalLink, Sparkles, XCircle, CheckCircle2, Calendar, MapPin, Mail } from 'lucide-react'
+import { ArrowLeft, ExternalLink, Send, Sparkles, XCircle, CheckCircle2, Calendar, MapPin, Mail } from 'lucide-react'
 import type { EventTip } from '@/types/database'
 import { formatDateTime, formatDay, formatRelative } from '@/lib/format'
 import { PageHeader } from '@/components/ui/page-header'
@@ -51,16 +51,20 @@ export default function TipDetailPage() {
     if (!Number.isNaN(id)) load()
   }, [id, load])
 
-  const doConvert = async () => {
+  const doConvert = async (publish = false) => {
     if (!tip) return
-    const ok = await confirm({ title: 'Konvertera till event?', description: `”${tip.event_name}” skapas som utkast.`, confirmLabel: 'Konvertera' })
+    const ok = await confirm(
+      publish
+        ? { title: 'Publicera direkt?', description: `”${tip.event_name}” skapas som event och syns på ivarberg.nu direkt.`, confirmLabel: 'Publicera' }
+        : { title: 'Skapa utkast?', description: `”${tip.event_name}” skapas som utkast.`, confirmLabel: 'Skapa utkast' }
+    )
     if (!ok) return
     setBusy(true)
     try {
-      const result = await convertTip(tip.id)
+      const result = await convertTip(tip.id, publish)
       toast.toast({
         kind: 'success',
-        title: 'Event skapat som utkast',
+        title: publish ? 'Eventet är publicerat' : 'Event skapat som utkast',
         description: tip.event_name,
         action: { label: 'Öppna eventet', onClick: () => router.push(`/events/${result.event.id}/edit`) },
       })
@@ -131,9 +135,14 @@ export default function TipDetailPage() {
               </Button>
             ) : null}
             {tip.status !== 'converted' ? (
-              <Button loading={busy} onClick={doConvert}>
-                <Sparkles /> Konvertera till event
-              </Button>
+              <>
+                <Button variant="secondary" disabled={busy} onClick={() => doConvert(false)}>
+                  <Sparkles /> Skapa utkast
+                </Button>
+                <Button loading={busy} onClick={() => doConvert(true)}>
+                  <Send /> Publicera direkt
+                </Button>
+              </>
             ) : null}
           </>
         }

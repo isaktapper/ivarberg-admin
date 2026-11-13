@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation'
 import * as stringSimilarity from 'string-similarity'
 import { Plus, MoreHorizontal, Eye, Pencil, Check, Archive, GitMerge, Trash2 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
+import { updateOrganizerEvents } from '@/lib/events-write'
 import { fetchAllRows } from '@/lib/supabase-fetch-all'
 import { Organizer, OrganizerStatus } from '@/types/database'
 import { useUrlState } from '@/hooks/use-url-state'
@@ -193,7 +194,7 @@ function OrganizersInner() {
     const { organizer, count } = publishDialog
     const ok = await setStatus([organizer.id], 'active')
     if (ok && publish) {
-      const { error } = await supabase.from('events').update({ status: 'published' }).eq('organizer_id', organizer.id).eq('status', 'draft')
+      const { error } = await updateOrganizerEvents(organizer.id, { status: 'published' }, 'draft')
       if (error) toast.error('Arrangören godkänd, men utkasten kunde inte publiceras', error.message)
       else toast.success(`${organizer.name} godkänd`, `${count} event publicerades`)
       load()

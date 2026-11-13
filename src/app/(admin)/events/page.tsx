@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { Suspense } from 'react'
 import { ChevronDown, Columns3, Download, Plus, Star, Calendar, MoreHorizontal, Search, X, ExternalLink, Pencil, Link2, Trash2, Check } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
+import { updateEvents } from '@/lib/events-write'
 import { getFrontendUrl, cn } from '@/lib/utils'
 import { formatDay, formatTime, toLocalDateInput } from '@/lib/format'
 import { getStatus, statusOptions, toneClasses } from '@/lib/status'
@@ -419,7 +420,7 @@ function EventsPageInner() {
   }
 
   const updateStatus = async (id: number, status: EventStatus) => {
-    const { error } = await supabase.from('events').update({ status }).eq('id', id)
+    const { error } = await updateEvents([id], { status })
     if (error) return toast.error('Kunde inte ändra status', error.message)
     patchLocal([id], { status })
     toast.success(`Status ändrad till ${getStatus('event', status).label}`)
@@ -427,7 +428,7 @@ function EventsPageInner() {
   }
 
   const toggleFeatured = async (row: EventRow) => {
-    const { error } = await supabase.from('events').update({ featured: !row.featured }).eq('id', row.id)
+    const { error } = await updateEvents([row.id], { featured: !row.featured })
     if (error) return toast.error('Kunde inte uppdatera featured', error.message)
     patchLocal([row.id], { featured: !row.featured })
     toast.success(row.featured ? 'Borttagen från featured' : 'Markerad som featured')
@@ -456,7 +457,7 @@ function EventsPageInner() {
   const bulkUpdate = async (patch: Record<string, unknown>, doneMsg: string) => {
     if (!selectedIds.length) return
     setBulkBusy(true)
-    const { error } = await supabase.from('events').update(patch).in('id', selectedIds)
+    const { error } = await updateEvents(selectedIds, patch)
     setBulkBusy(false)
     if (error) return toast.error('Uppdateringen misslyckades', error.message)
     toast.success(doneMsg)
@@ -1037,7 +1038,7 @@ function EventsPageInner() {
               <Button
                 disabled={bulkCats.length === 0 || bulkBusy}
                 onClick={async () => {
-                  await bulkUpdate({ categories: bulkCats, category: bulkCats[0] }, `Kategorier satta på ${selected.size} event`)
+                  await bulkUpdate({ categories: bulkCats }, `Kategorier satta på ${selected.size} event`)
                   setBulkCatsOpen(false)
                 }}
               >

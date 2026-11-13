@@ -3,8 +3,13 @@ import type { Event } from '@/types/database'
 
 /** Gemensamma anrop för tips (lista + detalj). Går via befintliga API-routes. */
 
-export async function convertTip(id: number): Promise<{ event: Event; event_id: string }> {
-  const res = await fetch(`/api/admin/tips/${id}/convert`, { method: 'POST' })
+/** Skapar ett event av tipset: som utkast, eller publicerat direkt med publish = true. */
+export async function convertTip(id: number, publish = false): Promise<{ event: Event; event_id: string }> {
+  const res = await fetch(`/api/admin/tips/${id}/convert`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ publish }),
+  })
   const json = await res.json()
   if (!res.ok) throw new Error(json.details || json.error || 'Kunde inte konvertera tipset')
   return json

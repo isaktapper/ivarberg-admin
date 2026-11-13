@@ -65,6 +65,10 @@ export async function POST(
       )
     }
 
+    // { publish: true } publicerar eventet direkt i stället för att skapa ett utkast
+    const body = await request.json().catch(() => null)
+    const publish = body?.publish === true
+
     // Hämta tipset
     const { data: tip, error: tipError } = await supabaseAdmin
       .from('event_tips')
@@ -116,7 +120,7 @@ export async function POST(
       category_scores: generateCategoryScores(categories),
       image_url: tip.image_url,
       organizer_event_url: tip.website_url,
-      status: 'draft' as const, // Väntar på admin approval
+      status: publish ? ('published' as const) : ('draft' as const),
       tags: ['tips', 'user-submitted'],
       price: null,
       is_free: null, // Okänt - tips innehåller ingen prisinfo

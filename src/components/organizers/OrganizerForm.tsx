@@ -6,6 +6,7 @@ import Link from 'next/link'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { supabase } from '@/lib/supabase'
+import { updateOrganizerEvents } from '@/lib/events-write'
 import { organizerSchema, OrganizerFormData } from '@/lib/validations'
 import { Organizer, OrganizerStatus } from '@/types/database'
 import GooglePlacesAutocomplete from '@/components/GooglePlacesAutocomplete'
@@ -90,7 +91,7 @@ export function OrganizerForm({ organizer }: { organizer?: Organizer }) {
         if (error) throw error
 
         if (publishEvents && status === 'active') {
-          const { error: eventsError } = await supabase.from('events').update({ status: 'published' }).eq('organizer_id', organizer.id).eq('status', 'draft')
+          const { error: eventsError } = await updateOrganizerEvents(organizer.id, { status: 'published' }, 'draft')
           if (eventsError) {
             toast.error('Arrangören sparades, men utkasten kunde inte publiceras', eventsError.message)
           } else {

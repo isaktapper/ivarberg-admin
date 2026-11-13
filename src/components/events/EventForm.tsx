@@ -7,6 +7,7 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { ArrowLeft, ExternalLink, MoreHorizontal, Trash2, MapPin } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
+import { insertEvent, updateEvents } from '@/lib/events-write'
 import { eventSchema, type EventFormData, eventStatuses } from '@/lib/validations'
 import { EVENT_AREAS, type EventArea, resolveArea } from '@/lib/services/areaResolver'
 import { resolveIsFree } from '@/lib/services/priceResolver'
@@ -74,7 +75,6 @@ function toPayload(data: EventFormData) {
     organizer_event_url: data.organizer_event_url || null,
     booking_url: data.booking_url || null,
     event_website: data.event_website || null,
-    category: categories[0], // bakåtkompatibilitet
     categories,
     organizer_id: data.organizer_id || null,
     featured: data.featured,
@@ -152,20 +152,13 @@ export function EventForm({ mode, event, onSaved }: { mode: 'create' | 'edit'; e
           const { generateUniqueEventId } = await import('@/lib/event-id-generator')
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           const eventId = await generateUniqueEventId(data.name, 'manual', supabase as any)
-          const { data: inserted, error } = await supabase
-            .from('events')
-            .insert([{ ...payload, event_id: eventId }])
-            .select('id')
-            .single()
-          if (error) throw error
+          const { data: inserted, error } = await insertEvent({ ...payload, event_id: eventId })
+          if (error || !inserted) throw error ?? new Error('Eventet skapades inte')
           toast.success(statusOverride === 'published' ? 'Eventet är publicerat' : 'Eventet är sparat')
           reset(data)
           onSaved?.(inserted.id)
         } else if (event) {
-          const { error } = await supabase
-            .from('events')
-            .update({ ...payload, updated_at: new Date().toISOString() })
-            .eq('id', event.id)
+          const { error } = await updateEvents([event.id], { ...payload, updated_at: new Date().toISOString() })
           if (error) throw error
           toast.success(statusOverride === 'published' ? 'Eventet är publicerat' : 'Ändringarna är sparade')
           reset({ ...data, status: statusOverride ?? data.status })

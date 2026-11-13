@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation'
 import { AlertTriangle, Check, CheckCircle2, ChevronLeft, ChevronRight, ExternalLink, Image as ImageIcon, Pencil, Sparkles } from 'lucide-react'
 import * as stringSimilarity from 'string-similarity'
 import { supabase } from '@/lib/supabase'
+import { updateEvents } from '@/lib/events-write'
 import { fetchAllRows } from '@/lib/supabase-fetch-all'
 import type { Event, EventCategory } from '@/types/database'
 import { formatDay, formatRelative, formatTime, toDateTimeLocalInput } from '@/lib/format'
@@ -187,10 +188,7 @@ export default function EventReviewPage() {
     if (!current || !dirty) return true
     setProcessing(true)
     try {
-      const { error } = await supabase
-        .from('events')
-        .update({ ...edited, updated_at: new Date().toISOString() })
-        .eq('id', current.id)
+      const { error } = await updateEvents([current.id], { ...edited, updated_at: new Date().toISOString() })
       if (error) throw error
       setQueue((q) => q.map((e) => (e.id === current.id ? { ...e, ...edited } : e)))
       setEdited({})
@@ -209,7 +207,7 @@ export default function EventReviewPage() {
     if (dirty && !(await saveChanges())) return
     setProcessing(true)
     try {
-      const { error } = await supabase.from('events').update({ status: 'published', updated_at: new Date().toISOString() }).eq('id', current.id)
+      const { error } = await updateEvents([current.id], { status: 'published', updated_at: new Date().toISOString() })
       if (error) throw error
       toast.success('Publicerat', current.name)
       removeFromQueue(current.id)
@@ -226,7 +224,7 @@ export default function EventReviewPage() {
     if (!ok) return
     setProcessing(true)
     try {
-      const { error } = await supabase.from('events').update({ status: 'cancelled', updated_at: new Date().toISOString() }).eq('id', current.id)
+      const { error } = await updateEvents([current.id], { status: 'cancelled', updated_at: new Date().toISOString() })
       if (error) throw error
       toast.info('Avvisat', current.name)
       removeFromQueue(current.id)
@@ -256,7 +254,7 @@ export default function EventReviewPage() {
     setProcessing(true)
     try {
       const ids = good.map((e) => e.id)
-      const { error } = await supabase.from('events').update({ status: 'published', updated_at: new Date().toISOString() }).in('id', ids)
+      const { error } = await updateEvents(ids, { status: 'published', updated_at: new Date().toISOString() })
       if (error) throw error
       setQueue((q) => q.filter((e) => !ids.includes(e.id)))
       setDone((n) => n + ids.length)

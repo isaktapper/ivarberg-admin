@@ -2,7 +2,7 @@
 
 import { Suspense, useCallback, useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Eye, MoreHorizontal, Sparkles, XCircle, CheckCircle2, Lightbulb } from 'lucide-react'
+import { Eye, MoreHorizontal, Send, Sparkles, XCircle, CheckCircle2, Lightbulb } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import type { EventTip, EventTipStatus } from '@/types/database'
 import { useUrlState } from '@/hooks/use-url-state'
@@ -117,19 +117,19 @@ function TipsList() {
     setSelected(new Set())
   }
 
-  const doConvert = async (tip: EventTip) => {
-    const ok = await confirm({
-      title: 'Konvertera till event?',
-      description: `”${tip.event_name}” skapas som utkast och kan sedan granskas och publiceras.`,
-      confirmLabel: 'Konvertera',
-    })
+  const doConvert = async (tip: EventTip, publish = false) => {
+    const ok = await confirm(
+      publish
+        ? { title: 'Publicera direkt?', description: `”${tip.event_name}” skapas som event och syns på ivarberg.nu direkt.`, confirmLabel: 'Publicera' }
+        : { title: 'Skapa utkast?', description: `”${tip.event_name}” skapas som utkast och kan sedan granskas och publiceras.`, confirmLabel: 'Skapa utkast' }
+    )
     if (!ok) return
     setBusy(true)
     try {
-      const result = await convertTip(tip.id)
+      const result = await convertTip(tip.id, publish)
       toast.toast({
         kind: 'success',
-        title: 'Event skapat som utkast',
+        title: publish ? 'Eventet är publicerat' : 'Event skapat som utkast',
         description: tip.event_name,
         action: { label: 'Öppna eventet', onClick: () => router.push(`/events/${result.event.id}/edit`) },
       })
@@ -225,9 +225,14 @@ function TipsList() {
               <Eye /> Visa
             </DropdownMenuItem>
             {t.status !== 'converted' ? (
-              <DropdownMenuItem onSelect={() => doConvert(t)}>
-                <Sparkles /> Konvertera till event
-              </DropdownMenuItem>
+              <>
+                <DropdownMenuItem onSelect={() => doConvert(t, true)}>
+                  <Send /> Publicera direkt
+                </DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => doConvert(t, false)}>
+                  <Sparkles /> Skapa utkast
+                </DropdownMenuItem>
+              </>
             ) : null}
             {t.status === 'pending' ? (
               <DropdownMenuItem onSelect={() => doReviewed([t.id])}>
@@ -254,7 +259,7 @@ function TipsList() {
     <>
       <PageHeader
         title="Tips från besökare"
-        description="Event som besökare skickat in via ivarberg.nu. Konvertera till utkast eller avvisa."
+        description="Event som besökare skickat in via ivarberg.nu. Publicera direkt, skapa ett utkast eller avvisa."
         meta={counts.all != null ? `${counts.all} totalt` : undefined}
       />
 

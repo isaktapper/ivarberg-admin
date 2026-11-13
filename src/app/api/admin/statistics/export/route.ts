@@ -26,7 +26,7 @@ export async function GET(request: NextRequest) {
     const eventsData = await fetchAllRows<any>((from, to) =>
       supabase
         .from('events')
-        .select('event_id, organizer_id, venue_name, category, organizers(name)')
+        .select('event_id, organizer_id, venue_name, categories, organizers(name)')
         .order('id', { ascending: true })
         .range(from, to)
     );
@@ -51,7 +51,7 @@ export async function GET(request: NextRequest) {
         'Ändrad av': log.changed_by || 'system',
         'Arrangör': eventInfo?.organizers?.name || 'Okänd',
         'Plats': eventInfo?.venue_name || '-',
-        'Kategori': eventInfo?.category || '-',
+        'Kategori': eventInfo?.categories?.[0] || '-',
         'Ändringar': log.changes ? JSON.stringify(log.changes) : '-'
       };
     });
