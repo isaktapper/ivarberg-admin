@@ -136,6 +136,19 @@ Primär trigger är **Vercel cron**: `/api/cron/instagram-post` körs kl 06:00 o
 
 ---
 
+## Run Newsletter (Torsdagsbrevet)
+
+Skapar veckans förslag till nyhetsbrevet och skickar påminnelser via ntfy. Skriptet skickar **aldrig** brevet – det gör bara ett godkännande på `/newsletter/approve/<token>`. Hela flödet, miljövariablerna och checklistan för att komma igång finns i `docs/TORSDAGSBREVET.md`.
+
+```bash
+pnpm newsletter -- --dry-run   # ta fram förslaget och skriv ut det, spara inget
+pnpm newsletter -- --force     # skapa förslaget oavsett veckodag och klockslag
+```
+
+Utan `NEWSLETTER_ENABLED=true` gör skriptet ingenting (utom vid `--dry-run`). Körs schemalagt av GitHub Actions (`.github/workflows/weekly-newsletter.yml`), inte av Vercel cron.
+
+---
+
 ## Regenerate Page Content
 
 Script för att regenerera AI-innehåll för befintliga arrangörssidor med den förbättrade prompten (tredje person, använder arrangörens namn).

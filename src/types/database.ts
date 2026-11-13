@@ -221,6 +221,43 @@ export interface InstagramPost {
   notified_at?: string | null
 }
 
+// Torsdagsbrevet (ADD_NEWSLETTER_FLOW.sql)
+export type NewsletterSubscriptionStatus = 'pending' | 'active' | 'unsubscribed' | 'bounced'
+
+export interface NewsletterSubscription {
+  id: number
+  email: string
+  name: string
+  status: NewsletterSubscriptionStatus
+  resend_contact_id?: string | null // Kontaktens id i Resend, NULL = inte synkad än
+  unsubscribed_at?: string | null
+  source?: string | null // Var anmälan gjordes (footer, säsongssida ...)
+  subscribed_at: string
+  updated_at: string
+}
+
+export type NewsletterIssueStatus = 'proposed' | 'approved' | 'scheduled' | 'sent' | 'skipped' | 'failed'
+export type NewsletterReminder = 'evening' | 'morning'
+
+export interface NewsletterIssue {
+  id: number
+  issue_date: string // Torsdagen brevet går ut (YYYY-MM-DD, Europe/Stockholm)
+  status: NewsletterIssueStatus
+  proposal?: import('@/lib/newsletter/proposal').NewsletterProposal | null // Kandidater + AI-förslag
+  content?: import('@/lib/newsletter/types').NewsletterContent | null // Brevets innehåll just nu
+  approval_token?: string | null
+  approved_at?: string | null
+  scheduled_for?: string | null // När Broadcastet går ut
+  resend_broadcast_id?: string | null
+  sent_at?: string | null
+  error?: string | null
+  recipient_count?: number | null
+  notified_at?: string | null
+  reminders_sent?: NewsletterReminder[]
+  created_at: string
+  updated_at: string
+}
+
 export interface Database {
   public: {
     Tables: {
@@ -270,6 +307,16 @@ export interface Database {
         Row: InstagramPost
         Insert: Omit<InstagramPost, 'id' | 'created_at'>
         Update: Partial<Omit<InstagramPost, 'id' | 'created_at'>>
+      }
+      newsletter_subscriptions: {
+        Row: NewsletterSubscription
+        Insert: Pick<NewsletterSubscription, 'email' | 'name'> & Partial<Pick<NewsletterSubscription, 'status' | 'source'>>
+        Update: Partial<Omit<NewsletterSubscription, 'id' | 'subscribed_at' | 'updated_at'>>
+      }
+      newsletter_issues: {
+        Row: NewsletterIssue
+        Insert: Omit<NewsletterIssue, 'id' | 'created_at' | 'updated_at'>
+        Update: Partial<Omit<NewsletterIssue, 'id' | 'created_at' | 'updated_at'>>
       }
     }
   }

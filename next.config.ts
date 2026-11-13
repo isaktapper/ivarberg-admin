@@ -26,6 +26,10 @@ const nextConfig: NextConfig = {
   outputFileTracingIncludes: {
     '/api/cron/instagram-post': SHARP_LINUX_FILES,
     '/api/instagram/**': SHARP_LINUX_FILES,
+    // Torsdagsbrevets mejlbilder går via samma sharp-kod (newsletter/images.ts)
+    '/api/newsletter/**': SHARP_LINUX_FILES,
+    '/api/admin/newsletter': SHARP_LINUX_FILES,
+    '/newsletter/approve/**': SHARP_LINUX_FILES,
   },
 };
 
