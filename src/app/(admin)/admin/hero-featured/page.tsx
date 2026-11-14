@@ -4,6 +4,8 @@ import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
 import { Plus, ChevronUp, ChevronDown, X, Calendar, MapPin, Pencil } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
+import { useTenant } from '@/contexts/TenantContext'
+import { rowTenantFields, scopeEvents, scopeTenant } from '@/lib/tenants'
 import type { Event, HeroFeaturedEvent } from '@/types/database'
 import { formatDateTime, formatDay } from '@/lib/format'
 import { cn } from '@/lib/utils'
@@ -24,6 +26,7 @@ const MAX_SECONDARY = 5
 export default function HeroFeaturedPage() {
   const toast = useToast()
   const confirm = useConfirm()
+  const { tenant } = useTenant()
   const [main, setMain] = useState<Featured | null>(null)
   const [secondary, setSecondary] = useState<Featured[]>([])
   const [loading, setLoading] = useState(true)
@@ -35,8 +38,8 @@ export default function HeroFeaturedPage() {
     setError(null)
     try {
       const [m, s] = await Promise.all([
-        supabase.from('hero_featured_events').select('*, event:events(*)').eq('position', 'main').maybeSingle(),
-        supabase.from('hero_featured_events').select('*, event:events(*)').eq('position', 'secondary').order('priority', { ascending: true }),
+        scopeTenant(supabase.from('hero_featured_events').select('*, event:events(*)').eq('position', 'main'), tenant).maybeSingle(),
+        scopeTenant(supabase.from('hero_featured_events').select('*, event:events(*)').eq('position', 'secondary'), tenant).order('priority', { ascending: true }),
       ])
       if (m.error) throw m.error
       if (s.error) throw s.error
@@ -47,7 +50,7 @@ export default function HeroFeaturedPage() {
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [tenant])
 
   useEffect(() => {
     load()
@@ -72,7 +75,7 @@ export default function HeroFeaturedPage() {
         const { error } = await supabase.from('hero_featured_events').delete().eq('id', main.id)
         if (error) throw error
       }
-      const { error } = await supabase.from('hero_featured_events').insert({ event_id: eventId, position: 'main', priority: null })
+      const { error } = await supabase.from('hero_featured_events').insert({ event_id: eventId, position: 'main', priority: null, ...rowTenantFields(tenant) })
       if (error) throw error
       setPicker(null)
     })
@@ -93,7 +96,7 @@ export default function HeroFeaturedPage() {
       return
     }
     run('Sekundärt event tillagt', async () => {
-      const { error } = await supabase.from('hero_featured_events').insert({ event_id: eventId, position: 'secondary', priority: secondary.length + 1 })
+      const { error } = await supabase.from('hero_featured_events').insert({ event_id: eventId, position: 'secondary', priority: secondary.length + 1, ...rowTenantFields(tenant) })
       if (error) throw error
       setPicker(null)
     })
@@ -132,7 +135,7 @@ export default function HeroFeaturedPage() {
 
   return (
     <>
-      <PageHeader title="Hero på startsidan" description="Ett huvudevent och upp till fem sekundära som visas överst på ivarberg.nu." />
+      <PageHeader title="Hero på startsidan" description={`Ett huvudevent och upp till fem sekundära som visas överst på ${tenant?.primary_domain ?? 'ivarberg.nu'}.`} />
 
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
         <div className="flex flex-col gap-4">
@@ -153,7 +156,7 @@ export default function HeroFeaturedPage() {
               {main?.event ? (
                 <EventPreview event={main.event} large />
               ) : (
-                <button type="button" disabled={busy} onClick={() => setPicker('main')} className="flex w-full flex-col items-center justify-center gap-2 rounded-[10px] border border-dashed border-[#C9C0AE] bg-sand-soft py-12 text-ink-soft hover:border-sea hover:text-sea">
+                <button type="button" disabled={busy} onClick={() => setPicker('main')} className="flex w-full flex-col items-center justify-center gap-2 rounded-[12px] bg-field py-12 text-ink-soft hover:bg-lime-light hover:text-ink">
                   <Plus className="size-5" />
                   <span className="text-[13px] font-medium">Välj huvudevent</span>
                 </button>
@@ -195,7 +198,7 @@ export default function HeroFeaturedPage() {
                   type="button"
                   disabled={busy}
                   onClick={() => setPicker('secondary')}
-                  className="mx-5 my-2 flex h-11 items-center justify-center gap-2 rounded-[8px] border border-dashed border-[#C9C0AE] text-[13px] text-ink-muted hover:border-sea hover:text-sea"
+                  className="mx-5 my-2 flex h-11 items-center justify-center gap-2 rounded-[10px] bg-field text-[13px] text-ink-muted hover:bg-lime-light hover:text-ink"
                 >
                   <Plus className="size-4" /> Tom plats {secondary.length + i + 1}
                 </button>
@@ -205,7 +208,7 @@ export default function HeroFeaturedPage() {
         </div>
 
         <Card className="h-fit">
-          <CardHeader title="Så visas det på ivarberg.nu" />
+          <CardHeader title={`Så visas det på ${tenant?.primary_domain ?? 'ivarberg.nu'}`} />
           <CardBody className="bg-sand">
             <div className="flex flex-col gap-2">
               <MockTile event={main?.event} tall label="Huvud" />
@@ -263,6 +266,7 @@ function EventPicker({ open, title, excludeIds, onClose, onPick, busy }: { open:
   const [q, setQ] = useState('')
   const [rows, setRows] = useState<Event[]>([])
   const [loading, setLoading] = useState(false)
+  const { tenant } = useTenant()
 
   useEffect(() => {
     if (!open) {
@@ -273,9 +277,9 @@ function EventPicker({ open, title, excludeIds, onClose, onPick, busy }: { open:
     let alive = true
     setLoading(true)
     const like = `%${q.trim().replace(/[%_]/g, '')}%`
-    let query = supabase.from('events').select('*').eq('status', 'published').gte('date_time', new Date().toISOString()).order('date_time', { ascending: true }).limit(20)
+    let query = scopeEvents(supabase.from('events').select('*').eq('status', 'published').gte('date_time', new Date().toISOString()), tenant)
     if (q.trim()) query = query.ilike('name', like)
-    query.then(({ data }) => {
+    query.order('date_time', { ascending: true }).limit(20).then(({ data }) => {
       if (!alive) return
       setRows(((data as Event[]) || []).filter((e) => !excludeIds.includes(e.id)))
       setLoading(false)
@@ -285,7 +289,7 @@ function EventPicker({ open, title, excludeIds, onClose, onPick, busy }: { open:
     }
     // excludeIds ändras bara när listan laddas om; q och open styr sökningen
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, q])
+  }, [open, q, tenant])
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>

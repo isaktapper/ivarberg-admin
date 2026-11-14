@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { getActiveTenant } from '@/lib/tenant-server'
+import { scopeTenant } from '@/lib/tenants'
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -8,8 +10,10 @@ const supabase = createClient(
 
 export async function GET() {
   try {
+    const tenant = await getActiveTenant()
+
     // Hämta main featured event
-    const { data: mainData, error: mainError } = await supabase
+    const { data: mainData, error: mainError } = await scopeTenant(supabase
       .from('hero_featured_events')
       .select(`
         *,
@@ -17,7 +21,7 @@ export async function GET() {
           *,
           organizer:organizers(*)
         )
-      `)
+      `), tenant)
       .eq('position', 'main')
       .eq('event.status', 'published')
       .single()
@@ -27,7 +31,7 @@ export async function GET() {
     }
 
     // Hämta secondary featured events
-    const { data: secondaryData, error: secondaryError } = await supabase
+    const { data: secondaryData, error: secondaryError } = await scopeTenant(supabase
       .from('hero_featured_events')
       .select(`
         *,
@@ -35,7 +39,7 @@ export async function GET() {
           *,
           organizer:organizers(*)
         )
-      `)
+      `), tenant)
       .eq('position', 'secondary')
       .eq('event.status', 'published')
       .order('priority', { ascending: true })

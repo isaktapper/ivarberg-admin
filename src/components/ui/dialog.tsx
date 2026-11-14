@@ -29,7 +29,7 @@ function DialogContent({
       <DialogPrimitive.Overlay className="animate-fade-in fixed inset-0 z-50 bg-ink/40" />
       <DialogPrimitive.Content
         className={cn(
-          'animate-pop-in fixed left-1/2 top-1/2 z-50 flex max-h-[90vh] w-[calc(100%-32px)] -translate-x-1/2 -translate-y-1/2 flex-col rounded-[12px] border border-line bg-white shadow-[var(--shadow-pop)] outline-none',
+          'animate-pop-in fixed left-1/2 top-1/2 z-50 flex max-h-[90vh] w-[calc(100%-32px)] -translate-x-1/2 -translate-y-1/2 flex-col rounded-[18px] bg-white shadow-[var(--shadow-pop)] outline-none',
           widths[size],
           className
         )}

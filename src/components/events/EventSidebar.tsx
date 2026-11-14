@@ -5,6 +5,8 @@ import Link from 'next/link'
 import { Check, AlertTriangle, Sparkles, RefreshCw, ImageIcon } from 'lucide-react'
 import * as stringSimilarity from 'string-similarity'
 import { supabase } from '@/lib/supabase'
+import { useTenant } from '@/contexts/TenantContext'
+import { scopeEvents } from '@/lib/tenants'
 import { Card, CardBody, SectionLabel } from '@/components/ui/card'
 import { Banner } from '@/components/ui/states'
 import { Button } from '@/components/ui/button'
@@ -31,16 +33,17 @@ export interface SidebarValues {
 /* ---------- Förhandsvisning ---------- */
 export function PreviewCard({ v }: { v: SidebarValues }) {
   const [broken, setBroken] = React.useState(false)
+  const { tenant } = useTenant()
   React.useEffect(() => setBroken(false), [v.image_url])
   const priceLabel = v.is_free === 'free' ? 'Gratis' : v.price || (v.is_free === 'paid' ? 'Se arrangör' : '')
   return (
     <Card className="overflow-hidden">
       <div className="border-b border-line px-4 py-3">
-        <SectionLabel>Så ser det ut på ivarberg.nu</SectionLabel>
+        <SectionLabel>Så ser det ut på {tenant?.primary_domain ?? 'ivarberg.nu'}</SectionLabel>
       </div>
       <div className="bg-sand p-4">
         <div className="overflow-hidden rounded-[12px] bg-white shadow-[0_2px_8px_rgba(15,90,166,0.08)]">
-          <div className="relative flex h-[150px] items-center justify-center bg-amber-light text-amber">
+          <div className="relative flex h-[150px] items-center justify-center bg-field text-ink-faint">
             {v.image_url && !broken ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img src={v.image_url} alt="" className="size-full object-cover" onError={() => setBroken(true)} />
@@ -196,6 +199,7 @@ interface DupMatch {
 
 export function DuplicateWarning({ name, dateTime, excludeId }: { name: string; dateTime: string; excludeId?: number }) {
   const [matches, setMatches] = React.useState<DupMatch[]>([])
+  const { tenant } = useTenant()
 
   React.useEffect(() => {
     if (!name || name.length < 4 || !dateTime) {
@@ -205,11 +209,11 @@ export function DuplicateWarning({ name, dateTime, excludeId }: { name: string; 
     let alive = true
     const t = setTimeout(async () => {
       const day = dateTime.slice(0, 10)
-      const { data } = await supabase
+      const { data } = await scopeEvents(supabase
         .from('events')
         .select('id, name, status, organizer:organizers(name)')
         .gte('date_time', `${day}T00:00:00`)
-        .lt('date_time', `${day}T23:59:59.999`)
+        .lt('date_time', `${day}T23:59:59.999`), tenant)
         .limit(200)
       if (!alive || !data) return
       const found = (data as unknown as Omit<DupMatch, 'similarity'>[])
@@ -224,7 +228,7 @@ export function DuplicateWarning({ name, dateTime, excludeId }: { name: string; 
       alive = false
       clearTimeout(t)
     }
-  }, [name, dateTime, excludeId])
+  }, [name, dateTime, excludeId, tenant])
 
   if (matches.length === 0) return null
   return (

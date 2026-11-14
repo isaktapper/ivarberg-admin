@@ -16,6 +16,7 @@ import { BulkBar, BulkButton } from '@/components/ui/bulk-bar'
 import { EmptyState, ErrorState, TableSkeleton } from '@/components/ui/states'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useToast } from '@/components/ui/toast'
+import { useConfirm } from '@/components/ui/confirm-dialog'
 
 interface SystemAlert {
   id: number
@@ -53,6 +54,7 @@ export default function AlertsPage() {
 
 function AlertsList() {
   const toast = useToast()
+  const confirm = useConfirm()
   const { user } = useAuth()
   const { state, set } = useUrlState(DEFAULTS)
   const page = Math.max(1, parseInt(state.page) || 1)
@@ -159,6 +161,32 @@ function AlertsList() {
     }
   }
 
+  /** Alla olösta larm, även de som inte syns på den här sidan */
+  const resolveAll = async () => {
+    const open = counts.open ?? 0
+    if (open === 0) return
+    const ok = await confirm({
+      title: `Markera alla ${open} larm som lösta?`,
+      description: 'Alla olösta larm markeras som lösta, även de som inte syns på den här sidan. De finns kvar under Alla.',
+      confirmLabel: 'Markera alla lösta',
+    })
+    if (!ok) return
+    setBusy(true)
+    const { error } = await supabase
+      .from('system_alerts')
+      .update({ resolved: true, resolved_at: new Date().toISOString() })
+      .eq('resolved', false)
+    setBusy(false)
+    if (error) {
+      toast.error('Kunde inte markera larmen som lösta', error.message)
+      return
+    }
+    toast.success(`${open} larm lösta`)
+    setSelected(new Set())
+    load()
+    loadCounts()
+  }
+
   const toggle = (id: number) =>
     setSelected((prev) => {
       const n = new Set(prev)
@@ -173,9 +201,16 @@ function AlertsList() {
         title="Larm"
         description="Systemlarm från scrapers, Instagram-flödet och cron-jobb."
         actions={
-          <Button variant="secondary" onClick={() => { load(); loadCounts() }}>
-            <RefreshCw /> Uppdatera
-          </Button>
+          <>
+            <Button variant="secondary" onClick={() => { load(); loadCounts() }}>
+              <RefreshCw /> Uppdatera
+            </Button>
+            {(counts.open ?? 0) > 0 ? (
+              <Button onClick={resolveAll} disabled={busy}>
+                <CheckCheck /> Markera alla lösta
+              </Button>
+            ) : null}
+          </>
         }
       />
 
@@ -216,7 +251,7 @@ function AlertCard({ alert, selected, onToggle, onAck, onResolve, busy }: { aler
   const critical = alert.severity === 'critical' && !alert.resolved
 
   return (
-    <article className={cn('flex gap-4 rounded-[12px] border bg-white px-5 py-4', selected ? 'border-sea bg-sea-lightest' : critical ? 'border-poppy-line' : 'border-line', alert.resolved && 'opacity-70')}>
+    <article className={cn('flex gap-4 rounded-[16px] bg-white px-5 py-4', selected ? 'bg-sea-lightest ring-2 ring-lime' : critical && 'ring-2 ring-poppy/30', alert.resolved && 'opacity-70')}>
       <input type="checkbox" aria-label="Markera larm" checked={selected} onChange={onToggle} className="mt-1 size-4 shrink-0 cursor-pointer accent-sea" />
       <div className="flex min-w-0 flex-1 flex-col gap-2">
         <div className="flex flex-wrap items-center gap-2">

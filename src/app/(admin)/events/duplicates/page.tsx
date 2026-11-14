@@ -6,6 +6,8 @@ import { ExternalLink, Copy } from 'lucide-react'
 import * as stringSimilarity from 'string-similarity'
 import { supabase } from '@/lib/supabase'
 import { fetchAllRows } from '@/lib/supabase-fetch-all'
+import { useTenant } from '@/contexts/TenantContext'
+import { scopeEvents } from '@/lib/tenants'
 import type { Event } from '@/types/database'
 import { formatDateTime, formatRelative } from '@/lib/format'
 import { cn } from '@/lib/utils'
@@ -87,6 +89,7 @@ const canUndo = (l: DuplicateLog) =>
 export default function DuplicatesPage() {
   const toast = useToast()
   const confirm = useConfirm()
+  const { tenant } = useTenant()
 
   const [tab, setTab] = useState<'auto' | 'potential'>('auto')
   const [logs, setLogs] = useState<DuplicateLog[]>([])
@@ -118,11 +121,11 @@ export default function DuplicatesPage() {
     setEventsError(null)
     try {
       const data = await fetchAllRows<DupEvent>((from, to) =>
-        supabase
+        scopeEvents(supabase
           .from('events')
           .select('*, organizer:organizers(name,scraper_source)')
           .eq('status', 'published')
-          .gte('date_time', new Date().toISOString())
+          .gte('date_time', new Date().toISOString()), tenant)
           .order('date_time', { ascending: true })
           .order('id', { ascending: true })
           .range(from, to)
@@ -133,7 +136,7 @@ export default function DuplicatesPage() {
     } finally {
       setEventsLoading(false)
     }
-  }, [])
+  }, [tenant])
 
   useEffect(() => {
     loadLogs()

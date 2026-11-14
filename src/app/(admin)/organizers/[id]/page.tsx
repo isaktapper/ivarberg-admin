@@ -8,7 +8,8 @@ import { supabase } from '@/lib/supabase'
 import { fetchAllRows } from '@/lib/supabase-fetch-all'
 import { Organizer, Event, OrganizerPage } from '@/types/database'
 import { formatDay, formatDateTime, formatRelative } from '@/lib/format'
-import { getFrontendUrl } from '@/lib/utils'
+import { useTenant } from '@/contexts/TenantContext'
+import { scopeEvents, scopeTenant, tenantSiteUrl } from '@/lib/tenants'
 import { Card, CardBody, CardHeader } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { StatusBadge, CategoryChip, QualityDot } from '@/components/ui/status-badge'
@@ -27,6 +28,7 @@ export default function OrganizerDetailPage() {
   const router = useRouter()
   const toast = useToast()
   const confirm = useConfirm()
+  const { tenant } = useTenant()
   const id = parseInt(params.id as string)
 
   const [organizer, setOrganizer] = useState<Organizer | null>(null)
@@ -42,14 +44,14 @@ export default function OrganizerDetailPage() {
     setLoading(true)
     const [orgRes, pageRes, evs] = await Promise.all([
       supabase.from('organizers').select('*').eq('id', id).single(),
-      supabase.from('organizer_pages').select('*').eq('organizer_id', id).maybeSingle(),
-      fetchAllRows<Event>((from, to) => supabase.from('events').select('*').eq('organizer_id', id).order('date_time', { ascending: false }).order('id', { ascending: false }).range(from, to)).catch(() => [] as Event[]),
+      scopeTenant(supabase.from('organizer_pages').select('*').eq('organizer_id', id), tenant).maybeSingle(),
+      fetchAllRows<Event>((from, to) => scopeEvents(supabase.from('events').select('*').eq('organizer_id', id), tenant).order('date_time', { ascending: false }).order('id', { ascending: false }).range(from, to)).catch(() => [] as Event[]),
     ])
     setOrganizer(orgRes.data ?? null)
     setPage(pageRes.data ?? null)
     setEvents(evs)
     setLoading(false)
-  }, [id])
+  }, [id, tenant])
 
   useEffect(() => {
     load()
@@ -262,8 +264,8 @@ export default function OrganizerDetailPage() {
                   Redigera sida
                 </Link>
                 {page.is_published ? (
-                  <a href={`${getFrontendUrl()}/arrangor/${page.slug}`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-sea">
-                    Visa på ivarberg.nu <ExternalLink className="size-3.5" />
+                  <a href={`${tenantSiteUrl(tenant)}/arrangor/${page.slug}`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-sea">
+                    Visa på {tenant?.primary_domain ?? 'ivarberg.nu'} <ExternalLink className="size-3.5" />
                   </a>
                 ) : null}
               </div>

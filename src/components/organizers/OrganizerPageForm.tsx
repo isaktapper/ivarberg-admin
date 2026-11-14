@@ -6,7 +6,8 @@ import Link from 'next/link'
 import { ExternalLink, GripVertical, ImageOff, Star, X, ArrowDown } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { OrganizerPage, ContactInfo, SocialLinks, Organizer } from '@/types/database'
-import { getFrontendUrl } from '@/lib/utils'
+import { useTenant } from '@/contexts/TenantContext'
+import { rowTenantFields, tenantSiteUrl } from '@/lib/tenants'
 import { formatRelative } from '@/lib/format'
 import OrganizerSearchableDropdown from '@/components/OrganizerSearchableDropdown'
 import { Card, CardBody, CardHeader } from '@/components/ui/card'
@@ -89,6 +90,7 @@ function fromPage(p: OrganizerPage): FormData {
 export function OrganizerPageForm({ page, presetOrganizerId }: { page?: OrganizerPage; presetOrganizerId?: number | null }) {
   const router = useRouter()
   const toast = useToast()
+  const { tenant } = useTenant()
   const isEdit = !!page
 
   const [organizers, setOrganizers] = useState<Organizer[]>([])
@@ -213,7 +215,7 @@ export function OrganizerPageForm({ page, presetOrganizerId }: { page?: Organize
         setDirty(false)
         toast.success(is_published ? 'Sidan sparad och publicerad' : 'Sidan sparad')
       } else {
-        const { data, error } = await supabase.from('organizer_pages').insert(payload).select().single()
+        const { data, error } = await supabase.from('organizer_pages').insert({ ...payload, ...rowTenantFields(tenant) }).select().single()
         if (error) throw error
         setDirty(false)
         toast.success(is_published ? 'Sidan skapad och publicerad' : 'Sidan skapad som utkast')
@@ -230,7 +232,7 @@ export function OrganizerPageForm({ page, presetOrganizerId }: { page?: Organize
     }
   }
 
-  const publicUrl = `${getFrontendUrl()}/arrangor/${form.slug || '…'}`
+  const publicUrl = `${tenantSiteUrl(tenant)}/arrangor/${form.slug || '…'}`
   const img = (url: string, cls: string) =>
     broken.has(url) ? (
       <span className={cn('flex items-center justify-center bg-stone text-ink-faint', cls)}>
@@ -285,7 +287,7 @@ export function OrganizerPageForm({ page, presetOrganizerId }: { page?: Organize
                   {form.hero_image_url ? (
                     img(form.hero_image_url, 'h-[150px] w-[200px] rounded-[10px]')
                   ) : (
-                    <span className="flex h-[150px] w-[200px] items-center justify-center rounded-[10px] bg-amber-light text-amber">
+                    <span className="flex h-[150px] w-[200px] items-center justify-center rounded-[12px] bg-field text-amber">
                       <ImageOff className="size-6" />
                     </span>
                   )}
@@ -375,10 +377,10 @@ export function OrganizerPageForm({ page, presetOrganizerId }: { page?: Organize
                 <StatusBadge domain="page" value={form.is_published} />
                 {isEdit && page?.updated_at ? <span className="text-xs text-ink-muted">Uppdaterad {formatRelative(page.updated_at)}</span> : null}
               </div>
-              <Checkbox label="Publicerad på ivarberg.nu" checked={form.is_published} onChange={(e) => patch({ is_published: e.target.checked })} />
+              <Checkbox label={`Publicerad på ${tenant?.primary_domain ?? 'ivarberg.nu'}`} checked={form.is_published} onChange={(e) => patch({ is_published: e.target.checked })} />
               {isEdit && page?.is_published ? (
-                <a href={`${getFrontendUrl()}/arrangor/${page.slug}`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-[13px] font-medium text-sea">
-                  Visa på ivarberg.nu <ExternalLink className="size-3.5" />
+                <a href={`${tenantSiteUrl(tenant)}/arrangor/${page.slug}`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-[13px] font-medium text-sea">
+                  Visa på {tenant?.primary_domain ?? 'ivarberg.nu'} <ExternalLink className="size-3.5" />
                 </a>
               ) : null}
             </CardBody>

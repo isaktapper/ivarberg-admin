@@ -53,8 +53,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
             key={t.id}
             onOpenChange={(open) => !open && setItems((prev) => prev.filter((x) => x.id !== t.id))}
             className={cn(
-              'animate-toast-in flex w-[360px] items-start gap-3 rounded-[10px] border bg-white p-3.5 shadow-[var(--shadow-pop)]',
-              t.kind === 'error' ? 'border-poppy-line' : 'border-line'
+              'animate-toast-in flex w-[360px] items-start gap-3 rounded-[14px] bg-white p-3.5 shadow-[var(--shadow-pop)]'
             )}
           >
             <span className="mt-0.5 shrink-0">{icons[t.kind]}</span>

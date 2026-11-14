@@ -4,6 +4,8 @@ import { Suspense, useCallback, useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Eye, MoreHorizontal, Send, Sparkles, XCircle, CheckCircle2, Lightbulb } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
+import { useTenant } from '@/contexts/TenantContext'
+import { scopeTenant } from '@/lib/tenants'
 import type { EventTip, EventTipStatus } from '@/types/database'
 import { useUrlState } from '@/hooks/use-url-state'
 import { formatDay, formatRelative } from '@/lib/format'
@@ -53,6 +55,7 @@ function TipsList() {
   const toast = useToast()
   const confirm = useConfirm()
   const { state, set } = useUrlState(DEFAULTS)
+  const { tenant } = useTenant()
 
   const [tips, setTips] = useState<EventTip[]>([])
   const [counts, setCounts] = useState<Record<string, number>>({})
@@ -69,7 +72,7 @@ function TipsList() {
     const keys = STATUSES.map((s) => s.value)
     const results = await Promise.all(
       keys.map((k) => {
-        let q = supabase.from('event_tips').select('*', { count: 'exact', head: true })
+        let q = scopeTenant(supabase.from('event_tips').select('*', { count: 'exact', head: true }), tenant)
         if (k !== 'all') q = q.eq('status', k)
         return q
       })
@@ -77,7 +80,7 @@ function TipsList() {
     const next: Record<string, number> = {}
     keys.forEach((k, i) => (next[k] = results[i].count ?? 0))
     setCounts(next)
-  }, [])
+  }, [tenant])
 
   const loadTips = useCallback(async () => {
     setLoading(true)
@@ -120,7 +123,7 @@ function TipsList() {
   const doConvert = async (tip: EventTip, publish = false) => {
     const ok = await confirm(
       publish
-        ? { title: 'Publicera direkt?', description: `”${tip.event_name}” skapas som event och syns på ivarberg.nu direkt.`, confirmLabel: 'Publicera' }
+        ? { title: 'Publicera direkt?', description: `”${tip.event_name}” skapas som event och syns på ${tenant?.primary_domain ?? 'ivarberg.nu'} direkt.`, confirmLabel: 'Publicera' }
         : { title: 'Skapa utkast?', description: `”${tip.event_name}” skapas som utkast och kan sedan granskas och publiceras.`, confirmLabel: 'Skapa utkast' }
     )
     if (!ok) return
@@ -259,7 +262,7 @@ function TipsList() {
     <>
       <PageHeader
         title="Tips från besökare"
-        description="Event som besökare skickat in via ivarberg.nu. Publicera direkt, skapa ett utkast eller avvisa."
+        description={`Event som besökare skickat in via ${tenant?.primary_domain ?? 'ivarberg.nu'}. Publicera direkt, skapa ett utkast eller avvisa.`}
         meta={counts.all != null ? `${counts.all} totalt` : undefined}
       />
 
@@ -314,7 +317,7 @@ function TipsList() {
           }
         >
           <Field label="Anledning" htmlFor="reject-reason" help="Valfritt">
-            <Textarea id="reject-reason" autoFocus value={rejectReason} onChange={(e) => setRejectReason(e.target.value)} placeholder="T.ex. dublett, utanför Varberg, otillräcklig info…" />
+            <Textarea id="reject-reason" autoFocus value={rejectReason} onChange={(e) => setRejectReason(e.target.value)} placeholder={`T.ex. dublett, utanför ${tenant?.city_name ?? 'Varberg'}, otillräcklig info…`} />
           </Field>
         </DialogContent>
       </Dialog>

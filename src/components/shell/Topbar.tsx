@@ -12,7 +12,7 @@ export function Topbar({ onOpenMenu, onOpenSearch }: { onOpenMenu: () => void; o
   const crumbs = CRUMBS.find((c) => pathname === c.prefix || (c.prefix !== '/' && pathname.startsWith(c.prefix)))?.crumbs ?? ['Översikt']
 
   return (
-    <header className="flex h-14 shrink-0 items-center justify-between gap-3 border-b border-line bg-sand px-4 md:px-8">
+    <header className="flex h-14 shrink-0 items-center justify-between gap-3 bg-sand px-4 md:px-8">
       <div className="flex min-w-0 items-center gap-2">
         <button type="button" onClick={onOpenMenu} aria-label="Öppna meny" className="-ml-2 inline-flex size-9 items-center justify-center rounded-md text-ink md:hidden">
           <Menu className="size-5" />

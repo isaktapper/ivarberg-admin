@@ -6,16 +6,17 @@ import { Loader2 } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 const buttonVariants = cva(
-  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-[8px] text-[13px] font-medium transition-colors disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg:not([class*='size-'])]:size-4 shrink-0 [&_svg]:shrink-0 outline-none cursor-pointer",
+  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-[10px] text-[13px] font-medium transition-colors disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg:not([class*='size-'])]:size-4 shrink-0 [&_svg]:shrink-0 outline-none cursor-pointer",
   {
     variants: {
       variant: {
-        default: "bg-sea text-white font-semibold hover:bg-sea-dark",
-        secondary: "border border-line bg-white text-ink hover:bg-sand-soft",
-        outline: "border border-line bg-white text-ink hover:bg-sand-soft",
+        default: "bg-ink text-white font-semibold hover:bg-black",
+        accent: "bg-lime text-ink font-semibold hover:bg-lime-dark",
+        secondary: "bg-stone text-ink hover:bg-black/10",
+        outline: "bg-white text-ink hover:bg-sand-soft",
         ghost: "text-ink-soft hover:bg-stone hover:text-ink",
-        destructive: "border border-poppy-line bg-white text-poppy hover:bg-poppy-light",
-        success: "bg-kelp text-white font-semibold hover:bg-[#155A3B]",
+        destructive: "bg-poppy-light text-poppy hover:bg-[#FBD5D5]",
+        success: "bg-kelp text-white font-semibold hover:bg-[#106232]",
         link: "text-sea underline-offset-4 hover:underline px-0",
         dark: "bg-ink text-white hover:bg-navy",
       },

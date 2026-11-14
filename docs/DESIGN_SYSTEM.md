@@ -1,28 +1,59 @@
-# Kustkontoret – designsystem för iVarberg Admin
+# Designsystem för adminen
 
-Adminen delar palett med ivarberg.nu men är byggd för tabeller och köer:
-tätare, lugnare, med tydliga statusar och kortkommandon.
+Omdesign november 2026: vitt och svart med limegrön accent från inu, i stil
+med en finansdashboard. Tekniskt, rent och minimalistiskt. Funktionerna är
+desamma som tidigare.
 
-Designförslaget (artboards): https://claude.ai/artifact/P6YCpdxk6fA1Df7eNrbxb6
+## Grundregler
+
+- **Inga borders.** Ytor skiljs åt med bakgrundsfärg: ljusgrå sida, vita kort,
+  genomskinligt grå fyllning för fält, sekundärknappar och chips. Lägg inte
+  till `border` för att avgränsa något. Undantag: understrykningen på aktiv
+  flik och svaga radavdelare i tabeller (`line-soft`).
+- **Svart är primärt.** Primärknappar, valt menyval och valt filter är svarta.
+- **Limegrönt är accenten**, alltid som fyllning med svart text (för ljust för
+  vit text eller som textfärg). Används för valt läge, dagens stapel, "ok"-märken,
+  fokusring på fält och knappen `accent`.
+- **Siffror** i `tabular`/`font-mono` så att de står still.
 
 ## Tokens (`src/app/globals.css`)
 
-| Token | Hex | Används till |
-| --- | --- | --- |
-| `sand` | #F9F4EF | Sidans bakgrund |
-| `sand-deep` | #F1EADF | Sidomenyn |
-| `sand-soft` | #FBF8F4 | Tabellhuvud, hover |
-| `stone` | #ECE9E3 | Neutrala chips |
-| `line` / `line-soft` | #E3DBCA / #F0EBE3 | Kantlinjer |
-| `ink` / `ink-soft` / `ink-muted` / `ink-faint` | #10214B … #8B92A3 | Text i fyra nivåer |
-| `sea` / `sea-dark` / `sea-light` / `sea-lightest` | #0F5AA6 … #EEF4FB | Primär, länkar, vald rad |
-| `kelp` / `kelp-light` | #1B6F49 / #DDF1E6 | Ok, publicerad |
-| `amber` / `amber-light` | #8A5A00 / #FBEFD0 | Väntar, varning |
-| `poppy` / `poppy-light` / `poppy-line` | #B84A14 / #FBE4D7 / #F3C9B3 | Fel, destruktivt |
+Tokennamnen är kvar från förra designen så att alla sidor följde med. Läs dem
+som roller:
 
-Typsnitt: `font-display` (Poppins 600) för rubriker, `font-sans` (IBM Plex Sans)
-för gränssnitt, `font-mono` (IBM Plex Mono) för tider, id:n och siffror.
-Radier: 12 px kort, 8 px kontroller. Rader i tabeller: 48 px (44 px tät).
+| Token | Värde | Används till |
+| --- | --- | --- |
+| `sand` / `sand-deep` | #F1F1F0 | Sidans och sidomenyns bakgrund |
+| `sand-soft` | #F7F7F6 | Tabellhuvud, hover inuti vita kort |
+| `stone` | svart 6 % | Sekundärknappar, chips, knappgrupper |
+| `field` | svart 4,5 % | Fält (input, textarea, uppladdning) på vita kort |
+| `line` | genomskinlig | Borders, osynliga med flit |
+| `line-soft` | #F2F2F1 | Svaga radavdelare i tabeller |
+| `ink` / `ink-soft` / `ink-muted` / `ink-faint` | #111 … #A3A3A3 | Text i fyra nivåer |
+| `sea` / `sea-dark` | #111 / #000 | Primär handling (svart) |
+| `sea-light` / `sea-lightest` / `lime-light` | #EEF9C9 / #F7FCE6 | Valt läge, info (limegrön ton) |
+| `lime` / `lime-dark` | #C6F135 / #B4DE22 | Accent |
+| `kelp` / `amber` / `poppy` (+ `-light`) | grön / orange / röd | Ok, väntar, fel |
+
+Typsnitt: Inter för allt (`font-sans`, `font-display` med tätare spärrning),
+Geist Mono för tider, id:n och siffror. Radier: 16 px kort, 10 px kontroller,
+18 px dialoger.
+
+## BoardUI
+
+Komponenter från [BoardUI](https://www.boardui.com) (MIT, React 19 + Tailwind 4)
+ger den extra finishen. De ligger i `src/components/base/` och
+`src/components/foundations/`, med tokens i `src/styles/theme.css` och
+`typography.css` (importeras i `globals.css`; `src/styles/globals.css` används
+inte). BoardUI:s accentramp är omställd till svart, så deras komponenter följer
+stilen.
+
+- Lägg till fler: `BOARDUI_TELEMETRY_DISABLED=1 npx boardui@latest add <namn> --yes`.
+  Ta bort `AGENTS.md` och `.cursor/` om verktyget skapar dem.
+- I bruk nu: `Chip` (statusmärken via `ToneBadge`, märken i siffrorkorten),
+  `SegmentedControl` (via `Segmented`), `StatusDot`.
+- Ikoner: Lucide som tidigare. BoardUI:s Remix-ikoner följer med deras
+  komponenter men behövs inte i egen kod.
 
 ## Statusar – ett register
 
@@ -39,7 +70,7 @@ Inga lokala färghjälpare.
 - Formulär: `Field`, `Input`, `Textarea`, `Select`, `Checkbox`, `Label`, `TagInput`, `CategoryPicker`
 - Feedback: `useToast()` (ersätter `alert()`), `useConfirm()` (ersätter `confirm()`, stöd för "skriv ordet"), `Banner`, `EmptyState`, `LoadingState`, `ErrorState`, `Skeleton`
 - Overlay: `Dialog`/`DialogContent`, `DropdownMenu`, `Tooltip`/`IconButton`, `BulkBar`
-- Övrigt: `Button` (default, secondary, ghost, destructive, success, dark, link), `Kbd`, `StatusBadge`, `ToneBadge`, `CategoryChip`, `QualityDot`
+- Övrigt: `Button` (default svart, accent limegrön, secondary, outline, ghost, destructive, success, dark, link), `Kbd`, `StatusBadge`, `ToneBadge`, `CategoryChip`, `QualityDot`
 
 ## Skal (`src/components/shell/`)
 
@@ -59,5 +90,6 @@ Menyn definieras i `nav.ts`.
 - Inga `alert()`/`confirm()`/`prompt()`.
 - Hämta listor sidvis från servern (`.range()`), aldrig alla rader för att filtrera i klienten.
 - Filtrering, sortering och sida lever i URL:en.
-- Destruktiva åtgärder är kantlinje-knappar och kräver bekräftelse.
-- Ingen Tailwind-grå (`gray-*`, `blue-600`) – bara tokens ovan.
+- Destruktiva åtgärder är röda tonade knappar och kräver bekräftelse.
+- Ingen Tailwind-grå (`gray-*`, `blue-600`) och inga hårdkodade färger – bara tokens ovan.
+- Inga borders för att avgränsa ytor, se Grundregler.

@@ -1,6 +1,8 @@
 import { createClient } from '@supabase/supabase-js';
 import { NextRequest, NextResponse } from 'next/server';
 import { fetchAllRows } from '@/lib/supabase-fetch-all';
+import { getActiveTenant } from '@/lib/tenant-server';
+import { filterAuditLogsByTenant } from '@/lib/tenant-audit';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -39,7 +41,7 @@ export async function GET(request: NextRequest) {
 
     // Filtrera på organisatör: hämta organisatörens event-id:n direkt
     // (istället för .in() med tusentals id:n som slår i URL-gränsen)
-    let data = auditData;
+    let data = await filterAuditLogsByTenant(supabase, auditData, await getActiveTenant());
 
     if (organizerId && data.length > 0) {
       const eventsData = await fetchAllRows<{ event_id: string }>((from, to) =>

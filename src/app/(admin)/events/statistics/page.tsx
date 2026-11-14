@@ -16,6 +16,7 @@ import { useUrlState } from '@/hooks/use-url-state'
 import { formatDuration, formatNumber, formatRelative } from '@/lib/format'
 import { qualityTone, toneClasses } from '@/lib/status'
 import { cn } from '@/lib/utils'
+import { useTenant } from '@/contexts/TenantContext'
 
 interface ScraperStat {
   name: string
@@ -51,20 +52,22 @@ interface DashboardData {
   generatedAt: string
 }
 
+// Diagramfärger i adminens stil: svart, limegrönt och neutrala toner, med
+// några tekniska accentfärger för serier som behöver skiljas åt.
 const C = {
-  sea: '#0F5AA6',
-  seaLight: '#DEE9F7',
-  kelp: '#1B6F49',
-  amber: '#8A5A00',
-  poppy: '#B84A14',
-  ink: '#10214B',
-  inkMuted: '#6B7385',
-  line: '#E3DBCA',
-  grid: '#F0EBE3',
+  sea: '#111111',
+  seaLight: '#EEF9C9',
+  kelp: '#9CC71A',
+  amber: '#F2A516',
+  poppy: '#D02F2F',
+  ink: '#111111',
+  inkMuted: '#737373',
+  line: 'transparent',
+  grid: '#EFEFEE',
 }
-const SERIES = [C.sea, C.kelp, C.amber, C.poppy, '#4F7FC2', '#5FA187', '#C08A2B', '#080860']
+const SERIES = [C.sea, C.kelp, '#A3A3A3', '#06B6D4', '#8B5CF6', C.amber, C.poppy, '#D4D4D4']
 
-const tooltipStyle = { borderRadius: 10, border: `1px solid ${C.line}`, boxShadow: '0 8px 24px rgba(16,33,75,0.12)', fontSize: 12, fontFamily: 'inherit' }
+const tooltipStyle = { borderRadius: 12, border: 'none', boxShadow: '0 12px 32px rgba(0,0,0,0.10), 0 2px 6px rgba(0,0,0,0.06)', fontSize: 12, fontFamily: 'inherit' }
 const axisTick = { fontSize: 11, fill: C.inkMuted }
 const fmtDate = (v: string) => new Date(v).toLocaleDateString('sv-SE', { day: 'numeric', month: 'short' }).replace('.', '')
 
@@ -228,8 +231,8 @@ function OverviewTab({ data }: { data: DashboardData }) {
             <YAxis tick={axisTick} axisLine={false} tickLine={false} width={32} />
             <Tooltip contentStyle={tooltipStyle} labelFormatter={(v) => new Date(v).toLocaleDateString('sv-SE')} />
             <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 12 }} />
-            <Line type="monotone" dataKey="imported" stroke={C.kelp} strokeWidth={1.5} dot={false} name="Importerade" />
-            <Line type="monotone" dataKey="duplicates" stroke={C.amber} strokeWidth={1.5} dot={false} name="Dubletter" />
+            <Line type="monotone" dataKey="imported" stroke={C.kelp} strokeWidth={2} dot={false} name="Importerade" />
+            <Line type="monotone" dataKey="duplicates" stroke="#A3A3A3" strokeWidth={1.5} dot={false} name="Dubletter" />
           </LineChart>
         </ResponsiveContainer>
       </ChartCard>
@@ -299,8 +302,8 @@ function ScrapersTab({ data }: { data: DashboardData }) {
             <Tooltip contentStyle={tooltipStyle} labelFormatter={(v) => new Date(v).toLocaleDateString('sv-SE')} />
             <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 12 }} />
             <Line type="monotone" dataKey="found" stroke={C.sea} strokeWidth={1.5} dot={false} name="Hittade" />
-            <Line type="monotone" dataKey="imported" stroke={C.kelp} strokeWidth={1.5} dot={false} name="Importerade" />
-            <Line type="monotone" dataKey="duplicates" stroke={C.amber} strokeWidth={1.5} dot={false} name="Dubletter" />
+            <Line type="monotone" dataKey="imported" stroke={C.kelp} strokeWidth={2} dot={false} name="Importerade" />
+            <Line type="monotone" dataKey="duplicates" stroke="#A3A3A3" strokeWidth={1.5} dot={false} name="Dubletter" />
           </LineChart>
         </ResponsiveContainer>
       </ChartCard>
@@ -396,6 +399,7 @@ function EventsTab({ data }: { data: DashboardData }) {
 }
 
 function QualityTab({ data }: { data: DashboardData }) {
+  const { tenant } = useTenant()
   const totalPublished = data.events.stats.published
   const score = data.quality.avgQualityScore
   const tone = qualityTone(score)
@@ -454,7 +458,7 @@ function QualityTab({ data }: { data: DashboardData }) {
       <Banner tone="info" title="Så höjer du kvaliteten">
         <ul className="list-disc pl-4 text-[13px] leading-relaxed">
           <li>Okategoriserade event hittar du i vyn ”Okategoriserade” på Alla events.</li>
-          <li>Event utan bild får sämre synlighet på ivarberg.nu och utesluts från Instagram-posten.</li>
+          <li>Event utan bild får sämre synlighet på {tenant?.primary_domain ?? 'ivarberg.nu'} och utesluts från Instagram-posten.</li>
           <li>Korta beskrivningar ger sämre sök och läsupplevelse.</li>
           <li>Låg kvalitetspoäng betyder att flera fält saknas eller är ofullständiga.</li>
         </ul>

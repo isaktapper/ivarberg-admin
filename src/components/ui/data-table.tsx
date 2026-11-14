@@ -109,12 +109,12 @@ export function DataTable<T>({
   const rowH = dense ? 'min-h-10' : 'min-h-12'
 
   return (
-    <div className={cn('flex flex-col overflow-hidden rounded-[12px] border border-line bg-white', className)}>
+    <div className={cn('flex flex-col overflow-hidden rounded-[16px] bg-white', className)}>
       <div className="thin-scroll overflow-x-auto">
         <div className="min-w-fit">
           <div
             role="row"
-            className="grid h-10 items-center gap-3 border-b border-line bg-sand-soft px-4 text-[11px] font-semibold uppercase tracking-[0.08em] text-ink-muted"
+            className="grid h-10 items-center gap-3 bg-sand-soft px-4 text-[11px] font-medium uppercase tracking-[0.06em] text-ink-muted"
             style={{ gridTemplateColumns: tracks }}
           >
             {selectable ? (

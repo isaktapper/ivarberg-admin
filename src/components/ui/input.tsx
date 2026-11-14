@@ -2,7 +2,7 @@ import * as React from "react"
 import { cn } from "@/lib/utils"
 
 const inputBase =
-  "h-10 w-full min-w-0 rounded-[8px] border border-line bg-white px-3 text-sm text-ink placeholder:text-ink-faint transition-colors focus:border-sea focus:outline-none focus:ring-2 focus:ring-sea/20 disabled:cursor-not-allowed disabled:bg-sand-soft disabled:text-ink-muted aria-invalid:border-poppy aria-invalid:bg-[#FFF8F4]"
+  "h-10 w-full min-w-0 rounded-[10px] border border-transparent bg-field px-3 text-sm text-ink placeholder:text-ink-faint transition-colors focus:bg-white focus:outline-none focus:ring-2 focus:ring-lime disabled:cursor-not-allowed disabled:bg-sand-soft disabled:text-ink-muted aria-invalid:bg-poppy-light aria-invalid:ring-2 aria-invalid:ring-poppy/40"
 
 function Input({ className, type, ...props }: React.ComponentProps<"input">) {
   return <input type={type} data-slot="input" className={cn(inputBase, className)} {...props} />
@@ -82,7 +82,7 @@ function Field({
 }
 
 function Checkbox({ className, label, ...props }: React.ComponentProps<"input"> & { label?: React.ReactNode }) {
-  const box = <input type="checkbox" className={cn("size-4 shrink-0 cursor-pointer rounded border-line accent-sea", className)} {...props} />
+  const box = <input type="checkbox" className={cn("size-4 shrink-0 cursor-pointer rounded accent-ink", className)} {...props} />
   if (!label) return box
   return (
     <label className="inline-flex cursor-pointer items-center gap-2.5 text-[13px] text-ink">

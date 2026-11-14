@@ -2,6 +2,7 @@
 
 import * as React from 'react'
 import { useAuth } from '@/contexts/AuthContext'
+import { useTenant } from '@/contexts/TenantContext'
 import { Sidebar, useBadgeCounts } from './Sidebar'
 import { Topbar } from './Topbar'
 import { CommandPalette } from './CommandPalette'
@@ -12,13 +13,15 @@ import { useHotkeys } from '@/hooks/use-hotkeys'
 /** Skalet: sidomeny + topprad + innehåll. Alla admin-sidor renderas inuti. */
 export function AppShell({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth()
+  const { ready: tenantReady } = useTenant()
   const counts = useBadgeCounts()
   const [menuOpen, setMenuOpen] = React.useState(false)
   const [searchOpen, setSearchOpen] = React.useState(false)
 
   useHotkeys(React.useMemo(() => ({ 'mod+k': () => setSearchOpen((o) => !o) }), []))
 
-  if (loading) {
+  // Sidorna läser vald stad direkt vid start, så vänta tills den är hämtad.
+  if (loading || (user && !tenantReady)) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-sand">
         <Spinner className="size-7" />
@@ -34,7 +37,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <Sidebar counts={counts} onOpenSearch={() => setSearchOpen(true)} />
       </div>
       <Sheet open={menuOpen} onOpenChange={setMenuOpen}>
-        <SheetContent side="left" className="w-60 p-0">
+        <SheetContent side="left" className="w-64 p-0">
           <Sidebar counts={counts} onOpenSearch={() => { setMenuOpen(false); setSearchOpen(true) }} onNavigate={() => setMenuOpen(false)} />
         </SheetContent>
       </Sheet>

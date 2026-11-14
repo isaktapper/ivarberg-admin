@@ -1,14 +1,24 @@
 import * as React from "react"
 import { cn } from "@/lib/utils"
 import { getStatus, qualityTone, toneClasses, type StatusDomain, type StatusTone } from "@/lib/status"
+import { Chip, type ChipProps } from "@/components/base/badges/chip"
+
+/** Ton → BoardUI-chipets färg. Limegrönt är bra, gult väntar, rosa är fel. */
+const CHIP_COLOR: Record<StatusTone, ChipProps["color"]> = {
+  ok: "lime",
+  wait: "yellow",
+  bad: "rose",
+  neutral: "neutral",
+  info: "gray",
+  running: "cyan",
+}
 
 export function ToneBadge({ tone, children, className, dot = true }: { tone: StatusTone; children: React.ReactNode; className?: string; dot?: boolean }) {
-  const t = toneClasses[tone]
   return (
-    <span className={cn("inline-flex w-fit items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 py-[3px] text-xs font-medium", t.chip, className)}>
-      {dot ? <span className={cn("size-1.5 rounded-full", t.dot)} /> : null}
+    <Chip variant="caption" color={CHIP_COLOR[tone]} className={cn("w-fit gap-1.5 px-2 text-xs font-medium", className)}>
+      {dot ? <span className={cn("size-1.5 rounded-full bg-current", tone === "running" && "animate-pulse")} /> : null}
       {children}
-    </span>
+    </Chip>
   )
 }
 

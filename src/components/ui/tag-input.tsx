@@ -15,7 +15,7 @@ export function TagInput({ value, onChange, placeholder = 'Lägg till…', class
   }
 
   return (
-    <div className={cn('flex min-h-10 flex-wrap items-center gap-1.5 rounded-[8px] border border-line bg-white px-2 py-1.5 focus-within:border-sea focus-within:ring-2 focus-within:ring-sea/20', className)}>
+    <div className={cn('flex min-h-10 flex-wrap items-center gap-1.5 rounded-[10px] bg-field px-2 py-1.5 focus-within:bg-white focus-within:ring-2 focus-within:ring-lime', className)}>
       {value.map((tag) => (
         <span key={tag} className="inline-flex items-center gap-1 rounded-full bg-stone px-2 py-0.5 text-xs text-ink">
           {tag}

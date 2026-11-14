@@ -1,50 +1,86 @@
 @import "tailwindcss";
+/* BoardUI (boardui.com, MIT): tokens och typografi för komponenterna under
+   src/components/boardui. Våra egna tokens nedan läggs efter och vinner där
+   namnen krockar (typsnitt, skuggor). src/styles/globals.css används inte. */
+@import "../styles/theme.css";
+@import "../styles/typography.css";
 
 /*
-  Kustkontoret – designtokens för iVarberg Admin.
-  Paletten kommer från ivarberg.nu (sand, bläck, hav, vallmo, tång).
+  Adminens designtokens (omdesign november 2026).
+  Vitt och svart med limegrön inu-accent. Inga borders: ytor skiljs åt med
+  bakgrundsfärg (ljusgrå sida, vita kort, gråfyllda fält). Se docs/DESIGN_SYSTEM.md.
+
+  Tokennamnen (sand, ink, sea …) är kvar från förra designen så att alla sidor
+  följer med utan att skrivas om. Läs dem som roller:
+    sand      = sidans bakgrund        ink   = text
+    sand-soft = svag yta inuti kort    sea   = primär handling (svart)
+    stone     = fyllda fält, knappar   lime  = accent (fyllning, alltid med svart text)
+    line      = borders: osynliga med flit
 */
 @theme {
-  --color-sand: #F9F4EF;
-  --color-sand-deep: #F1EADF;
-  --color-sand-soft: #FBF8F4;
-  --color-stone: #ECE9E3;
-  --color-line: #E3DBCA;
-  --color-line-soft: #F0EBE3;
+  --color-sand: #F1F1F0;
+  --color-sand-deep: #F1F1F0;
+  --color-sand-soft: #F7F7F6;
+  /* Genomskinliga fyllningar: syns lika bra på vita kort som på grå sidbakgrund */
+  --color-stone: rgb(0 0 0 / 0.06);
+  --color-line: transparent;
+  --color-line-soft: #F2F2F1;
+  /* Fyllda fält (input, sök) på vita kort */
+  --color-field: rgb(0 0 0 / 0.045);
 
-  --color-ink: #10214B;
-  --color-ink-soft: #495569;
-  --color-ink-muted: #6B7385;
-  --color-ink-faint: #8B92A3;
+  --color-ink: #111111;
+  --color-ink-soft: #4D4D4D;
+  --color-ink-muted: #737373;
+  --color-ink-faint: #A3A3A3;
 
-  --color-sea: #0F5AA6;
-  --color-sea-dark: #0C4A88;
-  --color-sea-light: #DEE9F7;
-  --color-sea-lightest: #EEF4FB;
+  /* Primär handling: svart. Valt läge och info: limegrön ton med svart text. */
+  --color-sea: #111111;
+  --color-sea-dark: #000000;
+  --color-sea-light: #EEF9C9;
+  --color-sea-lightest: #F7FCE6;
 
-  --color-kelp: #1B6F49;
-  --color-kelp-light: #DDF1E6;
+  --color-lime: #C6F135;
+  --color-lime-dark: #B4DE22;
+  --color-lime-light: #EEF9C9;
 
-  --color-amber: #8A5A00;
-  --color-amber-light: #FBEFD0;
-  --color-amber-line: #EBD9A6;
+  --color-kelp: #157A3E;
+  --color-kelp-light: #DDF6E5;
 
-  --color-poppy: #B84A14;
-  --color-poppy-light: #FBE4D7;
-  --color-poppy-line: #F3C9B3;
+  --color-amber: #A35200;
+  --color-amber-light: #FDF0D5;
+  --color-amber-line: #FDF0D5;
 
-  --color-navy: #080860;
+  --color-poppy: #D02F2F;
+  --color-poppy-light: #FDE6E6;
+  --color-poppy-line: #FDE6E6;
 
-  --font-sans: var(--font-plex-sans), "IBM Plex Sans", system-ui, sans-serif;
-  --font-display: var(--font-poppins), "Poppins", system-ui, sans-serif;
-  --font-mono: var(--font-plex-mono), "IBM Plex Mono", ui-monospace, monospace;
+  --color-navy: #111111;
 
-  --radius-card: 12px;
-  --radius-control: 8px;
+  /* BoardUI:s accentramp (knappar, valt läge, kryssrutor, fokus) blir svart,
+     så att deras komponenter följer vår svartvita stil. Limegrönt läggs på
+     med flit där det ska synas. */
+  --color-accent-50: var(--color-neutral-50);
+  --color-accent-100: var(--color-neutral-100);
+  --color-accent-200: var(--color-neutral-200);
+  --color-accent-300: var(--color-neutral-300);
+  --color-accent-400: var(--color-neutral-700);
+  --color-accent-500: var(--color-neutral-900);
+  --color-accent-600: var(--color-neutral-950);
+  --color-accent-700: var(--color-neutral-950);
+  --color-accent-800: var(--color-neutral-950);
+  --color-accent-900: var(--color-neutral-950);
+  --color-accent-950: var(--color-neutral-950);
 
-  --shadow-card: 0 1px 2px rgba(16, 33, 75, 0.06);
-  --shadow-float: 0 12px 32px rgba(16, 33, 75, 0.28);
-  --shadow-pop: 0 8px 24px rgba(16, 33, 75, 0.12);
+  --font-sans: var(--font-inter), "Inter", system-ui, sans-serif;
+  --font-display: var(--font-inter), "Inter", system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), "Geist Mono", ui-monospace, monospace;
+
+  --radius-card: 16px;
+  --radius-control: 10px;
+
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.04);
+  --shadow-float: 0 16px 40px rgba(0, 0, 0, 0.16);
+  --shadow-pop: 0 12px 32px rgba(0, 0, 0, 0.10), 0 2px 6px rgba(0, 0, 0, 0.06);
 }
 
 html {
@@ -55,7 +91,19 @@ body {
   background: var(--color-sand);
   color: var(--color-ink);
   font-family: var(--font-sans);
+  font-feature-settings: "cv11", "ss01";
+  letter-spacing: -0.006em;
   -webkit-font-smoothing: antialiased;
+}
+
+/* Rubriker: tätare spärrning, som en finansdashboard */
+.font-display {
+  letter-spacing: -0.02em;
+}
+
+/* Siffror i jämn bredd så att kolumner och räknare inte hoppar */
+.font-mono, .tabular {
+  font-variant-numeric: tabular-nums;
 }
 
 ::placeholder {
@@ -73,12 +121,12 @@ input[type="date"], input[type="time"], input[type="datetime-local"] {
 }
 
 input[type="checkbox"], input[type="radio"] {
-  accent-color: var(--color-sea);
+  accent-color: var(--color-ink);
 }
 
 /* Fokusring – samma överallt */
 :where(button, a, input, select, textarea, [tabindex]):focus-visible {
-  outline: 2px solid var(--color-sea);
+  outline: 2px solid var(--color-ink);
   outline-offset: 2px;
   border-radius: 6px;
 }
@@ -86,15 +134,15 @@ input[type="checkbox"], input[type="radio"] {
 /* Tunna scrollbars i paneler */
 .thin-scroll {
   scrollbar-width: thin;
-  scrollbar-color: var(--color-line) transparent;
+  scrollbar-color: var(--color-stone) transparent;
 }
 
 /* Google Places dropdown ska ligga över dialoger */
 .pac-container {
   z-index: 10000 !important;
   font-family: var(--font-sans);
-  border-radius: 10px;
-  border: 1px solid var(--color-line);
+  border-radius: 12px;
+  border: 0;
   box-shadow: var(--shadow-pop);
 }
 

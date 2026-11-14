@@ -20,7 +20,7 @@ export function FilterChip({
         type="button"
         className={cn(
           'inline-flex h-9 items-center gap-1.5 whitespace-nowrap rounded-full border pl-3 pr-2.5 text-[13px] transition-colors',
-          active ? 'border-sea bg-sea-light font-medium text-sea-dark' : 'border-line bg-white text-ink hover:bg-sand-soft',
+          active ? 'border-transparent bg-ink font-medium text-white' : 'border-transparent bg-white text-ink hover:bg-sand-soft',
           onClear && active ? 'rounded-r-none pr-2' : '',
           className
         )}
@@ -35,7 +35,7 @@ export function FilterChip({
           type="button"
           aria-label="Rensa filter"
           onClick={onClear}
-          className="inline-flex h-9 items-center rounded-r-full border border-l-0 border-sea bg-sea-light pl-1 pr-2.5 text-sea-dark hover:bg-sea-light/70"
+          className="inline-flex h-9 items-center rounded-r-full bg-ink pl-1 pr-2.5 text-white/70 hover:text-white"
         >
           <X className="size-3.5" />
         </button>

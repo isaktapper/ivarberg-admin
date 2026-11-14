@@ -10,6 +10,8 @@ export function StatCard({
   value,
   note,
   tone,
+  icon,
+  badge,
   href,
   className,
 }: {
@@ -17,20 +19,30 @@ export function StatCard({
   value: number | string | null | undefined
   note?: React.ReactNode
   tone?: StatusTone
+  /** Ikon i en liten ruta före etiketten */
+  icon?: React.ReactNode
+  /** Chip bredvid siffran (ersätter tonpricken), t.ex. "+3 sedan igår" */
+  badge?: React.ReactNode
   href?: string
   className?: string
 }) {
   const body = (
     <>
-      <div className="flex items-center justify-between">
-        <span className="text-[13px] font-medium text-ink-soft">{label}</span>
-        {tone ? <span className={cn('size-2 rounded-full', toneClasses[tone].dot)} /> : null}
+      <div className="flex items-center justify-between gap-2">
+        <span className="flex min-w-0 items-center gap-2 text-[13px] font-medium text-ink-soft">
+          {icon ? <span className="flex size-7 shrink-0 items-center justify-center rounded-[8px] bg-stone text-ink [&_svg]:size-4">{icon}</span> : null}
+          <span className="truncate">{label}</span>
+        </span>
+        {!badge && tone ? <span className={cn('size-2 shrink-0 rounded-full', toneClasses[tone].dot)} /> : null}
       </div>
-      <span className="font-display text-[32px] font-semibold leading-none text-ink">{typeof value === 'number' ? formatNumber(value) : value ?? '–'}</span>
+      <div className="flex items-center gap-2">
+        <span className="tabular font-display text-[30px] font-semibold leading-none tracking-[-0.03em] text-ink">{typeof value === 'number' ? formatNumber(value) : value ?? '–'}</span>
+        {badge}
+      </div>
       {note ? <span className="text-xs text-ink-muted">{note}</span> : null}
     </>
   )
-  const cls = cn('flex flex-col gap-2.5 rounded-[12px] border border-line bg-white px-5 py-4', href && 'transition-colors hover:border-sea/40 hover:bg-sand-soft', className)
+  const cls = cn('flex flex-col gap-3 rounded-[16px] bg-white px-5 py-4', href && 'transition-colors hover:bg-sand-soft', className)
   return href ? (
     <Link href={href} className={cls}>
       {body}

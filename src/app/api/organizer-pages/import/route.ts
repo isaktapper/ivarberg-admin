@@ -3,6 +3,8 @@ import { supabase } from '@/lib/supabase'
 import { extractMetadataAndContent } from '@/lib/services/organizer-crawler'
 import { generateOrganizerContent } from '@/lib/services/organizer-ai-generator'
 import { classifyImages } from '@/lib/services/organizer-image-classifier'
+import { getActiveTenant } from '@/lib/tenant-server'
+import { rowTenantFields } from '@/lib/tenants'
 
 export async function POST(request: NextRequest) {
   try {
@@ -89,7 +91,8 @@ export async function POST(request: NextRequest) {
       seo_title: aiContent.seo_title,
       seo_description: aiContent.seo_description,
       seo_keywords: aiContent.seo_keywords,
-      is_published: false
+      is_published: false,
+      ...rowTenantFields(await getActiveTenant())
     }
     
     console.log('📝 Insert data:', JSON.stringify(insertData, null, 2))

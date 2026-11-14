@@ -2,8 +2,11 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
-import { Image as ImageIcon } from 'lucide-react'
+import { Bell, CheckSquare, Copy, Image as ImageIcon, Lightbulb } from 'lucide-react'
+import { Chip } from '@/components/base/badges/chip'
 import { supabase } from '@/lib/supabase'
+import { useTenant } from '@/contexts/TenantContext'
+import { isVarberg, scopeEvents, scopeTenant, type Tenant } from '@/lib/tenants'
 import { SCRAPER_SOURCES } from '@/lib/constants'
 import { formatNumber, formatRelative, formatTime, toLocalDateInput } from '@/lib/format'
 import { Card, CardBody, CardHeader, SectionLabel } from '@/components/ui/card'
@@ -69,7 +72,7 @@ function capitalize(s: string) {
   return s.charAt(0).toUpperCase() + s.slice(1)
 }
 
-async function loadDashboard(): Promise<DashboardData> {
+async function loadDashboard(tenant: Tenant | null): Promise<DashboardData> {
   const now = new Date()
   const nowIso = now.toISOString()
   const yesterday = new Date(now.getTime() - 24 * 3600 * 1000).toISOString()
@@ -79,7 +82,7 @@ async function loadDashboard(): Promise<DashboardData> {
   const today = stockholmToday()
 
   const head = { count: 'exact' as const, head: true }
-  const upcoming = () => supabase.from('events').select('*', head).eq('status', 'published').gte('date_time', nowIso)
+  const upcoming = () => scopeEvents(supabase.from('events').select('*', head).eq('status', 'published').gte('date_time', nowIso), tenant)
 
   const [
     totalEvents,
@@ -102,13 +105,13 @@ async function loadDashboard(): Promise<DashboardData> {
     noOrganizer,
     lowScore,
   ] = await Promise.all([
-    supabase.from('events').select('*', head),
+    scopeEvents(supabase.from('events').select('*', head), tenant),
     supabase.from('organizers').select('*', head),
     upcoming(),
-    supabase.from('events').select('*', head).in('status', ['draft', 'pending_approval']),
-    supabase.from('events').select('*', head).in('status', ['draft', 'pending_approval']).gte('created_at', yesterday),
-    supabase.from('event_tips').select('*', head).eq('status', 'pending'),
-    supabase.from('event_tips').select('event_name').eq('status', 'pending').order('created_at', { ascending: false }).limit(1).maybeSingle(),
+    scopeEvents(supabase.from('events').select('*', head).in('status', ['draft', 'pending_approval']), tenant),
+    scopeEvents(supabase.from('events').select('*', head).in('status', ['draft', 'pending_approval']).gte('created_at', yesterday), tenant),
+    scopeTenant(supabase.from('event_tips').select('*', head).eq('status', 'pending'), tenant),
+    scopeTenant(supabase.from('event_tips').select('event_name').eq('status', 'pending'), tenant).order('created_at', { ascending: false }).limit(1).maybeSingle(),
     supabase.from('duplicate_event_logs').select('*', head).gte('created_at', weekAgo),
     supabase.from('duplicate_event_logs').select('scraper_name').gte('created_at', weekAgo).limit(200),
     supabase.from('system_alerts').select('*', head).eq('resolved', false),
@@ -121,8 +124,8 @@ async function loadDashboard(): Promise<DashboardData> {
       .order('created_at', { ascending: false })
       .limit(1)
       .maybeSingle(),
-    supabase.from('hero_featured_events').select('position, event:events(name)'),
-    supabase.from('events').select('date_time, image_url').eq('status', 'published').gte('date_time', startOfToday.toISOString()).lt('date_time', endOfWeek.toISOString()).limit(2000),
+    scopeTenant(supabase.from('hero_featured_events').select('position, event:events(name)'), tenant),
+    scopeEvents(supabase.from('events').select('date_time, image_url').eq('status', 'published').gte('date_time', startOfToday.toISOString()).lt('date_time', endOfWeek.toISOString()), tenant).limit(2000),
     upcoming().or('image_url.is.null,image_url.eq.'),
     upcoming().or('categories.is.null,categories.cs.{"Okategoriserad"}'),
     upcoming().is('organizer_id', null),
@@ -196,6 +199,7 @@ async function loadDashboard(): Promise<DashboardData> {
 }
 
 export default function Dashboard() {
+  const { tenant } = useTenant()
   const [data, setData] = useState<DashboardData | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
@@ -204,34 +208,37 @@ export default function Dashboard() {
     setLoading(true)
     setError(null)
     try {
-      setData(await loadDashboard())
+      setData(await loadDashboard(tenant))
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Okänt fel')
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [tenant])
 
   useEffect(() => {
     load()
   }, [load])
 
+  const showVarbergOnly = isVarberg(tenant)
   const title = useMemo(() => capitalize(new Date().toLocaleDateString('sv-SE', { weekday: 'long', day: 'numeric', month: 'long' })), [])
 
   const subtitle = useMemo(() => {
     if (!data) return ''
     const parts: string[] = []
+    const varberg = isVarberg(tenant)
     const latestRun = data.sources.map((s) => s.started_at).filter(Boolean).sort().reverse()[0]
-    if (latestRun) {
+    if (latestRun && varberg) {
       const ranToday = toLocalDateInput(latestRun) === toLocalDateInput(new Date())
       parts.push(ranToday ? `Scrapers kördes ${formatTime(latestRun)}.` : `Scrapers kördes senast ${formatRelative(latestRun)}.`)
     }
     parts.push(data.review.count > 0 ? `${formatNumber(data.review.count)} event väntar på dig.` : 'Inga event väntar på granskning.')
+    if (!varberg) return parts.join(' ')
     if (data.instagram?.status === 'published' && data.instagram.posted_at) parts.push(`Instagram-posten gick ut ${formatTime(data.instagram.posted_at)}.`)
     else if (data.instagram?.status === 'pending') parts.push('Instagram-posten väntar på godkännande.')
     else if (!data.instagram) parts.push('Ingen Instagram-post skapad ännu i dag.')
     return parts.join(' ')
-  }, [data])
+  }, [data, tenant])
 
   if (error) {
     return (
@@ -260,29 +267,47 @@ export default function Dashboard() {
 
       <section aria-label="Att göra" className="grid grid-cols-2 gap-4 lg:grid-cols-4">
         {loading || !data ? (
-          Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-[118px] rounded-[12px]" />)
+          Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-[118px] rounded-[16px]" />)
         ) : (
           <>
             <StatCard
               label="Granska nya event"
+              icon={<CheckSquare />}
               value={data.review.count}
-              tone={data.review.count > 0 ? 'bad' : 'ok'}
               href="/events/review"
+              badge={<Chip color={data.review.newSinceYesterday > 0 ? 'yellow' : 'lime'} className="text-xs">{data.review.newSinceYesterday > 0 ? `+${data.review.newSinceYesterday} sedan igår` : 'Klart'}</Chip>}
               note={data.review.newSinceYesterday > 0 ? `${data.review.newSinceYesterday} nya sedan igår` : 'Inga nya sedan igår'}
             />
-            <StatCard label="Tips från besökare" value={data.tips.count} tone={data.tips.count > 0 ? 'info' : 'ok'} href="/admin/tips" note={data.tips.latest ? `Senaste: ${data.tips.latest}` : 'Inga väntande tips'} />
+            <StatCard
+              label="Tips från besökare"
+              icon={<Lightbulb />}
+              value={data.tips.count}
+              href="/admin/tips"
+              badge={<Chip color={data.tips.count > 0 ? 'yellow' : 'lime'} className="text-xs">{data.tips.count > 0 ? 'Väntar' : 'Klart'}</Chip>}
+              note={data.tips.latest ? `Senaste: ${data.tips.latest}` : 'Inga väntande tips'}
+            />
             <StatCard
               label="Misstänkta dubletter"
+              icon={<Copy />}
               value={data.duplicates.count}
-              tone={data.duplicates.count > 0 ? 'wait' : 'ok'}
               href="/events/duplicates"
+              badge={<Chip color="neutral" className="text-xs">7 dagar</Chip>}
               note={data.duplicates.perScraper || 'Inga senaste 7 dagarna'}
             />
-            <StatCard label="Olösta larm" value={data.alerts.count} tone={data.alerts.count > 0 ? 'bad' : 'ok'} href="/admin/alerts" note={data.alerts.latest ?? 'Allt lugnt'} />
+            <StatCard
+              label="Olösta larm"
+              icon={<Bell />}
+              value={data.alerts.count}
+              href="/admin/alerts"
+              badge={<Chip color={data.alerts.count > 0 ? 'rose' : 'lime'} className="text-xs">{data.alerts.count > 0 ? 'Åtgärda' : 'Lugnt'}</Chip>}
+              note={data.alerts.latest ?? 'Allt lugnt'}
+            />
           </>
         )}
       </section>
 
+      {/* Scrapers och Instagram finns bara för Varberg än */}
+      {showVarbergOnly ? (
       <div className="grid gap-4 lg:grid-cols-12">
         <Card className="lg:col-span-7">
           <CardHeader
@@ -339,7 +364,7 @@ export default function Dashboard() {
                 </>
               ) : data.instagram ? (
                 <>
-                  <span className="text-sm font-semibold text-ink">Det här händer i Varberg idag</span>
+                  <span className="text-sm font-semibold text-ink">Det här händer i {tenant?.city_name ?? 'Varberg'} idag</span>
                   <span className="text-[13px] leading-relaxed text-ink-soft">
                     {data.instagram.eventName ? `Huvudevent: ${data.instagram.eventName}` : 'Inget huvudevent'}
                     {data.instagram.slide_image_urls?.length ? ` · ${data.instagram.slide_image_urls.length} slides` : ''}
@@ -384,6 +409,7 @@ export default function Dashboard() {
           </div>
         </Card>
       </div>
+      ) : null}
 
       <div className="grid gap-4 lg:grid-cols-12">
         <Card className="lg:col-span-7">
@@ -395,20 +421,12 @@ export default function Dashboard() {
               </Link>
             }
           />
-          <CardBody className="grid grid-cols-4 gap-2 sm:grid-cols-7">
-            {loading || !data
-              ? Array.from({ length: 7 }).map((_, i) => <Skeleton key={i} className="h-[88px] rounded-[10px]" />)
-              : data.days.map((d) => (
-                  <Link
-                    key={d.date}
-                    href={`/events?view=kommande&dateFrom=${d.date}&dateTo=${d.date}`}
-                    className={cn('flex flex-col gap-1.5 rounded-[10px] border border-line p-3 transition-colors hover:border-sea/40', d.isToday ? 'bg-sea-lightest' : 'bg-white')}
-                  >
-                    <span className="text-[11px] font-semibold uppercase tracking-[0.06em] text-ink-muted">{d.label}</span>
-                    <span className="font-display text-[22px] font-semibold leading-none text-ink">{d.count}</span>
-                    <span className={cn('text-[11px]', d.noImage > 0 ? 'text-poppy' : 'text-ink-muted')}>{d.isToday ? 'i dag' : d.noImage > 0 ? `${d.noImage} utan bild` : ''}</span>
-                  </Link>
-                ))}
+          <CardBody>
+            {loading || !data ? (
+              <Skeleton className="h-[188px] rounded-[12px]" />
+            ) : (
+              <WeekBars days={data.days} />
+            )}
           </CardBody>
         </Card>
 
@@ -424,6 +442,44 @@ export default function Dashboard() {
             <QualityRows quality={data.quality} />
           )}
         </Card>
+      </div>
+    </div>
+  )
+}
+
+/** Stapeldiagram för veckan: en klickbar stapel per dag, dagens i limegrönt. */
+function WeekBars({ days }: { days: DashboardData['days'] }) {
+  const max = Math.max(1, ...days.map((d) => d.count))
+  const total = days.reduce((sum, d) => sum + d.count, 0)
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="flex items-baseline gap-2">
+        <span className="tabular font-display text-[28px] font-semibold leading-none tracking-[-0.03em] text-ink">{formatNumber(total)}</span>
+        <span className="text-[13px] text-ink-muted">event de kommande 7 dagarna</span>
+      </div>
+      <div className="grid h-[132px] grid-cols-7 items-end gap-2">
+        {days.map((d) => (
+          <Link
+            key={d.date}
+            href={`/events?view=kommande&dateFrom=${d.date}&dateTo=${d.date}`}
+            aria-label={`${d.label}: ${d.count} event${d.noImage > 0 ? `, ${d.noImage} utan bild` : ''}`}
+            className="group flex h-full flex-col items-center justify-end gap-1.5"
+          >
+            <span className="font-mono text-[11px] text-ink-muted group-hover:text-ink">{d.count}</span>
+            <span
+              className={cn('w-full rounded-[8px] transition-colors', d.isToday ? 'bg-lime' : 'bg-stone group-hover:bg-ink')}
+              style={{ height: `${Math.max(6, Math.round((d.count / max) * 100))}%` }}
+            />
+          </Link>
+        ))}
+      </div>
+      <div className="grid grid-cols-7 gap-2">
+        {days.map((d) => (
+          <div key={d.date} className="flex flex-col items-center gap-0.5">
+            <span className={cn('text-[11px] font-medium uppercase tracking-[0.04em]', d.isToday ? 'text-ink' : 'text-ink-muted')}>{d.label}</span>
+            {d.noImage > 0 ? <span className="text-[10px] text-poppy">{d.noImage} utan bild</span> : <span className="text-[10px] text-transparent">–</span>}
+          </div>
+        ))}
       </div>
     </div>
   )

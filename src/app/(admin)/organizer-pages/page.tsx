@@ -6,7 +6,8 @@ import { useRouter } from 'next/navigation'
 import { Plus, MoreHorizontal, Pencil, ExternalLink, Eye, EyeOff, Copy, Trash2, Download } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { OrganizerPage } from '@/types/database'
-import { getFrontendUrl } from '@/lib/utils'
+import { useTenant } from '@/contexts/TenantContext'
+import { rowTenantFields, scopeEvents, scopeTenant, tenantSiteUrl } from '@/lib/tenants'
 import { formatRelative, formatNumber } from '@/lib/format'
 import { useUrlState } from '@/hooks/use-url-state'
 import { PageHeader } from '@/components/ui/page-header'
@@ -42,6 +43,7 @@ function Inner() {
   const toast = useToast()
   const confirm = useConfirm()
   const { state, set, reset } = useUrlState(DEFAULTS)
+  const { tenant } = useTenant()
 
   const [pages, setPages] = useState<PageRow[]>([])
   const [loading, setLoading] = useState(true)
@@ -59,8 +61,8 @@ function Inner() {
     setError(null)
     try {
       const [pagesRes, eventsRes] = await Promise.all([
-        supabase.from('organizer_pages').select('*, organizer:organizers(id, name)').order('created_at', { ascending: false }),
-        supabase.from('events').select('organizer_id').not('organizer_id', 'is', null),
+        scopeTenant(supabase.from('organizer_pages').select('*, organizer:organizers(id, name)'), tenant).order('created_at', { ascending: false }),
+        scopeEvents(supabase.from('events').select('organizer_id').not('organizer_id', 'is', null), tenant),
       ])
       if (pagesRes.error) throw pagesRes.error
       const counts = new Map<number, number>()
@@ -71,7 +73,7 @@ function Inner() {
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [tenant])
 
   useEffect(() => {
     load()
@@ -105,7 +107,7 @@ function Inner() {
   const remove = async (rows: PageRow[]) => {
     const ok = await confirm({
       title: rows.length === 1 ? `Ta bort ”${rows[0].name}”?` : `Ta bort ${rows.length} sidor?`,
-      description: 'Sidan försvinner från ivarberg.nu. Går inte att ångra.',
+      description: `Sidan försvinner från ${tenant?.primary_domain ?? 'ivarberg.nu'}. Går inte att ångra.`,
       confirmLabel: 'Ta bort',
       destructive: true,
     })
@@ -123,7 +125,7 @@ function Inner() {
     const { id, created_at, updated_at, organizer, event_count, ...rest } = p
     const { data, error } = await supabase
       .from('organizer_pages')
-      .insert({ ...rest, name: `${p.name} (Kopia)`, slug: `${p.slug}-kopia-${Date.now()}`, title: `${p.title} (Kopia)`, is_published: false })
+      .insert({ ...rest, name: `${p.name} (Kopia)`, slug: `${p.slug}-kopia-${Date.now()}`, title: `${p.title} (Kopia)`, is_published: false, ...rowTenantFields(tenant) })
       .select('*, organizer:organizers(id, name)')
       .single()
     if (error) return toast.error('Kunde inte duplicera', error.message)
@@ -198,7 +200,7 @@ function Inner() {
             <DropdownMenuItem onSelect={() => router.push(`/organizer-pages/${p.id}/edit`)}>
               <Pencil /> Redigera
             </DropdownMenuItem>
-            <DropdownMenuItem onSelect={() => window.open(`${getFrontendUrl()}/arrangor/${p.slug}`, '_blank', 'noopener')}>
+            <DropdownMenuItem onSelect={() => window.open(`${tenantSiteUrl(tenant)}/arrangor/${p.slug}`, '_blank', 'noopener')}>
               <ExternalLink /> Visa på webben
             </DropdownMenuItem>
             <DropdownMenuItem onSelect={() => setPublished([p.id], !p.is_published)}>
