@@ -1,5 +1,6 @@
 'use client'
 
+import { InuMark } from '@/components/shell/InuMark'
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Eye, EyeOff, LogIn } from 'lucide-react'
@@ -36,8 +37,10 @@ export default function LoginPage() {
     <div className="flex min-h-screen flex-col items-center justify-center bg-sand px-4 py-10">
       <main className="w-full max-w-sm rounded-[16px] border border-line bg-white p-8 shadow-[var(--shadow-pop)]">
         <div className="mb-7 flex flex-col items-center gap-4">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/Group 31 (1).png" alt="iVarberg" className="h-8 w-auto" />
+          <span className="flex items-center gap-2" aria-label="inu admin">
+            <InuMark className="h-6 w-auto text-ink" />
+            <span className="font-display text-lg font-semibold tracking-[-0.02em] text-ink">admin</span>
+          </span>
           <h1 className="font-display text-xl font-semibold text-ink">Logga in i adminen</h1>
         </div>
 
@@ -66,7 +69,7 @@ export default function LoginPage() {
           </Button>
         </form>
       </main>
-      <p className="mt-6 font-mono text-[11px] uppercase tracking-[0.1em] text-ink-muted">iVarberg · admin</p>
+      <p className="mt-6 font-mono text-[11px] uppercase tracking-[0.1em] text-ink-muted">inu · admin</p>
     </div>
   )
 }

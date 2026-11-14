@@ -6,7 +6,9 @@ import { Suspense } from 'react'
 import { ChevronDown, Columns3, Download, Plus, Star, Calendar, MoreHorizontal, Search, X, ExternalLink, Pencil, Link2, Trash2, Check } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { updateEvents } from '@/lib/events-write'
-import { getFrontendUrl, cn } from '@/lib/utils'
+import { cn } from '@/lib/utils'
+import { useTenant } from '@/contexts/TenantContext'
+import { isVarberg, scopeEvents, tenantSiteUrl } from '@/lib/tenants'
 import { formatDay, formatTime, toLocalDateInput } from '@/lib/format'
 import { getStatus, statusOptions, toneClasses } from '@/lib/status'
 import { CATEGORIES, AREAS, SCRAPER_SOURCES } from '@/lib/constants'
@@ -225,6 +227,10 @@ function OrganizerPicker({
 function EventsPageInner() {
   const toast = useToast()
   const confirm = useConfirm()
+  const { tenant } = useTenant()
+  const siteUrl = tenantSiteUrl(tenant)
+  // Områdena är Varbergs: andra städer har inget områdesfilter
+  const showArea = isVarberg(tenant)
   const { state, set, reset } = useUrlState(URL_DEFAULTS)
 
   const [storedPageSize, setStoredPageSize] = useLocalStorage<number>('events.pageSize', 50)
@@ -310,7 +316,7 @@ function EventsPageInner() {
     const load = async () => {
       const results = await Promise.all(
         VIEWS.map((v) =>
-          applyView(supabase.from('events').select('id', { count: 'exact', head: true }).in('status', LISTED_STATUSES), v.value)
+          applyView(scopeEvents(supabase.from('events').select('id', { count: 'exact', head: true }).in('status', LISTED_STATUSES), tenant), v.value)
         )
       )
       if (!alive) return
@@ -324,7 +330,7 @@ function EventsPageInner() {
     return () => {
       alive = false
     }
-  }, [applyView, refreshKey])
+  }, [applyView, refreshKey, tenant])
 
   // Huvudfråga
   React.useEffect(() => {
@@ -336,7 +342,7 @@ function EventsPageInner() {
 
     const run = async () => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      let q: any = supabase.from('events').select('*, organizer:organizers(id,name,scraper_source)', { count: 'exact' })
+      let q: any = scopeEvents(supabase.from('events').select('*, organizer:organizers(id,name,scraper_source)', { count: 'exact' }), tenant)
       q = applyView(q, view)
 
       if (state.q.trim()) {
@@ -348,7 +354,7 @@ function EventsPageInner() {
       if (cats.length) q = q.overlaps('categories', cats)
       if (state.org === 'none') q = q.is('organizer_id', null)
       else if (state.org) q = q.eq('organizer_id', Number(state.org))
-      if (state.area) q = q.eq('area', state.area)
+      if (state.area && showArea) q = q.eq('area', state.area)
       if (state.dateFrom) q = q.gte('date_time', startOfDayIso(state.dateFrom))
       if (state.dateTo) q = q.lte('date_time', endOfDayIso(state.dateTo))
       if (state.addedFrom) q = q.gte('created_at', startOfDayIso(state.addedFrom))
@@ -407,6 +413,7 @@ function EventsPageInner() {
     pageSize,
     organizers.length,
     refreshKey,
+    tenant,
   ])
 
   // Rensa markering när sidan/filter byts
@@ -445,7 +452,7 @@ function EventsPageInner() {
 
   const copyLink = async (row: EventRow) => {
     try {
-      await navigator.clipboard.writeText(`${getFrontendUrl()}/event/${row.event_id}`)
+      await navigator.clipboard.writeText(`${siteUrl}/event/${row.event_id}`)
       toast.success('Länk kopierad')
     } catch {
       toast.error('Kunde inte kopiera länken')
@@ -500,7 +507,7 @@ function EventsPageInner() {
         r.quality_score ?? '',
         sourceOf(r),
         r.price ?? '',
-        `${getFrontendUrl()}/event/${r.event_id}`,
+        `${siteUrl}/event/${r.event_id}`,
       ]
         .map(csvEscape)
         .join(';')
@@ -686,8 +693,8 @@ function EventsPageInner() {
               </Link>
             </DropdownMenuItem>
             <DropdownMenuItem asChild>
-              <a href={`${getFrontendUrl()}/event/${r.event_id}`} target="_blank" rel="noopener noreferrer">
-                <ExternalLink /> Visa på ivarberg.nu
+              <a href={`${siteUrl}/event/${r.event_id}`} target="_blank" rel="noopener noreferrer">
+                <ExternalLink /> Visa på {tenant?.primary_domain ?? 'ivarberg.nu'}
               </a>
             </DropdownMenuItem>
             <DropdownMenuItem onSelect={() => toggleFeatured(r)}>
@@ -802,7 +809,7 @@ function EventsPageInner() {
           onClick={() => setOrgFilterOpen(true)}
         />
 
-        <SelectFilter label="Område" value={state.area} options={AREAS.map((a) => ({ value: a, label: a }))} onChange={(area) => set({ area })} allLabel="Alla områden" />
+        {showArea && <SelectFilter label="Område" value={state.area} options={AREAS.map((a) => ({ value: a, label: a }))} onChange={(area) => set({ area })} allLabel="Alla områden" />}
 
         <SelectFilter
           label="Källa"

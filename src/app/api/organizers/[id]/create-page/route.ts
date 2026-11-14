@@ -3,6 +3,8 @@ import { createClient } from '@supabase/supabase-js'
 import { extractMetadataAndContent } from '@/lib/services/organizer-crawler'
 import { generateOrganizerContent } from '@/lib/services/organizer-ai-generator'
 import { classifyImages } from '@/lib/services/organizer-image-classifier'
+import { getActiveTenant } from '@/lib/tenant-server'
+import { rowTenantFields, scopeTenant } from '@/lib/tenants'
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
@@ -47,10 +49,12 @@ export async function POST(
     }
 
     // 3. Kolla om det redan finns en organizer page för denna organizer
-    const { data: existingPage, error: checkError } = await supabase
+    // Arrangörer är gemensamma, men sidan hör till vald stad
+    const tenant = await getActiveTenant()
+    const { data: existingPage, error: checkError } = await scopeTenant(supabase
       .from('organizer_pages')
       .select('id')
-      .eq('organizer_id', organizerId)
+      .eq('organizer_id', organizerId), tenant)
       .maybeSingle()
 
     if (checkError) {
@@ -140,7 +144,8 @@ export async function POST(
       seo_title: aiContent.seo_title,
       seo_description: aiContent.seo_description,
       seo_keywords: aiContent.seo_keywords,
-      is_published: false
+      is_published: false,
+      ...rowTenantFields(tenant)
     }
 
     const { data: newPage, error: insertError } = await supabase

@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { useParams, useRouter } from 'next/navigation'
 import { ArrowLeft, ExternalLink, Send, Sparkles, XCircle, CheckCircle2, Calendar, MapPin, Mail } from 'lucide-react'
 import type { EventTip } from '@/types/database'
+import { useTenant } from '@/contexts/TenantContext'
 import { formatDateTime, formatDay, formatRelative } from '@/lib/format'
 import { PageHeader } from '@/components/ui/page-header'
 import { Card, CardBody, CardHeader, SectionLabel } from '@/components/ui/card'
@@ -23,6 +24,7 @@ export default function TipDetailPage() {
   const router = useRouter()
   const toast = useToast()
   const confirm = useConfirm()
+  const { tenant } = useTenant()
 
   const [tip, setTip] = useState<EventTip | null>(null)
   const [loading, setLoading] = useState(true)
@@ -55,7 +57,7 @@ export default function TipDetailPage() {
     if (!tip) return
     const ok = await confirm(
       publish
-        ? { title: 'Publicera direkt?', description: `”${tip.event_name}” skapas som event och syns på ivarberg.nu direkt.`, confirmLabel: 'Publicera' }
+        ? { title: 'Publicera direkt?', description: `”${tip.event_name}” skapas som event och syns på ${tenant?.primary_domain ?? 'ivarberg.nu'} direkt.`, confirmLabel: 'Publicera' }
         : { title: 'Skapa utkast?', description: `”${tip.event_name}” skapas som utkast.`, confirmLabel: 'Skapa utkast' }
     )
     if (!ok) return
@@ -217,7 +219,7 @@ export default function TipDetailPage() {
           }
         >
           <Field label="Anledning" htmlFor="reject-reason" help="Valfritt">
-            <Textarea id="reject-reason" autoFocus value={reason} onChange={(e) => setReason(e.target.value)} placeholder="T.ex. dublett, utanför Varberg, otillräcklig info…" />
+            <Textarea id="reject-reason" autoFocus value={reason} onChange={(e) => setReason(e.target.value)} placeholder={`T.ex. dublett, utanför ${tenant?.city_name ?? 'Varberg'}, otillräcklig info…`} />
           </Field>
         </DialogContent>
       </Dialog>

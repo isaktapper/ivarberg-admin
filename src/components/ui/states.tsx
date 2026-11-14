@@ -53,7 +53,7 @@ export function EmptyState({
 }) {
   return (
     <div className={cn('flex flex-col items-center justify-center gap-2 px-6 py-14 text-center', className)}>
-      <span className="mb-1 flex size-11 items-center justify-center rounded-full bg-sand-deep text-ink-muted [&_svg]:size-5">{icon ?? <Inbox />}</span>
+      <span className="mb-1 flex size-11 items-center justify-center rounded-full bg-stone text-ink-muted [&_svg]:size-5">{icon ?? <Inbox />}</span>
       <h3 className="text-sm font-semibold text-ink">{title}</h3>
       {description ? <p className="max-w-sm text-[13px] text-ink-soft">{description}</p> : null}
       {action ? <div className="mt-3">{action}</div> : null}
@@ -63,7 +63,7 @@ export function EmptyState({
 
 export function ErrorState({ title = 'Något gick fel', description, onRetry, className }: { title?: string; description?: React.ReactNode; onRetry?: () => void; className?: string }) {
   return (
-    <div className={cn('flex flex-col items-center justify-center gap-2 rounded-[12px] border border-poppy-line bg-poppy-light/40 px-6 py-10 text-center', className)}>
+    <div className={cn('flex flex-col items-center justify-center gap-2 rounded-[16px] bg-poppy-light/60 px-6 py-10 text-center', className)}>
       <AlertTriangle className="size-5 text-poppy" />
       <h3 className="text-sm font-semibold text-ink">{title}</h3>
       {description ? <p className="max-w-md text-[13px] text-ink-soft">{description}</p> : null}
@@ -85,7 +85,7 @@ export function Banner({ tone = 'wait', title, children, actions, className }: {
     ok: 'border-kelp-light bg-kelp-light text-kelp',
   }
   return (
-    <div className={cn('flex flex-col gap-2 rounded-[12px] border px-4 py-3', tones[tone], className)}>
+    <div className={cn('flex flex-col gap-2 rounded-[14px] px-4 py-3', tones[tone], className)}>
       {title ? <span className="text-[13px] font-semibold">{title}</span> : null}
       {children ? <div className="text-[13px] text-ink">{children}</div> : null}
       {actions ? <div className="flex flex-wrap gap-3 pt-0.5 text-[13px] font-medium">{actions}</div> : null}

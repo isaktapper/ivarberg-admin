@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import { supabaseAdmin } from '@/lib/supabase-server'
+import { getActiveTenant } from '@/lib/tenant-server'
+import { eventTenantFields, isVarberg, scopeEvents } from '@/lib/tenants'
 
 /**
  * POST /api/admin/events/write
@@ -64,6 +66,11 @@ export async function POST(request: NextRequest) {
     if (body.action === 'insert') {
       const payload = clean(body.payload)
       if (!payload) return fail('Inget att spara', 400)
+      // Nya event hamnar i vald stad. Områdena är Varbergs, så andra städer får inget område.
+      const tenant = await getActiveTenant()
+      delete payload.municipality_code
+      Object.assign(payload, eventTenantFields(tenant))
+      if (!isVarberg(tenant)) payload.area = null
       const { data, error } = await supabaseAdmin.from('events').insert([payload]).select('id').single()
       if (error) return fail(error.message, 400)
       return NextResponse.json({ ok: true, id: data.id })
@@ -73,6 +80,8 @@ export async function POST(request: NextRequest) {
       const patch = clean(body.patch)
       if (!patch) return fail('Inget att spara', 400)
       delete patch.event_id
+      // Stad sätts bara när eventet skapas
+      delete patch.municipality_code
 
       let query = supabaseAdmin.from('events').update(patch)
       if (Array.isArray(body.ids)) {
@@ -80,7 +89,8 @@ export async function POST(request: NextRequest) {
         if (ids.length === 0) return fail('Inga event valda', 400)
         query = query.in('id', ids)
       } else if (Number.isInteger(body.organizer_id)) {
-        query = query.eq('organizer_id', body.organizer_id as number)
+        // Arrangörer är gemensamma: rör bara vald stads event
+        query = scopeEvents(query.eq('organizer_id', body.organizer_id as number), await getActiveTenant())
         if (typeof body.only_status === 'string') query = query.eq('status', body.only_status)
       } else {
         return fail('Inga event valda', 400)

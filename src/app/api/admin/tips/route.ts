@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
+import { getActiveTenant } from '@/lib/tenant-server'
+import { rowTenantFields, scopeTenant } from '@/lib/tenants'
 
 /**
  * Verify server-side authentication
@@ -52,6 +54,9 @@ export async function GET(request: NextRequest) {
     let query = supabase
       .from('event_tips')
       .select('*', { count: 'exact' })
+
+    // Bara vald stads tips
+    query = scopeTenant(query, await getActiveTenant())
 
     // Status filter
     if (status && status !== 'all') {
@@ -116,7 +121,8 @@ export async function POST(request: NextRequest) {
         website_url: body.website_url,
         submitter_email: body.submitter_email,
         submitter_name: body.submitter_name,
-        status: 'pending'
+        status: 'pending',
+        ...rowTenantFields(await getActiveTenant())
       }])
       .select()
       .single()

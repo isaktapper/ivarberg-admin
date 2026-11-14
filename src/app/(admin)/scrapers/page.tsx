@@ -8,6 +8,7 @@ import { ScraperLog, ScraperSchedule } from '@/types/database'
 import { useAuth } from '@/contexts/AuthContext'
 import ScraperProgressModal from '@/components/ScraperProgressModal'
 import { PageHeader } from '@/components/ui/page-header'
+import { VarbergOnly } from '@/components/cities/VarbergOnly'
 import { Button } from '@/components/ui/button'
 import { Card, CardHeader } from '@/components/ui/card'
 import { StatusBadge } from '@/components/ui/status-badge'
@@ -42,9 +43,11 @@ const URL_DEFAULTS = { source: '', status: '', period: '30', page: '1' }
 
 export default function ScrapersPage() {
   return (
-    <Suspense fallback={<LoadingState />}>
-      <ScrapersContent />
-    </Suspense>
+    <VarbergOnly title="Scrapers" feature="Scrapers">
+      <Suspense fallback={<LoadingState />}>
+        <ScrapersContent />
+      </Suspense>
+    </VarbergOnly>
   )
 }
 

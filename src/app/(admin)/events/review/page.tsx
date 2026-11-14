@@ -8,6 +8,8 @@ import * as stringSimilarity from 'string-similarity'
 import { supabase } from '@/lib/supabase'
 import { updateEvents } from '@/lib/events-write'
 import { fetchAllRows } from '@/lib/supabase-fetch-all'
+import { useTenant } from '@/contexts/TenantContext'
+import { scopeEvents } from '@/lib/tenants'
 import type { Event, EventCategory } from '@/types/database'
 import { formatDay, formatRelative, formatTime, toDateTimeLocalInput } from '@/lib/format'
 import { cn } from '@/lib/utils'
@@ -50,6 +52,7 @@ export default function EventReviewPage() {
   const router = useRouter()
   const toast = useToast()
   const confirm = useConfirm()
+  const { tenant } = useTenant()
 
   const [queue, setQueue] = useState<ReviewEvent[]>([])
   const [loading, setLoading] = useState(true)
@@ -71,10 +74,10 @@ export default function EventReviewPage() {
     setError(null)
     try {
       const data = await fetchAllRows<ReviewEvent>((from, to) =>
-        supabase
+        scopeEvents(supabase
           .from('events')
           .select('*, organizer:organizers(id,name,status,scraper_source)')
-          .in('status', ['draft', 'pending_approval'])
+          .in('status', ['draft', 'pending_approval']), tenant)
           .order('created_at', { ascending: false })
           .order('id', { ascending: false })
           .range(from, to)
@@ -88,7 +91,7 @@ export default function EventReviewPage() {
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [tenant])
 
   useEffect(() => {
     load()
@@ -134,13 +137,13 @@ export default function EventReviewPage() {
     const d = new Date(current.date_time)
     const start = new Date(d.getFullYear(), d.getMonth(), d.getDate())
     const end = new Date(start.getTime() + 86_400_000)
-    supabase
+    scopeEvents(supabase
       .from('events')
       .select('id,name,venue_name,date_time,organizer:organizers(name)')
       .eq('status', 'published')
       .neq('id', current.id)
       .gte('date_time', start.toISOString())
-      .lt('date_time', end.toISOString())
+      .lt('date_time', end.toISOString()), tenant)
       .limit(200)
       .then(({ data }) => {
         if (!alive) return

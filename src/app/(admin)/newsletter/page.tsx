@@ -11,6 +11,7 @@ import { ExternalLink, Mail, RefreshCw, Sparkles } from 'lucide-react'
 import type { NewsletterAdminData, NewsletterIssueSummary } from '@/lib/newsletter/admin-types'
 import { formatDateLong, formatStockholm, formatWeekendRange } from '@/lib/newsletter/dates'
 import { PageHeader } from '@/components/ui/page-header'
+import { VarbergOnly } from '@/components/cities/VarbergOnly'
 import { Button } from '@/components/ui/button'
 import { Card, CardBody } from '@/components/ui/card'
 import { StatCard } from '@/components/ui/stat-card'
@@ -30,6 +31,14 @@ function whenLabel(issue: NewsletterIssueSummary): string {
 }
 
 export default function NewsletterPage() {
+  return (
+    <VarbergOnly title="Nyhetsbrev" feature="Nyhetsbrevet">
+      <NewsletterContent />
+    </VarbergOnly>
+  )
+}
+
+function NewsletterContent() {
   const toast = useToast()
   const confirm = useConfirm()
   const [data, setData] = useState<NewsletterAdminData | null>(null)

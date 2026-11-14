@@ -6,6 +6,8 @@ import * as DialogPrimitive from '@radix-ui/react-dialog'
 import { Search, CornerDownLeft, Calendar, Users, Plus } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { supabase } from '@/lib/supabase'
+import { useTenant } from '@/contexts/TenantContext'
+import { scopeEvents } from '@/lib/tenants'
 import { ALL_NAV_ITEMS } from './nav'
 import { formatDay } from '@/lib/format'
 import { Kbd } from '@/components/ui/kbd'
@@ -22,6 +24,7 @@ interface Item {
 /** ⌘K: hoppa till sida, skapa nytt, eller sök events och arrangörer. */
 export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenChange: (o: boolean) => void }) {
   const router = useRouter()
+  const { tenant } = useTenant()
   const [q, setQ] = React.useState('')
   const [remote, setRemote] = React.useState<Item[]>([])
   const [active, setActive] = React.useState(0)
@@ -45,7 +48,7 @@ export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenCh
     const t = setTimeout(async () => {
       const like = `%${term.replace(/[%_]/g, '')}%`
       const [ev, org] = await Promise.all([
-        supabase.from('events').select('id, name, date_time, venue_name').or(`name.ilike.${like},venue_name.ilike.${like}`).order('date_time', { ascending: false }).limit(6),
+        scopeEvents(supabase.from('events').select('id, name, date_time, venue_name').or(`name.ilike.${like},venue_name.ilike.${like}`), tenant).order('date_time', { ascending: false }).limit(6),
         supabase.from('organizers').select('id, name, status').ilike('name', like).limit(4),
       ])
       if (!alive) return
@@ -58,7 +61,7 @@ export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenCh
       alive = false
       clearTimeout(t)
     }
-  }, [q])
+  }, [q, tenant])
 
   const local: Item[] = React.useMemo(() => {
     const term = q.trim().toLowerCase()
@@ -104,7 +107,7 @@ export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenCh
         <DialogPrimitive.Overlay className="animate-fade-in fixed inset-0 z-50 bg-ink/40" />
         <DialogPrimitive.Content
           onKeyDown={onKey}
-          className="animate-pop-in fixed left-1/2 top-[18%] z-50 w-[calc(100%-32px)] max-w-xl -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-[12px] border border-line bg-white shadow-[var(--shadow-pop)] outline-none"
+          className="animate-pop-in fixed left-1/2 top-[18%] z-50 w-[calc(100%-32px)] max-w-xl -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-[18px] bg-white shadow-[var(--shadow-pop)] outline-none"
         >
           <DialogPrimitive.Title className="sr-only">Sök eller hoppa till</DialogPrimitive.Title>
           <div className="flex h-12 items-center gap-3 border-b border-line px-4">

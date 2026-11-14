@@ -7,7 +7,8 @@ import { useToast } from '@/components/ui/toast'
 import { cn } from '@/lib/utils'
 
 /** Bildfält: förhandsvisning, dra-och-släpp/välj fil (laddas upp till Supabase Storage) samt URL. */
-export function ImageField({ value, onChange }: { value: string; onChange: (url: string) => void }) {
+/** contain: visa hela bilden (loggor, ikoner) i stället för att beskära den */
+export function ImageField({ value, onChange, contain = false }: { value: string; onChange: (url: string) => void; contain?: boolean }) {
   const toast = useToast()
   const [uploading, setUploading] = React.useState(false)
   const [dragging, setDragging] = React.useState(false)
@@ -39,10 +40,10 @@ export function ImageField({ value, onChange }: { value: string; onChange: (url:
 
   return (
     <div className="grid gap-4 sm:grid-cols-[200px_minmax(0,1fr)]">
-      <div className="flex h-[150px] w-[200px] items-center justify-center overflow-hidden rounded-[10px] bg-amber-light text-amber">
+      <div className="flex h-[150px] w-[200px] items-center justify-center overflow-hidden rounded-[12px] bg-field text-ink-faint">
         {value && !broken ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={value} alt="" className="size-full object-cover" onError={() => setBroken(true)} />
+          <img src={value} alt="" className={cn('size-full', contain ? 'object-contain p-3' : 'object-cover')} onError={() => setBroken(true)} />
         ) : (
           <ImageIcon className="size-7" strokeWidth={1.5} />
         )}
@@ -60,7 +61,7 @@ export function ImageField({ value, onChange }: { value: string; onChange: (url:
             const f = e.dataTransfer.files?.[0]
             if (f) upload(f)
           }}
-          className={cn('flex flex-col items-center gap-1 rounded-[10px] border border-dashed px-4 py-4 text-center', dragging ? 'border-sea bg-sea-lightest' : 'border-[#C9C0AE] bg-sand-soft')}
+          className={cn('flex flex-col items-center gap-1 rounded-[12px] px-4 py-4 text-center transition-colors', dragging ? 'bg-lime-light ring-2 ring-lime' : 'bg-field')}
         >
           <span className="text-[13px] font-medium text-ink">
             {uploading ? 'Laddar upp…' : 'Släpp en bild här eller '}
@@ -75,7 +76,7 @@ export function ImageField({ value, onChange }: { value: string; onChange: (url:
         </div>
         <div className="flex items-center gap-2">
           <Input aria-label="Bild-URL" type="url" value={value} placeholder="https://…" onChange={(e) => onChange(e.target.value)} className="h-9" />
-          <button type="button" onClick={() => fileRef.current?.click()} disabled={uploading} className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-[8px] border border-line bg-white px-3 text-[13px] font-medium text-ink hover:bg-sand-soft disabled:opacity-50">
+          <button type="button" onClick={() => fileRef.current?.click()} disabled={uploading} className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-[10px] bg-stone px-3 text-[13px] font-medium text-ink hover:bg-black/10 disabled:opacity-50">
             <Upload className="size-3.5" />
             Ladda upp
           </button>

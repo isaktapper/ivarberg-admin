@@ -7,6 +7,8 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { supabase } from '@/lib/supabase'
 import { updateOrganizerEvents } from '@/lib/events-write'
+import { useTenant } from '@/contexts/TenantContext'
+import { scopeEvents } from '@/lib/tenants'
 import { organizerSchema, OrganizerFormData } from '@/lib/validations'
 import { Organizer, OrganizerStatus } from '@/types/database'
 import GooglePlacesAutocomplete from '@/components/GooglePlacesAutocomplete'
@@ -26,6 +28,7 @@ import { cn } from '@/lib/utils'
 export function OrganizerForm({ organizer }: { organizer?: Organizer }) {
   const router = useRouter()
   const toast = useToast()
+  const { tenant } = useTenant()
   const isEdit = !!organizer
   const [saving, setSaving] = useState(false)
   const [status, setStatus] = useState<OrganizerStatus>(organizer?.status ?? 'active')
@@ -117,7 +120,7 @@ export function OrganizerForm({ organizer }: { organizer?: Organizer }) {
   const onSubmit = async (data: OrganizerFormData) => {
     // Pending → active: fråga om utkast-event ska publiceras samtidigt
     if (isEdit && organizer.status === 'pending' && status === 'active') {
-      const { count, error } = await supabase.from('events').select('id', { count: 'exact', head: true }).eq('organizer_id', organizer.id).eq('status', 'draft')
+      const { count, error } = await scopeEvents(supabase.from('events').select('id', { count: 'exact', head: true }).eq('organizer_id', organizer.id).eq('status', 'draft'), tenant)
       if (!error && (count ?? 0) > 0) {
         setPublishDialog({ count: count ?? 0, data })
         return
@@ -224,7 +227,7 @@ export function OrganizerForm({ organizer }: { organizer?: Organizer }) {
               </>
             }
           >
-            <span className="text-[13px] text-ink-soft">Utkasten blir synliga på ivarberg.nu direkt.</span>
+            <span className="text-[13px] text-ink-soft">Utkasten blir synliga på {tenant?.primary_domain ?? 'ivarberg.nu'} direkt.</span>
           </DialogContent>
         ) : null}
       </Dialog>

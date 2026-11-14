@@ -49,7 +49,7 @@ export function CategoryPicker({
             title={main ? 'Huvudkategori – klicka för att avmarkera' : on ? 'Klicka för att göra till huvudkategori' : undefined}
             className={cn(
               'inline-flex h-8 items-center gap-1.5 rounded-full border px-3 text-[13px] transition-colors disabled:cursor-not-allowed disabled:opacity-40',
-              on ? 'border-sea bg-sea-light font-semibold text-sea-dark' : 'border-line bg-white text-ink hover:bg-sand-soft'
+              on ? 'border-transparent bg-lime font-semibold text-ink' : 'border-transparent bg-stone text-ink hover:bg-black/10'
             )}
           >
             {main ? <span aria-hidden>★</span> : null}

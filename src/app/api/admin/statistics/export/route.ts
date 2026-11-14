@@ -2,6 +2,8 @@ import { createClient } from '@supabase/supabase-js';
 import { NextRequest, NextResponse } from 'next/server';
 import * as XLSX from 'xlsx';
 import { fetchAllRows } from '@/lib/supabase-fetch-all';
+import { getActiveTenant } from '@/lib/tenant-server';
+import { filterAuditLogsByTenant } from '@/lib/tenant-audit';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -12,7 +14,7 @@ export async function GET(request: NextRequest) {
   try {
     // Hämta audit log data (paginerat - Supabase cappar vid 1000 rader,
     // vilket trunkerade exporten)
-    const auditData = await fetchAllRows<any>((from, to) =>
+    const allAuditData = await fetchAllRows<any>((from, to) =>
       supabase
         .from('event_audit_log')
         .select('*')
@@ -20,6 +22,7 @@ export async function GET(request: NextRequest) {
         .order('id', { ascending: false })
         .range(from, to)
     );
+    const auditData = await filterAuditLogsByTenant(supabase, allAuditData, await getActiveTenant());
 
     // Hämta alla events för organisatör-info (paginerat istället för .in()
     // med tusentals id:n som slår i URL-gränsen)

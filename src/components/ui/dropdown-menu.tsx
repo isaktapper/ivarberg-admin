@@ -14,7 +14,7 @@ function DropdownMenuContent({ className, sideOffset = 6, ...props }: React.Comp
     <DropdownMenuPrimitive.Portal>
       <DropdownMenuPrimitive.Content
         sideOffset={sideOffset}
-        className={cn('animate-fade-in z-50 min-w-[180px] overflow-hidden rounded-[10px] border border-line bg-white p-1 shadow-[var(--shadow-pop)]', className)}
+        className={cn('animate-fade-in z-50 min-w-[180px] overflow-hidden rounded-[12px] bg-white p-1 shadow-[var(--shadow-pop)]', className)}
         {...props}
       />
     </DropdownMenuPrimitive.Portal>

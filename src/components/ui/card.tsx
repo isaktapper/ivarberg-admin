@@ -2,12 +2,12 @@ import * as React from "react"
 import { cn } from "@/lib/utils"
 
 function Card({ className, ...props }: React.ComponentProps<"div">) {
-  return <div data-slot="card" className={cn("rounded-[12px] border border-line bg-white", className)} {...props} />
+  return <div data-slot="card" className={cn("rounded-[16px] bg-white", className)} {...props} />
 }
 
 function CardHeader({ className, title, description, actions, children, ...props }: Omit<React.ComponentProps<"div">, "title"> & { title?: React.ReactNode; description?: React.ReactNode; actions?: React.ReactNode }) {
   return (
-    <div data-slot="card-header" className={cn("flex items-start justify-between gap-4 border-b border-line px-5 py-4", className)} {...props}>
+    <div data-slot="card-header" className={cn("flex items-start justify-between gap-4 px-5 pb-2 pt-5", className)} {...props}>
       <div className="flex min-w-0 flex-col gap-0.5">
         {title ? <h2 className="font-display text-base font-semibold text-ink">{title}</h2> : null}
         {description ? <p className="text-[13px] text-ink-soft">{description}</p> : null}
@@ -23,7 +23,7 @@ function CardBody({ className, ...props }: React.ComponentProps<"div">) {
 }
 
 function CardFooter({ className, ...props }: React.ComponentProps<"div">) {
-  return <div data-slot="card-footer" className={cn("flex items-center justify-between gap-3 border-t border-line px-5 py-3", className)} {...props} />
+  return <div data-slot="card-footer" className={cn("flex items-center justify-between gap-3 bg-sand-soft px-5 py-3 rounded-b-[16px]", className)} {...props} />
 }
 
 /** Sektionsrubrik i versaler (t.ex. i sidopaneler) */

@@ -8,6 +8,8 @@ import { Plus, MoreHorizontal, Eye, Pencil, Check, Archive, GitMerge, Trash2 } f
 import { supabase } from '@/lib/supabase'
 import { updateOrganizerEvents } from '@/lib/events-write'
 import { fetchAllRows } from '@/lib/supabase-fetch-all'
+import { useTenant } from '@/contexts/TenantContext'
+import { scopeEvents, scopeTenant } from '@/lib/tenants'
 import { Organizer, OrganizerStatus } from '@/types/database'
 import { useUrlState } from '@/hooks/use-url-state'
 import { formatDay, formatNumber } from '@/lib/format'
@@ -54,6 +56,7 @@ function OrganizersInner() {
   const toast = useToast()
   const confirm = useConfirm()
   const { state, set, reset } = useUrlState(DEFAULTS)
+  const { tenant } = useTenant()
 
   const [organizers, setOrganizers] = useState<Organizer[]>([])
   const [pages, setPages] = useState<Map<number, PageInfo>>(new Map())
@@ -72,9 +75,9 @@ function OrganizersInner() {
     try {
       const [orgRes, pageRes, events] = await Promise.all([
         supabase.from('organizers').select('*').order('needs_review', { ascending: false }).order('name'),
-        supabase.from('organizer_pages').select('id, organizer_id, is_published'),
+        scopeTenant(supabase.from('organizer_pages').select('id, organizer_id, is_published'), tenant),
         fetchAllRows<{ organizer_id: number | null; date_time: string; status: string }>((from, to) =>
-          supabase.from('events').select('organizer_id, date_time, status').order('id').range(from, to)
+          scopeEvents(supabase.from('events').select('organizer_id, date_time, status'), tenant).order('id').range(from, to)
         ),
       ])
       if (orgRes.error) throw orgRes.error
@@ -99,7 +102,7 @@ function OrganizersInner() {
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [tenant])
 
   useEffect(() => {
     load()
@@ -180,7 +183,7 @@ function OrganizersInner() {
 
   /** Pending → active. Frågar om utkast-event ska publiceras om sådana finns. */
   const approve = async (org: Organizer) => {
-    const { count } = await supabase.from('events').select('id', { count: 'exact', head: true }).eq('organizer_id', org.id).eq('status', 'draft')
+    const { count } = await scopeEvents(supabase.from('events').select('id', { count: 'exact', head: true }).eq('organizer_id', org.id).eq('status', 'draft'), tenant)
     if ((count ?? 0) > 0) {
       setPublishDialog({ organizer: org, count: count ?? 0 })
       return
@@ -503,7 +506,7 @@ function OrganizersInner() {
               </>
             }
           >
-            <span className="text-[13px] text-ink-soft">Utkasten blir synliga på ivarberg.nu direkt.</span>
+            <span className="text-[13px] text-ink-soft">Utkasten blir synliga på {tenant?.primary_domain ?? 'ivarberg.nu'} direkt.</span>
           </DialogContent>
         ) : null}
       </Dialog>

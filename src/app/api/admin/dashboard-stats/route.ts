@@ -1,6 +1,8 @@
 import { createClient } from '@supabase/supabase-js';
 import { NextRequest, NextResponse } from 'next/server';
 import { fetchAllRows } from '@/lib/supabase-fetch-all';
+import { getActiveTenant } from '@/lib/tenant-server';
+import { scopeEvents } from '@/lib/tenants';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -138,13 +140,15 @@ export async function GET(request: NextRequest) {
 
     // Hämta alla events (paginerat - Supabase cappar annars vid 1000 rader,
     // vilket gav fel totalsiffror när databasen växte förbi det)
-    const events = await fetchAllRows<any>((from, to) =>
-      supabase
+    const tenant = await getActiveTenant();
+    const events = await fetchAllRows<any>((from, to) => {
+      const query = supabase
         .from('events')
-        .select('id, status, date_time, categories, organizer_id, created_at, quality_score, image_url, description')
+        .select('id, status, date_time, categories, organizer_id, created_at, quality_score, image_url, description');
+      return scopeEvents(query, tenant)
         .order('id', { ascending: true })
-        .range(from, to)
-    );
+        .range(from, to);
+    });
 
     // Hämta organizers för namn
     const { data: organizers } = await supabase

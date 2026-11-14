@@ -52,7 +52,7 @@ export function Pagination({
           </label>
         ) : null}
         <div className="flex items-center gap-1">
-          <button type="button" aria-label="Föregående sida" disabled={page <= 1} onClick={() => onPageChange(page - 1)} className="inline-flex size-8 items-center justify-center rounded-md border border-line bg-white text-ink disabled:opacity-40">
+          <button type="button" aria-label="Föregående sida" disabled={page <= 1} onClick={() => onPageChange(page - 1)} className="inline-flex size-8 items-center justify-center rounded-md bg-stone text-ink disabled:opacity-40">
             <ChevronLeft className="size-3.5" />
           </button>
           {visible.map((p, i) =>
@@ -64,13 +64,13 @@ export function Pagination({
                 type="button"
                 aria-current={p === page ? 'page' : undefined}
                 onClick={() => onPageChange(p)}
-                className={cn('h-8 min-w-8 rounded-md px-2 font-mono text-xs', p === page ? 'bg-ink text-white' : 'border border-line bg-white text-ink hover:bg-sand-soft')}
+                className={cn('h-8 min-w-8 rounded-md px-2 font-mono text-xs', p === page ? 'bg-ink text-white' : 'bg-stone text-ink hover:bg-black/10')}
               >
                 {p}
               </button>
             )
           )}
-          <button type="button" aria-label="Nästa sida" disabled={page >= pages} onClick={() => onPageChange(page + 1)} className="inline-flex size-8 items-center justify-center rounded-md border border-line bg-white text-ink disabled:opacity-40">
+          <button type="button" aria-label="Nästa sida" disabled={page >= pages} onClick={() => onPageChange(page + 1)} className="inline-flex size-8 items-center justify-center rounded-md bg-stone text-ink disabled:opacity-40">
             <ChevronRight className="size-3.5" />
           </button>
         </div>

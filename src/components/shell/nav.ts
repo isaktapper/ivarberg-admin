@@ -13,6 +13,9 @@ import {
   Bell,
   BarChart3,
   SlidersHorizontal,
+  Building2,
+  Layers,
+  Radio,
   type LucideIcon,
 } from 'lucide-react'
 
@@ -25,17 +28,24 @@ export interface NavItem {
   badge?: 'review' | 'tips' | 'alerts'
   /** Matcha även undersidor */
   prefix?: boolean
+  /** Visas bara för den som får hantera städer */
+  platformOnly?: boolean
 }
 
 export interface NavGroup {
+  key: string
   label?: string
+  /** Gruppens ikon i sidomenyn (länkarna inuti har ingen egen ikon där) */
+  icon: LucideIcon
   items: NavItem[]
 }
 
 export const NAV: NavGroup[] = [
-  { items: [{ key: 'dashboard', label: 'Översikt', href: '/', icon: LayoutDashboard }] },
+  { key: 'overview', icon: LayoutDashboard, items: [{ key: 'dashboard', label: 'Översikt', href: '/', icon: LayoutDashboard }] },
   {
+    key: 'events',
     label: 'Evenemang',
+    icon: Calendar,
     items: [
       { key: 'events', label: 'Alla events', href: '/events', icon: Calendar },
       { key: 'review', label: 'Granska', href: '/events/review', icon: CheckSquare, badge: 'review', prefix: true },
@@ -45,7 +55,9 @@ export const NAV: NavGroup[] = [
     ],
   },
   {
+    key: 'content',
     label: 'Innehåll',
+    icon: Layers,
     items: [
       { key: 'instagram', label: 'Instagram', href: '/instagram', icon: Instagram, prefix: true },
       { key: 'newsletter', label: 'Nyhetsbrev', href: '/newsletter', icon: Mail, prefix: true },
@@ -54,19 +66,18 @@ export const NAV: NavGroup[] = [
     ],
   },
   {
+    key: 'sources',
     label: 'Källor',
+    icon: Radio,
     items: [
       { key: 'scrapers', label: 'Scrapers', href: '/scrapers', icon: Download, prefix: true },
       { key: 'alerts', label: 'Larm', href: '/admin/alerts', icon: Bell, badge: 'alerts', prefix: true },
     ],
   },
-  {
-    label: 'Analys',
-    items: [
-      { key: 'stats', label: 'Statistik', href: '/events/statistics', icon: BarChart3, prefix: true },
-      { key: 'settings', label: 'Inställningar', href: '/admin/settings/notifications', icon: SlidersHorizontal, prefix: true },
-    ],
-  },
+  // Fristående länkar: hör inte ihop med varandra och behöver ingen grupp
+  { key: 'stats', icon: BarChart3, items: [{ key: 'stats', label: 'Statistik', href: '/events/statistics', icon: BarChart3, prefix: true }] },
+  { key: 'settings', icon: SlidersHorizontal, items: [{ key: 'settings', label: 'Inställningar', href: '/admin/settings/notifications', icon: SlidersHorizontal, prefix: true }] },
+  { key: 'cities', icon: Building2, items: [{ key: 'cities', label: 'Städer', href: '/admin/cities', icon: Building2, prefix: true, platformOnly: true }] },
 ]
 
 export const ALL_NAV_ITEMS = NAV.flatMap((g) => g.items)
@@ -75,13 +86,15 @@ export const ALL_NAV_ITEMS = NAV.flatMap((g) => g.items)
 export const CRUMBS: { prefix: string; crumbs: string[] }[] = [
   { prefix: '/events/review', crumbs: ['Evenemang', 'Granska'] },
   { prefix: '/events/duplicates', crumbs: ['Evenemang', 'Dubletter'] },
-  { prefix: '/events/statistics', crumbs: ['Analys', 'Statistik'] },
+  { prefix: '/events/statistics', crumbs: ['Statistik'] },
   { prefix: '/events/new', crumbs: ['Evenemang', 'Alla events', 'Nytt event'] },
   { prefix: '/events', crumbs: ['Evenemang', 'Alla events'] },
   { prefix: '/admin/tips', crumbs: ['Evenemang', 'Tips från besökare'] },
   { prefix: '/admin/hero-featured', crumbs: ['Evenemang', 'Hero på startsidan'] },
   { prefix: '/admin/alerts', crumbs: ['Källor', 'Larm'] },
-  { prefix: '/admin/settings', crumbs: ['Analys', 'Inställningar'] },
+  { prefix: '/admin/settings', crumbs: ['Inställningar'] },
+  { prefix: '/admin/cities/new', crumbs: ['Städer', 'Ny stad'] },
+  { prefix: '/admin/cities', crumbs: ['Städer'] },
   { prefix: '/instagram', crumbs: ['Innehåll', 'Instagram'] },
   { prefix: '/newsletter', crumbs: ['Innehåll', 'Nyhetsbrev'] },
   { prefix: '/organizer-pages/new', crumbs: ['Innehåll', 'Arrangörssidor', 'Ny sida'] },

@@ -12,7 +12,8 @@ import { eventSchema, type EventFormData, eventStatuses } from '@/lib/validation
 import { EVENT_AREAS, type EventArea, resolveArea } from '@/lib/services/areaResolver'
 import { resolveIsFree } from '@/lib/services/priceResolver'
 import { getStatus } from '@/lib/status'
-import { getFrontendUrl } from '@/lib/utils'
+import { useTenant } from '@/contexts/TenantContext'
+import { isVarberg, tenantSiteUrl } from '@/lib/tenants'
 import type { Event, EventCategory, Organizer } from '@/types/database'
 import GooglePlacesAutocomplete from '@/components/GooglePlacesAutocomplete'
 import OrganizerSearchableDropdown from '@/components/OrganizerSearchableDropdown'
@@ -59,8 +60,11 @@ function toDefaults(event?: Event | null): EventFormData {
   }
 }
 
-/** Bygger payloaden till events-tabellen från formulärvärdena (samma semantik som de gamla sidorna). */
-function toPayload(data: EventFormData) {
+/**
+ * Bygger payloaden till events-tabellen från formulärvärdena (samma semantik som de gamla sidorna).
+ * Områdena är Varbergs: med withArea = false härleds inget område och fältet blir null.
+ */
+function toPayload(data: EventFormData, withArea = true) {
   const categories = data.categories && data.categories.length > 0 ? data.categories : (['Okategoriserad'] as EventCategory[])
   return {
     name: data.name,
@@ -68,7 +72,7 @@ function toPayload(data: EventFormData) {
     date_time: data.date_time,
     location: data.location,
     venue_name: data.venue_name || null,
-    area: data.area || resolveArea(data.location, data.venue_name),
+    area: withArea ? data.area || resolveArea(data.location, data.venue_name) : null,
     price: data.price || null,
     is_free: data.is_free === 'free' ? true : data.is_free === 'paid' ? false : resolveIsFree(data.price),
     image_url: data.image_url || null,
@@ -89,6 +93,9 @@ export function EventForm({ mode, event, onSaved }: { mode: 'create' | 'edit'; e
   const router = useRouter()
   const toast = useToast()
   const confirm = useConfirm()
+  const { tenant } = useTenant()
+  // Områdena är Varbergs: andra städer har inget områdesfält
+  const showArea = isVarberg(tenant)
   const [organizers, setOrganizers] = React.useState<Organizer[]>([])
   const [saving, setSaving] = React.useState(false)
   const [scores, setScores] = React.useState<Record<string, number> | null>(event?.category_scores ?? null)
@@ -129,7 +136,7 @@ export function EventForm({ mode, event, onSaved }: { mode: 'create' | 'edit'; e
   const timePart = dateTime.slice(11, 16)
   const setDateTime = (d: string, t: string) => setValue('date_time', d && t ? `${d}T${t}` : d ? `${d}T00:00` : '', { shouldDirty: true, shouldValidate: true })
 
-  const resolvedArea = React.useMemo(() => resolveArea(v.location || '', v.venue_name || ''), [v.location, v.venue_name])
+  const resolvedArea = React.useMemo(() => (showArea ? resolveArea(v.location || '', v.venue_name || '') : null), [showArea, v.location, v.venue_name])
 
   const sidebarValues: SidebarValues = {
     name: v.name || '',
@@ -146,7 +153,9 @@ export function EventForm({ mode, event, onSaved }: { mode: 'create' | 'edit'; e
   const save = React.useCallback(
     async (data: EventFormData, statusOverride?: EventFormData['status']) => {
       setSaving(true)
-      const payload = toPayload({ ...data, status: statusOverride ?? data.status })
+      const payload: Partial<ReturnType<typeof toPayload>> = toPayload({ ...data, status: statusOverride ?? data.status }, showArea)
+      // Annan stad än Varberg: nya event får area null, befintliga behåller sitt värde
+      if (!showArea && mode !== 'create') delete payload.area
       try {
         if (mode === 'create') {
           const { generateUniqueEventId } = await import('@/lib/event-id-generator')
@@ -171,7 +180,7 @@ export function EventForm({ mode, event, onSaved }: { mode: 'create' | 'edit'; e
         setSaving(false)
       }
     },
-    [mode, event, onSaved, reset, toast]
+    [mode, event, onSaved, reset, toast, showArea]
   )
 
   const submit = React.useCallback(
@@ -214,9 +223,9 @@ export function EventForm({ mode, event, onSaved }: { mode: 'create' | 'edit'; e
           <StatusBadge domain="event" value={v.status} />
           {isPublished && event ? (
             <Button asChild variant="secondary">
-              <a href={`${getFrontendUrl()}/event/${event.event_id}`} target="_blank" rel="noopener noreferrer">
+              <a href={`${tenantSiteUrl(tenant)}/event/${event.event_id}`} target="_blank" rel="noopener noreferrer">
                 <ExternalLink />
-                Visa på ivarberg.nu
+                Visa på {tenant?.primary_domain ?? 'ivarberg.nu'}
               </a>
             </Button>
           ) : null}
@@ -297,7 +306,7 @@ export function EventForm({ mode, event, onSaved }: { mode: 'create' | 'edit'; e
                   </div>
                 </Field>
               </div>
-              <Field label="Område" htmlFor="f-area" help="Lämna på Auto så härleds området från adress och platsnamn när eventet sparas">
+              {showArea && <Field label="Område" htmlFor="f-area" help="Lämna på Auto så härleds området från adress och platsnamn när eventet sparas">
                 <div className="flex items-center gap-2">
                   <Select id="f-area" {...register('area')} className="max-w-xs">
                     <option value="">Auto</option>
@@ -311,7 +320,7 @@ export function EventForm({ mode, event, onSaved }: { mode: 'create' | 'edit'; e
                     <span className="whitespace-nowrap rounded-full bg-sea-light px-2 py-0.5 text-[11px] font-medium text-sea-dark">{resolvedArea ?? 'Okänt område'} · auto</span>
                   ) : null}
                 </div>
-              </Field>
+              </Field>}
             </CardBody>
           </Card>
 
@@ -337,7 +346,7 @@ export function EventForm({ mode, event, onSaved }: { mode: 'create' | 'edit'; e
                 </Field>
               </div>
               <div className="grid gap-4 sm:grid-cols-2">
-                <Field label="Biljettlänk" htmlFor="f-book" error={errors.booking_url?.message} help={!v.booking_url ? 'Tomt. Besökare kan inte köpa biljett direkt från ivarberg.nu.' : undefined}>
+                <Field label="Biljettlänk" htmlFor="f-book" error={errors.booking_url?.message} help={!v.booking_url ? `Tomt. Besökare kan inte köpa biljett direkt från ${tenant?.primary_domain ?? 'ivarberg.nu'}.` : undefined}>
                   <Input id="f-book" type="url" {...register('booking_url')} placeholder="https://…" aria-invalid={!!errors.booking_url} className={!v.booking_url ? 'border-poppy-line bg-[#FFF8F4]' : ''} />
                 </Field>
                 <Field label="Arrangörens eventsida" htmlFor="f-site" error={errors.event_website?.message} help="Visas aldrig som utlänk, används för hämtning och kontroll">

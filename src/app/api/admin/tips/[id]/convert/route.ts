@@ -4,6 +4,19 @@ import { cookies } from 'next/headers'
 import { supabaseAdmin } from '@/lib/supabase-server'
 import { generateUniqueEventId } from '@/lib/event-id-generator'
 import { resolveArea } from '@/lib/services/areaResolver'
+import { getActiveTenant } from '@/lib/tenant-server'
+import { eventTenantFields, isVarberg, type Tenant } from '@/lib/tenants'
+
+/**
+ * Staden som eventet ska hamna i: tipsets egen stad om tipset har en,
+ * annars vald stad. null = städer finns inte än (migrationen inte körd).
+ */
+async function resolveTipTenant(tip: { tenant_id?: string | null }): Promise<Pick<Tenant, 'id' | 'municipality_codes'> | null> {
+  const active = await getActiveTenant()
+  if (!active || !tip.tenant_id || tip.tenant_id === active.id) return active
+  const { data, error } = await supabaseAdmin.from('tenants').select('*').eq('id', tip.tenant_id).maybeSingle()
+  return error || !data ? active : (data as Tenant)
+}
 
 /**
  * Verify server-side authentication
@@ -106,6 +119,9 @@ export async function POST(
         ? [tip.category]
         : ['Okategoriserad']
 
+    // Eventet hamnar i tipsets stad. Områdena är Varbergs, så andra städer får inget område.
+    const tenant = await resolveTipTenant(tip)
+
     // Skapa event från tips
     const eventData = {
       event_id: eventId,
@@ -113,7 +129,7 @@ export async function POST(
       date_time: tip.date_time || tip.event_date,
       location: tip.event_location || '',
       venue_name: tip.venue_name,
-      area: resolveArea(tip.event_location, tip.venue_name),
+      area: isVarberg(tenant) ? resolveArea(tip.event_location, tip.venue_name) : null,
       description: tip.event_description,
       description_format: 'plaintext' as const,
       categories: categories,
@@ -130,7 +146,8 @@ export async function POST(
       max_participants: null,
       quality_score: null,
       quality_issues: null,
-      auto_published: false
+      auto_published: false,
+      ...eventTenantFields(tenant)
     }
 
     const { data: event, error: eventError } = await supabaseAdmin

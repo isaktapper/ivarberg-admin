@@ -11,6 +11,7 @@ import { ExternalLink, Image as ImageIcon, RefreshCw } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { InstagramPost } from '@/types/database'
 import { PageHeader } from '@/components/ui/page-header'
+import { VarbergOnly } from '@/components/cities/VarbergOnly'
 import { Button } from '@/components/ui/button'
 import { Card, CardBody } from '@/components/ui/card'
 import { StatusBadge } from '@/components/ui/status-badge'
@@ -28,6 +29,14 @@ const SOURCE: Record<string, string> = {
 }
 
 export default function InstagramPage() {
+  return (
+    <VarbergOnly title="Instagram" feature="Instagram-flödet">
+      <InstagramContent />
+    </VarbergOnly>
+  )
+}
+
+function InstagramContent() {
   const [rows, setRows] = useState<Row[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
