@@ -21,11 +21,12 @@ const nextConfig: NextConfig = {
   // directories"). Utvärderas vid build på Vercel (linux-x64).
   serverExternalPackages: ['sharp'],
   // sharp laddar sina Linux-binärer dynamiskt och spåras därför inte av
-  // Next - alla routes som croppar Instagram-bilder måste listas här
+  // Next - alla routes som ritar/croppar Instagram-bilder måste listas här
   // (nycklarna är picomatch-globs mot route-namnet).
   outputFileTracingIncludes: {
-    '/api/cron/instagram-post': SHARP_LINUX_FILES,
-    '/api/instagram/**': SHARP_LINUX_FILES,
+    // Instagram-slidesen ritas med typsnitten i assets/fonts (läses via fs)
+    '/api/cron/instagram-post': [...SHARP_LINUX_FILES, './assets/fonts/**'],
+    '/api/instagram/**': [...SHARP_LINUX_FILES, './assets/fonts/**'],
     // Torsdagsbrevets mejlbilder går via samma sharp-kod (newsletter/images.ts)
     '/api/newsletter/**': SHARP_LINUX_FILES,
     '/api/admin/newsletter': SHARP_LINUX_FILES,

@@ -3,13 +3,13 @@
  * "Det här händer i Varberg idag".
  *
  * AI-pipeline (gpt-4o-mini, alla anrop PostHog-mätta via openai-client):
- *   1. rankEvents()      - rankar dagens event efter Instagram-potential
- *   2. reviewImages()    - vision-granskar toppkandidaternas bilder
- *   3. generateCaption() - skriver den svenska captionen
+ *   1. rankEvents()       - rankar dagens event (huvudkandidater + listan)
+ *   2. reviewImages()     - vision-granskar bilderna, flaggar riktigt snygga foton
+ *   3. generateHeadline() - kort rubrik till vykortet
+ *   4. generateCaption()  - den svenska captionen
  *
- * Bildformat: posten publiceras i ETT av Instagram-formaten (1:1, 4:5 eller
- * 1.91:1) - se INSTAGRAM_FORMATS. Kvadrat föredras, de andra räddar dagar där
- * eventbilderna bara finns som stående affischer eller breda bannrar.
+ * Slidesen ritas av instagram-slides.ts (vykortet, 4:5). Fotot läggs in helt
+ * på vykortet, så bildgaten (assessPhoto) handlar bara om upplösning.
  *
  * VIKTIG INNEHÅLLSREGEL: captions får ALDRIG hänvisa till arrangörens egen
  * webbplats eller biljettsida. Enda CTA är iVarberg ("länk i bio").
@@ -21,20 +21,20 @@ import { SupabaseClient } from '@supabase/supabase-js'
 import { Event } from '@/types/database'
 import { getOpenAIClient } from './openai-client'
 import { alertService } from './alert-service'
+import { HEADLINE_MAX_LENGTH } from './instagram-proposal'
+import { MAX_PHOTO_ASPECT, MIN_PHOTO_ASPECT, photoBox, stripEmoji } from './instagram-slides'
 
 const MODEL = 'gpt-4o-mini'
 const MAX_CAPTION_LENGTH = 2200
 const PRIMARY_LOOKBACK_DAYS = 7 // Event som varit primärt inom X dagar får inte bli det igen
-const ALSO_LOOKBACK_DAYS = 2 // Event som nämnts inom X dagar undviks i "också"-listan
+const ALSO_LOOKBACK_DAYS = 2 // Event som nämnts inom X dagar undviks i listan
 const MIN_ALSO_COUNT = 3
-export const MAX_ALSO_COUNT = 6
+export const MAX_ALSO_COUNT = 7 // listslidens tak: topp tre + fyra rader
 
-// Karusell: min 1, max 5 slides per post
-export const MAX_SLIDES = 5
 export const MAX_VISION_CANDIDATES = 8 // tak på bilder i vision-anropet
 
 // Dubblettregler utöver 7-dagarsregeln för primärt event: samma event får
-// inte återkomma som karusell-slide dag efter dag, och får inte synas mer än
+// inte återkomma som extra vykort dag efter dag, och får inte synas mer än
 // MAX_APPEARANCES_PER_WEEK gånger på en rullande vecka. Matchning sker på
 // normaliserat NAMN - långkörare får nytt event-id varje dag av scrapern, så
 // id-jämförelsen ensam ser dem som nya event varje morgon (det var så
@@ -46,39 +46,10 @@ const MAX_APPEARANCES_PER_WEEK = 2
 // legat i halva veckans poster (långkörare) ska inte kunna det.
 const MAX_PRIMARY_APPEARANCES_PER_WEEK = 3
 
-/**
- * Instagram-format. Alla slides i en karusell måste ha SAMMA proportion
- * (Graph API beskär barnen efter den första), så ett format väljs per post.
- * Listan är preferensordning: kvadrat är säkrast i flödet, stående 4:5 tar
- * mest plats, liggande 1.91:1 är sista utvägen men räddar dagar där
- * eventbilderna bara finns som bredbild/banner.
- */
-export type InstagramFormatKey = 'square' | 'portrait' | 'landscape'
-
-export interface InstagramFormat {
-  key: InstagramFormatKey
-  label: string
-  width: number
-  height: number
-  aspect: number // width / height
-}
-
-export const INSTAGRAM_FORMATS: InstagramFormat[] = [
-  { key: 'square', label: '1:1', width: 1080, height: 1080, aspect: 1080 / 1080 },
-  { key: 'portrait', label: '4:5', width: 1080, height: 1350, aspect: 1080 / 1350 },
-  { key: 'landscape', label: '1.91:1', width: 1080, height: 566, aspect: 1080 / 566 },
-]
-
-// Bildkvalitet bedöms per format:
-//   retention = andel av bilden som överlever cover-croppen till formatet
-//   upscale   = hur mycket croppen måste skalas upp till formatets pixelmått
-// En 16:9-banner har retention 0.56 mot kvadrat (faller) men 0.95 mot
-// liggande (klarar), medan en 4:5-affisch är perfekt stående och 0.8 kvadrat.
-const MIN_CROP_RETENTION = 0.65
-const RELAXED_CROP_RETENTION = 0.55
-const MAX_UPSCALE = 1.35 // som tidigare: 800px kortsida → 1080 kvadrat
-const RELAXED_MAX_UPSCALE = 1.7
-const ABSOLUTE_MIN_SIDE = 400 // golv mot rena tumnaglar, oavsett format
+// Bildgate för vykortet: fotot visas som mest ~884 px brett, så källan får
+// skalas upp högst så här mycket (efter att extrema format klämts).
+const MAX_PHOTO_UPSCALE = 1.6
+const ABSOLUTE_MIN_SIDE = 400 // golv mot rena tumnaglar
 
 export interface RankingResult {
   primaryCandidates: number[] // Event-id:n i prioritetsordning (bäst först)
@@ -464,10 +435,10 @@ VIKTIGAST - prioritetsordning för HUVUDEVENT (coolast först). Välj alltid fr�
 
 Välj:
 1. "primary_candidates": de 3 bästa kandidaterna till HUVUDEVENT, i ordning (bäst först). Huvudeventet MÅSTE ha har_bild: ja. Du får ENDAST välja bland dessa id:n: [${primaryIds.join(', ')}]
-2. "also_today": 3-6 andra event-id:n som listas under "Det händer också" (inte samma som huvudkandidaterna, föredra sådana utan nyligen_visad-flagga)
+2. "also_today": 4-7 andra event-id:n till inläggets lista "Mer i dag", i prioritetsordning. De TRE FÖRSTA visas stort som dagens topp tre - välj dagens bästa där och gärna olika kategorier. Inte samma som huvudkandidaterna, föredra sådana utan nyligen_visad-flagga. Event utan bild går bra i listan.
 
 Svara ENDAST med JSON:
-{ "primary_candidates": [id, id, id], "also_today": [id, id, id, id] }`
+{ "primary_candidates": [id, id, id], "also_today": [id, id, id, id, id] }`
 
   const response = await withRetry(
     () =>
@@ -482,7 +453,7 @@ Svara ENDAST med JSON:
           { role: 'user', content: prompt },
         ],
         temperature: 0.3,
-        max_tokens: 300,
+        max_tokens: 350,
         response_format: { type: 'json_object' },
         posthogProperties: { feature: 'instagram-event-ranking' },
       }),
@@ -565,71 +536,27 @@ export function originalImageUrl(imageUrl: string): string {
   }
 }
 
-export interface FormatFit {
-  ok: boolean // klarar strikta gaten i detta format (slide-duglig)
-  relaxedOk: boolean // klarar relaxed-gaten (bara som enbildspost)
-  retention: number // andel av bilden som överlever cover-croppen
-  upscale: number // hur mycket croppen måste skalas upp till formatets mått
-  reason?: 'too-small' | 'too-elongated'
-}
-
-export interface ImageQualityResult {
+export interface PhotoAssessment {
   width: number
   height: number
   unreachable: boolean
-  fits: Record<InstagramFormatKey, FormatFit> // bedömning per Instagram-format
-  ok: boolean // klarar strikta gaten i MINST ett format
-  relaxedOk: boolean // klarar relaxed-gaten i minst ett format
-  bestFormat: InstagramFormatKey | null // första formatet i preferensordning som klarar strikt
-}
-
-/** Hur väl en källbild med givna mått passar ett format efter cover-crop */
-export function fitToFormat(width: number, height: number, format: InstagramFormat): FormatFit {
-  const sourceAspect = width / height
-  const retention = Math.min(format.aspect / sourceAspect, sourceAspect / format.aspect)
-  // Cover-crop: den axel som är "för lång" beskärs, den andra behålls helt
-  const cropHeight = sourceAspect >= format.aspect ? height : width / format.aspect
-  const upscale = format.height / cropHeight
-  const tooSmall = (maxUpscale: number) =>
-    upscale > maxUpscale || Math.min(width, height) < ABSOLUTE_MIN_SIDE
-
-  const relaxedOk = !tooSmall(RELAXED_MAX_UPSCALE) && retention >= RELAXED_CROP_RETENTION
-  const ok = !tooSmall(MAX_UPSCALE) && retention >= MIN_CROP_RETENTION
-  return {
-    ok,
-    relaxedOk,
-    retention,
-    upscale,
-    reason: ok ? undefined : tooSmall(MAX_UPSCALE) ? 'too-small' : 'too-elongated',
-  }
+  /** Räcker till ett vykort (huvudevent eller extra slide) */
+  usable: boolean
 }
 
 /**
- * Programmatisk kvalitetsbedömning: nåbar, avkodbar, och tillräckligt nära
- * något av Instagram-formaten för att croppen inte ska förstöra bilden.
- * Bedöms mot ALLA format - runnern väljer sedan format för hela posten.
+ * Hur mycket fotot måste skalas upp på vykortet. Extrema format kläms först
+ * till MIN/MAX_PHOTO_ASPECT (som vid renderingen), resten visas helt.
  */
-export async function assessImageQuality(imageUrl: string): Promise<ImageQualityResult> {
-  const buildFits = (width: number, height: number): Record<InstagramFormatKey, FormatFit> =>
-    Object.fromEntries(
-      INSTAGRAM_FORMATS.map((f) => [
-        f.key,
-        width && height
-          ? fitToFormat(width, height, f)
-          : { ok: false, relaxedOk: false, retention: 0, upscale: Infinity, reason: 'too-small' as const },
-      ])
-    ) as Record<InstagramFormatKey, FormatFit>
+export function photoUpscale(width: number, height: number): number {
+  const aspect = width / height
+  const clamped = Math.min(MAX_PHOTO_ASPECT, Math.max(MIN_PHOTO_ASPECT, aspect))
+  const sourceWidth = aspect > clamped ? height * clamped : width
+  return photoBox(aspect).width / sourceWidth
+}
 
-  const unreachable = (): ImageQualityResult => ({
-    width: 0,
-    height: 0,
-    unreachable: true,
-    fits: buildFits(0, 0),
-    ok: false,
-    relaxedOk: false,
-    bestFormat: null,
-  })
-
+/** Nåbar, avkodbar och tillräckligt stor för att bli ett vykort */
+export async function assessPhoto(imageUrl: string): Promise<PhotoAssessment> {
   try {
     const response = await fetch(imageUrl, {
       headers: {
@@ -637,7 +564,7 @@ export async function assessImageQuality(imageUrl: string): Promise<ImageQuality
       },
       signal: AbortSignal.timeout(15000),
     })
-    if (!response.ok) return unreachable()
+    if (!response.ok) return { width: 0, height: 0, unreachable: true, usable: false }
 
     const buffer = Buffer.from(await response.arrayBuffer())
     const metadata = await sharp(buffer).metadata()
@@ -647,21 +574,13 @@ export async function assessImageQuality(imageUrl: string): Promise<ImageQuality
     if ((metadata.orientation ?? 1) >= 5) {
       ;[width, height] = [height, width]
     }
-    if (!width || !height) return unreachable()
+    if (!width || !height) return { width: 0, height: 0, unreachable: true, usable: false }
 
-    const fits = buildFits(width, height)
-    return {
-      width,
-      height,
-      unreachable: false,
-      fits,
-      ok: INSTAGRAM_FORMATS.some((f) => fits[f.key].ok),
-      relaxedOk: INSTAGRAM_FORMATS.some((f) => fits[f.key].relaxedOk),
-      bestFormat: INSTAGRAM_FORMATS.find((f) => fits[f.key].ok)?.key ?? null,
-    }
+    const usable = Math.min(width, height) >= ABSOLUTE_MIN_SIDE && photoUpscale(width, height) <= MAX_PHOTO_UPSCALE
+    return { width, height, unreachable: false, usable }
   } catch (error) {
     console.warn(`  ⚠️ Bildbedömning misslyckades för ${imageUrl}:`, error instanceof Error ? error.message : error)
-    return unreachable()
+    return { width: 0, height: 0, unreachable: true, usable: false }
   }
 }
 
@@ -669,20 +588,21 @@ export interface ImageReviewResult {
   bestEventId: number | null
   rankedEventIds: number[] // alla användbara kandidater i kvalitetsordning (bäst först)
   unusableEventIds: number[]
+  standoutEventIds: number[] // riktigt snygga foton som bär ett eget extra vykort
 }
 
 /**
  * Steg 2: Vision-granska kandidaternas bilder och ranka dem efter kvalitet.
  * Ett enda multimodalt anrop med alla (för-validerade) bilder. Rankningen
- * styr både valet av primärt event (slide 1) och ordningen på övriga slides.
+ * styr valet av huvudevent (vykortet); "standout" styr extra vykort.
  */
 export async function reviewImages(
   candidates: { event: Event; imageUrl: string }[]
 ): Promise<ImageReviewResult> {
-  if (candidates.length === 0) return { bestEventId: null, rankedEventIds: [], unusableEventIds: [] }
+  if (candidates.length === 0) return { bestEventId: null, rankedEventIds: [], unusableEventIds: [], standoutEventIds: [] }
   if (candidates.length === 1) {
     const id = candidates[0].event.id
-    return { bestEventId: id, rankedEventIds: [id], unusableEventIds: [] }
+    return { bestEventId: id, rankedEventIds: [id], unusableEventIds: [], standoutEventIds: [] }
   }
 
   const imageContent = candidates.flatMap((c, i) => [
@@ -700,16 +620,18 @@ export async function reviewImages(
             content: [
               {
                 type: 'text',
-                text: `Granska dessa eventbilder för ett Instagram-karusellinlägg för en lokal eventguide. Rangordna ALLA bilder efter hur bra de fungerar i inlägget (bäst först) - den bästa blir första sliden.
+                text: `Granska dessa eventbilder för ett Instagram-inlägg för en lokal eventguide. Den bästa bilden blir inläggets vykort (huvudbild). Rangordna ALLA bilder efter hur bra de fungerar (bäst först).
 
 Kriterier:
 - Skarp och visuellt tilltalande (inte suddig, mörk eller lågupplöst)
 - Inte en placeholder, logotyp eller ren textskylt
-- Eventaffischer med text är OK, men riktiga foton föredras om kvaliteten är jämförbar
+- Eventaffischer med text är OK, men riktiga foton föredras om kvaliteten är jämförbar (inlägget har redan en egen rubrik)
 - Flagga bilder som är helt oanvändbara (trasiga, oigenkännliga, placeholder) - de ska inte med i quality_order
 
+Välj också "standout_event_ids": de 0-2 bilder som är RIKTIGT snygga foton (inte affischer med mycket text) och skulle bära en egen extra slide. Var sträng - de flesta dagar är svaret tomt eller en bild.
+
 Svara ENDAST med JSON:
-{ "best_event_id": <id>, "quality_order": [<id>, <id>, ...], "unusable_event_ids": [<id>, ...] }`,
+{ "best_event_id": <id>, "quality_order": [<id>, <id>, ...], "unusable_event_ids": [<id>, ...], "standout_event_ids": [<id>, ...] }`,
               },
               ...imageContent,
             ],
@@ -757,7 +679,15 @@ Svara ENDAST med JSON:
   }
   for (const c of candidates) pushRanked(c.event.id)
 
-  return { bestEventId, rankedEventIds, unusableEventIds }
+  const standoutEventIds: number[] = [
+    ...new Set<number>(
+      (parsed.standout_event_ids || []).filter(
+        (id: unknown): id is number => typeof id === 'number' && validIds.has(id) && !unusable.has(id)
+      )
+    ),
+  ].slice(0, 2)
+
+  return { bestEventId, rankedEventIds, unusableEventIds, standoutEventIds }
 }
 
 // ============ Steg 3: Caption ============
@@ -781,13 +711,70 @@ export function sanitizeCaption(caption: string): { caption: string; hadViolatio
   return { caption: lines.join('\n').trim(), hadViolations }
 }
 
-/** Steg 3: Generera den svenska captionen (med variation mot senaste dagarnas öppningar) */
+/**
+ * Steg 3: Kort rubrik till vykortet (2-5 ord). Datum, tid och plats står
+ * redan på sliden, så rubriken ska säga VAD som händer och väcka lust.
+ */
+export async function generateHeadline(primary: Event, avoid: string[] = []): Promise<string> {
+  const avoidBlock =
+    avoid.length > 0 ? `\nSkriv något annat än dessa:\n${avoid.map((a) => `- ${a}`).join('\n')}\n` : ''
+  const prompt = `Skriv en rubrik till dagens Instagram-vykort för en lokal eventguide i Varberg.
+
+EVENT:
+${eventSummary(primary, false)}
+${avoidBlock}
+REGLER:
+- 2-5 ord, max ${HEADLINE_MAX_LENGTH - 6} tecken
+- Svenska, varm och lokal ton, gärna lite lekfull - men konkret om vad som händer
+- Ingen emoji, inga citattecken, ingen punkt på slutet
+- Skriv INTE datum, veckodag, klockslag eller plats (det står redan på bilden)
+- Använd gärna eventets namn om det är kort och känt (artist, föreställning), annars beskriv upplevelsen
+- Exempel på ton: "Jazz på fästningen", "Binda julkrans med ett glas vin", "Nisse Hallberg är tillbaka"
+
+Svara ENDAST med JSON: { "headline": "..." }`
+
+  const response = await withRetry(
+    () =>
+      getOpenAIClient().chat.completions.create({
+        model: MODEL,
+        messages: [
+          { role: 'system', content: 'Du är social media-redaktör för iVarberg och skriver korta, träffsäkra svenska rubriker. Svara endast med JSON.' },
+          { role: 'user', content: prompt },
+        ],
+        temperature: 0.9,
+        max_tokens: 60,
+        response_format: { type: 'json_object' },
+        posthogProperties: { feature: 'instagram-headline' },
+      }),
+    'instagram-headline'
+  )
+
+  const content = response.choices[0]?.message?.content?.trim()
+  let headline = ''
+  try {
+    headline = String(JSON.parse(content || '{}').headline || '')
+  } catch {
+    headline = ''
+  }
+  headline = stripEmoji(headline).replace(/^["'”“]+|["'”“.!]+$/g, '').trim()
+  if (!headline) headline = stripEmoji(primary.name)
+  if (headline.length > HEADLINE_MAX_LENGTH) {
+    headline = headline.slice(0, HEADLINE_MAX_LENGTH).replace(/\s+\S*$/, '')
+  }
+  return headline
+}
+
+/**
+ * Steg 4: Generera den svenska captionen (med variation mot senaste dagarnas
+ * öppningar). Listan över dagens övriga event står på slide 2, så captionen
+ * hålls kort och hänvisar dit.
+ */
 export async function generateCaption(
   primary: Event,
-  alsoEvents: Event[],
+  listEvents: Event[],
   recentOpenings: string[] = []
 ): Promise<string> {
-  const alsoList = alsoEvents
+  const listText = listEvents
     .map((e) => {
       const time = formatTime(e.date_time)
       return `- ${e.name} (${e.venue_name || e.location}${time ? `, kl ${time}` : ''})`
@@ -801,27 +788,30 @@ export async function generateCaption(
 
   const prompt = `Skriv en Instagram-caption för dagens inlägg från en lokal eventguide för Varberg.
 
-HUVUDEVENT (inläggets bild är från detta event):
+Inlägget är en karusell: första bilden är ett vykort för HUVUDEVENTET, nästa bild är en lista "Mer i dag" med eventen under ÖVRIGA EVENT.
+
+HUVUDEVENT:
 ${eventSummary(primary, false)}
 
-ÖVRIGA EVENT IDAG:
-${alsoList || '(inga)'}
+ÖVRIGA EVENT IDAG (står på bild 2):
+${listText || '(inga)'}
 ${recentOpeningsBlock}
 Struktur (följ exakt):
 1. Öppningsrad: kort och catchig, budskapet "det här händer i Varberg idag" - men VARIERA formuleringen. Låt gärna huvudeventet färga tonen och välj emoji som matchar eventets karaktär (konsert 🎸🎶, teater/show 🎭, konst 🎨, mat 🍴, marknad 🛍️, sport ⚽, utomhus/sommar ☀️🌊, kvällsevent ✨🌙 osv). Använd INTE 🎉 som slentrianval.
 2. 1-2 entusiastiska meningar om huvudeventet (namn, plats, tid) - variera även här, börja inte alltid med eventnamnet
-3. Om det finns övriga event: raden "Det händer också:" följt av punktlista (en rad per event: namn, plats, kl tid)
-4. Avslutning: "Vill du se allt som händer idag? Gå in på iVarberg 👉 länk i bio"
+3. ${listText ? 'En mening som lockar att svepa till listan, gärna med en av de övriga eventen som smakprov (t.ex. "Svep för fler tips - från julmarknad till innebandy 👉")' : 'Hoppa över denna punkt'}
+4. Avslutning: "Allt som händer idag hittar du på iVarberg 👉 länk i bio"
 5. 3-5 relevanta svenska hashtags (t.ex. #varberg #ivarberg + eventrelevanta)
 
 ABSOLUTA REGLER:
 - Skriv på svenska, varm och lokal ton, sparsamt med emojis (2-4 totalt utöver de i mallen)
 - Använd INTE markdown-formatering (inga asterisker, fetstil eller kursiv) - Instagram renderar ren text
+- Ingen punktlista över eventen - den står redan på bilden
 - Utelämna klockslag för event utan angiven tid (skriv inte "kl 00:00")
 - Nämn ALDRIG arrangörens webbplats, biljettsida eller några URL:er/länkar
 - Enda hänvisningen är iVarberg ("länk i bio")
 - Uppmana INTE till att köpa biljetter någonstans - iVarberg är enda vägen
-- Max 1800 tecken
+- Max 900 tecken
 
 Svara ENDAST med captionen, ingen annan text.`
 
@@ -838,7 +828,7 @@ Svara ENDAST med captionen, ingen annan text.`
           { role: 'user', content: prompt },
         ],
         temperature: 0.9,
-        max_tokens: 800,
+        max_tokens: 600,
         posthogProperties: { feature: 'instagram-caption' },
       }),
     'instagram-caption'
@@ -869,109 +859,76 @@ Svara ENDAST med captionen, ingen annan text.`
   return caption
 }
 
-// ============ Bildkonvertering + uppladdning ============
+// ============ Uppladdning ============
 
 const STORAGE_BUCKET = 'instagram-posts'
 
-/**
- * Hämta eventbilden, croppa till formatets mått (JPEG) och ladda upp till en
- * publik Supabase Storage-bucket som `{postDate}-{slideIndex}.jpg`.
- * Kvalitetsgaten (assessImageQuality) har redan sorterat bort bilder som
- * skulle croppas för hårt i det valda formatet. Returnerar publika URL:en.
- */
-export async function uploadInstagramImage(
-  supabase: SupabaseClient,
-  imageUrl: string,
-  postDate: string,
-  slideIndex: number, // 1-baserat
-  format: InstagramFormat
-): Promise<string> {
-  const response = await fetch(imageUrl, {
-    headers: {
-      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-    },
-    signal: AbortSignal.timeout(20000),
-  })
-  if (!response.ok) {
-    throw new Error(`Kunde inte hämta bilden (${response.status}): ${imageUrl}`)
-  }
-  const sourceBuffer = Buffer.from(await response.arrayBuffer())
-
-  // .rotate() utan argument applicerar EXIF-orienteringen före resize.
-  // attention-strategin croppar mot bildens mest intressanta region.
-  const jpegBuffer = await sharp(sourceBuffer, { failOn: 'error' })
-    .rotate()
-    .resize({
-      width: format.width,
-      height: format.height,
-      fit: 'cover',
-      position: sharp.strategy.attention,
-    })
-    .jpeg({ quality: 85, mozjpeg: true })
-    .toBuffer()
-
+async function ensureBucket(supabase: SupabaseClient): Promise<void> {
   // Skapa bucketen om den inte finns (publik läsning krävs för Instagram)
-  const { error: bucketError } = await supabase.storage.createBucket(STORAGE_BUCKET, {
-    public: true,
-  })
-  if (bucketError && !/already exists/i.test(bucketError.message)) {
-    throw new Error(`Kunde inte skapa storage-bucket: ${bucketError.message}`)
+  const { error } = await supabase.storage.createBucket(STORAGE_BUCKET, { public: true })
+  if (error && !/already exists/i.test(error.message)) {
+    throw new Error(`Kunde inte skapa storage-bucket: ${error.message}`)
   }
+}
 
-  const path = `${postDate}-${slideIndex}.jpg`
-  const { error: uploadError } = await supabase.storage
+async function uploadJpeg(supabase: SupabaseClient, path: string, jpeg: Buffer): Promise<string> {
+  const { error } = await supabase.storage
     .from(STORAGE_BUCKET)
-    .upload(path, jpegBuffer, { contentType: 'image/jpeg', upsert: true })
-  if (uploadError) {
-    throw new Error(`Kunde inte ladda upp bilden: ${uploadError.message}`)
-  }
-
-  const { data } = supabase.storage.from(STORAGE_BUCKET).getPublicUrl(path)
-  return data.publicUrl
+    .upload(path, jpeg, { contentType: 'image/jpeg', upsert: true })
+  if (error) throw new Error(`Kunde inte ladda upp ${path}: ${error.message}`)
+  return supabase.storage.from(STORAGE_BUCKET).getPublicUrl(path).data.publicUrl
 }
 
 /**
- * Ladda upp alla slides för dagens post. Rensar först gamla filer med samma
- * datumprefix (stale slides från tidigare försök + legacy `{postDate}.jpg`) -
- * upsert kan skriva över men aldrig krympa mängden filer.
- *
- * Slide 1 är obligatorisk (fel kastas vidare); fel på slide 2+ loggas och
- * den sliden släpps så att posten ändå går ut med färre bilder.
+ * Hämta en bild, cover-beskär den (attention) till width x height som JPEG och
+ * ladda upp till bucketen under `path`. Används av Torsdagsbrevets mejlbilder.
  */
-export async function uploadInstagramSlides(
+export async function uploadCroppedImage(
   supabase: SupabaseClient,
-  slides: { event: Event; imageUrl: string }[],
-  postDate: string,
-  format: InstagramFormat
-): Promise<{ event: Event; url: string }[]> {
-  const { data: existingFiles } = await supabase.storage
-    .from(STORAGE_BUCKET)
-    .list('', { search: postDate })
-  const stalePaths = (existingFiles || [])
-    .map((f) => f.name)
-    .filter((name) => name.startsWith(postDate))
+  imageUrl: string,
+  path: string,
+  width: number,
+  height: number
+): Promise<string> {
+  const response = await fetch(imageUrl, {
+    headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
+    signal: AbortSignal.timeout(20000),
+  })
+  if (!response.ok) throw new Error(`Kunde inte hämta bilden (${response.status}): ${imageUrl}`)
+  const jpeg = await sharp(Buffer.from(await response.arrayBuffer()), { failOn: 'error' })
+    .rotate()
+    .resize({ width, height, fit: 'cover', position: sharp.strategy.attention })
+    .jpeg({ quality: 85, mozjpeg: true })
+    .toBuffer()
+  await ensureBucket(supabase)
+  return uploadJpeg(supabase, path, jpeg)
+}
+
+/**
+ * Ladda upp dagens färdigritade slides som `{postDate}-{n}.jpg`. Rensar först
+ * gamla filer med samma datumprefix (tidigare försök, förhandsbilden till
+ * notisen) - upsert kan skriva över men aldrig krympa mängden filer.
+ */
+export async function uploadSlideImages(
+  supabase: SupabaseClient,
+  slides: Buffer[],
+  postDate: string
+): Promise<string[]> {
+  await ensureBucket(supabase)
+  const { data: existingFiles } = await supabase.storage.from(STORAGE_BUCKET).list('', { search: postDate })
+  const stalePaths = (existingFiles || []).map((f) => f.name).filter((name) => name.startsWith(postDate))
   if (stalePaths.length > 0) {
     await supabase.storage.from(STORAGE_BUCKET).remove(stalePaths)
   }
-
-  const uploaded: { event: Event; url: string }[] = []
-  for (const [i, slide] of slides.entries()) {
-    try {
-      const url = await uploadInstagramImage(
-        supabase,
-        slide.imageUrl,
-        postDate,
-        uploaded.length + 1,
-        format
-      )
-      uploaded.push({ event: slide.event, url })
-    } catch (error) {
-      if (i === 0) throw error // primära slidens bild är obligatorisk
-      console.warn(
-        `  ⚠️ Slide "${slide.event.name}" kunde inte laddas upp - hoppar över:`,
-        error instanceof Error ? error.message : error
-      )
-    }
+  const urls: string[] = []
+  for (const [i, jpeg] of slides.entries()) {
+    urls.push(await uploadJpeg(supabase, `${postDate}-${i + 1}.jpg`, jpeg))
   }
-  return uploaded
+  return urls
+}
+
+/** Förhandsbild av vykortet till ntfy-notisen (`{postDate}-preview.jpg`, rensas vid publicering) */
+export async function uploadPreviewImage(supabase: SupabaseClient, jpeg: Buffer, postDate: string): Promise<string> {
+  await ensureBucket(supabase)
+  return uploadJpeg(supabase, `${postDate}-preview.jpg`, jpeg)
 }

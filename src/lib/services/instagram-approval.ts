@@ -4,7 +4,7 @@
  */
 import { createClient, SupabaseClient } from '@supabase/supabase-js'
 import { InstagramPost } from '@/types/database'
-import { InstagramProposal } from './instagram-proposal'
+import { InstagramProposal, normalizeProposal } from './instagram-proposal'
 
 export interface ApprovalView {
   postDate: string
@@ -33,7 +33,7 @@ export function toApprovalView(row: InstagramPost): ApprovalView {
   return {
     postDate: row.post_date,
     status: row.status,
-    proposal: (row.proposal as InstagramProposal | null) ?? null,
+    proposal: normalizeProposal(row.proposal),
     approvalSource: row.approval_source ?? null,
     postedAt: row.posted_at ?? null,
     publishedEventId: row.event_id ?? null,

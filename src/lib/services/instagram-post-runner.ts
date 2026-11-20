@@ -6,26 +6,30 @@
  *   - Vercel cron via /api/cron/instagram-post (primär - punktlig)
  *   - GitHub Actions via scripts/publish-instagram-post.ts (backup + manuell)
  *
+ * POSTEN ("vykortet", alltid 4:5):
+ *   1. Huvudeventet som vykort med en AI-skriven rubrik
+ *   2. "Mer i dag": topp tre + upp till fyra rader (event utan bild går bra)
+ *   3+. Extra vykort när vision-granskningen hittar riktigt snygga foton
+ *
  * GODKÄNNANDEFLÖDET (standard när NTFY_TOPIC är satt):
  *   1. Första körningen efter kl 07 (Stockholm) analyserar dagen: hämtar
- *      publicerade event, AI-rankar, kvalitetsbedömer bilder per format,
- *      vision-granskar och tar fram ett förslag (huvudevent, slides, format,
+ *      publicerade event, AI-rankar, bedömer och vision-granskar bilder och
+ *      tar fram ett förslag (huvudevent, rubrik, lista, extra vykort,
  *      caption). Förslaget sparas i instagram_posts med status 'pending' och
- *      en engångstoken, och en ntfy-notis skickas med länk till
- *      godkännandesidan (/instagram/approve/<token>) + knappar för att
- *      publicera förslaget direkt eller hoppa över dagen.
- *   2. På sidan väljer man huvudevent, ordnar slides, justerar captionen och
- *      publicerar (API: /api/instagram/approve/<token>).
+ *      en engångstoken, och en ntfy-notis med det färdiga vykortet skickas
+ *      med länk till godkännandesidan (/instagram/approve/<token>) + knappar
+ *      för att publicera förslaget direkt eller hoppa över dagen.
+ *   2. På sidan väljer man huvudevent, ändrar rubrik och lista, justerar
+ *      captionen och publicerar (API: /api/instagram/approve/<token>).
  *   3. Nästa cron-körning efter kl 10 publicerar förslaget automatiskt om
  *      ingen svarat (INSTAGRAM_AUTO_PUBLISH=false stänger av det).
  *
  * DIREKTFLÖDET (INSTAGRAM_APPROVAL_FLOW=off, --direct, --event=ID, eller när
- * NTFY_TOPIC saknas): som tidigare - analysera och posta i samma körning.
+ * NTFY_TOPIC saknas): analysera och posta i samma körning.
  *
- * Publicering = croppa slides till formatet, ladda upp till Supabase Storage
- * och skicka { image_urls, caption } till Make.com-webhooken som postar
- * (karusell vid >= 2 bilder, enbildspost annars). Loggas i instagram_posts
- * + PostHog.
+ * Publicering = rita slidesen (instagram-slides.ts), ladda upp till Supabase
+ * Storage och skicka { image_urls, caption } till Make.com-webhooken som
+ * postar karusellen. Loggas i instagram_posts + PostHog.
  */
 import { createClient, SupabaseClient } from '@supabase/supabase-js'
 import { nanoid } from 'nanoid'
@@ -38,32 +42,34 @@ import {
   getRecentCaptionOpenings,
   normalizeEventName,
   rankEvents,
-  assessImageQuality,
+  assessPhoto,
   originalImageUrl,
   reviewImages,
+  generateHeadline,
   generateCaption,
-  uploadInstagramSlides,
+  uploadSlideImages,
+  uploadPreviewImage,
   isSlideRepeatBlocked,
   isPrimaryRepeatBlocked,
+  hasHitWeeklyCap,
   lastAppearance,
   appearanceCount,
-  INSTAGRAM_FORMATS,
-  InstagramFormat,
-  InstagramFormatKey,
-  ImageQualityResult,
+  PhotoAssessment,
   RecentlyFeatured,
-  MAX_SLIDES,
   MAX_VISION_CANDIDATES,
   MAX_ALSO_COUNT,
 } from './instagram-post-service'
 import {
   InstagramProposal,
   InstagramSelection,
-  ProposalCandidate,
-  formatLabel,
+  ProposalEvent,
+  PROPOSAL_MAX_EXTRA_SLIDES,
+  normalizeProposal,
   selectionFromSuggestion,
+  slideSpecsFor,
   validateSelection,
 } from './instagram-proposal'
+import { renderSlide } from './instagram-slides'
 import { MakeWebhookPublisher } from './instagram-publisher'
 import { getPostHogClient } from './openai-client'
 import { alertService } from './alert-service'
@@ -78,11 +84,10 @@ export interface InstagramRunOptions {
   force?: boolean // kringgå timvakten
   dryRun?: boolean // generera allt men skicka/logga inte
   /**
-   * Tvinga ett visst event som huvudevent (slide 1). Formatet väljs efter
-   * vad DET eventets bild klarar; övriga slides fylls som vanligt. Kringgår
-   * idempotenskollen och timvakten och postar direkt - används för att göra
-   * om dagens post manuellt. Kastar fel om eventet inte finns bland dagens
-   * event eller inte har en användbar bild i något format.
+   * Tvinga ett visst event som huvudevent (vykortet). Listan fylls som
+   * vanligt. Kringgår idempotenskollen och timvakten och postar direkt -
+   * används för att göra om dagens post manuellt. Kastar fel om eventet inte
+   * finns bland dagens event eller saknar en bild som räcker till vykortet.
    */
   primaryEventId?: number
   /** Posta direkt utan godkännande (gamla flödet) även om ntfy är konfigurerat */
@@ -108,9 +113,9 @@ export interface InstagramRunResult {
   eventId?: number
   eventName?: string
   caption?: string
+  headline?: string
   imageUrl?: string // första sliden (bakåtkompat för cron-route/CLI-output)
   imageUrls?: string[] // alla slides i publiceringsordning
-  format?: InstagramFormatKey // formatet posten publicerades i
   approvalUrl?: string // godkännandesidan (status 'pending')
 }
 
@@ -144,35 +149,76 @@ export function eventTimeLabel(event: Pick<Event, 'date_time'>): string {
 }
 
 // ---------------------------------------------------------------------------
-// Analys av dagen: event -> ranking -> bildbedömning -> plan + förslag
+// Analys av dagen: event -> ranking -> bildbedömning -> förslag
 // ---------------------------------------------------------------------------
-
-type Candidate = { event: Event; imageUrl: string; quality: ImageQualityResult }
-
-interface SlidePlan {
-  format: InstagramFormat
-  relaxed: boolean
-  slides: { event: Event; imageUrl: string }[]
-}
 
 export interface DayAnalysis {
   events: Event[]
   eventById: Map<number, Event>
   primaryCandidateIds: number[]
-  alsoTodayIds: number[]
-  recentlyFeatured: RecentlyFeatured
-  plan: SlidePlan | null
-  /** Caption för planen (genereras bara när plan finns) */
-  caption: string | null
-  /** "Också"-event för planen, i captionordning */
-  alsoEvents: Event[]
   proposal: InstagramProposal
 }
 
+function toProposalEvent(
+  event: Event,
+  photo: PhotoAssessment | undefined,
+  recent: RecentlyFeatured,
+  extra: { isPrimaryCandidate: boolean; visionRank: number | null; standout: boolean }
+): ProposalEvent {
+  const shown = appearanceCount(event, recent)
+  return {
+    eventId: event.id,
+    name: event.name,
+    venueName: event.venue_name || event.location || null,
+    timeLabel: eventTimeLabel(event),
+    category: event.categories?.[0] ?? null,
+    imageUrl: event.image_url && photo && !photo.unreachable ? originalImageUrl(event.image_url) : null,
+    imageWidth: photo?.width ?? 0,
+    imageHeight: photo?.height ?? 0,
+    imageUsable: !!photo?.usable,
+    isPrimaryCandidate: extra.isPrimaryCandidate,
+    visionRank: extra.visionRank,
+    standout: extra.standout,
+    primaryRepeatBlocked: isPrimaryRepeatBlocked(event, recent),
+    slideRepeatBlocked: isSlideRepeatBlocked(event, recent),
+    lastShown: shown > 0 ? lastAppearance(event, recent) : null,
+    timesShownThisWeek: shown,
+  }
+}
+
 /**
- * Kör hela analysen för dagen och bygger både den körbara planen och det
- * sparbara förslaget. Kastar inte på "inga event"/"ingen bild" - då är
- * plan null och proposal.suggestion null.
+ * Listan "Mer i dag": rankingens övriga huvudkandidater först (de är dagens
+ * starkaste), sedan rankingens lista, och därefter fylls den på med dagens
+ * övriga event i tidsordning upp till taket - utom sådana som synts de
+ * senaste dagarna eller nått veckotaket (långkörare). Huvudeventet, extra
+ * vykort och namn-dubbletter hoppas alltid över.
+ */
+export function buildListEvents(
+  primary: Event,
+  exclude: Event[],
+  rankedPrimaryCandidates: Event[],
+  rankedAlso: Event[],
+  allEvents: Event[],
+  recent: RecentlyFeatured
+): Event[] {
+  const seen = new Set<string>([primary, ...exclude].map((e) => normalizeEventName(e.name)))
+  const result: Event[] = []
+  const add = (e: Event, filler: boolean) => {
+    if (result.length >= MAX_ALSO_COUNT) return
+    const name = normalizeEventName(e.name)
+    if (seen.has(name)) return
+    if (filler && (hasHitWeeklyCap(e, recent) || isSlideRepeatBlocked(e, recent))) return
+    seen.add(name)
+    result.push(e)
+  }
+  for (const e of [...rankedPrimaryCandidates, ...rankedAlso]) add(e, false)
+  for (const e of allEvents) add(e, true)
+  return result
+}
+
+/**
+ * Kör hela analysen för dagen och bygger det sparbara förslaget. Kastar inte
+ * på "inga event"/"ingen bild" - då är proposal.suggestion null.
  */
 export async function analyzeDay(
   supabase: SupabaseClient,
@@ -186,34 +232,20 @@ export async function analyzeDay(
   const events = await getTodayEvents(supabase)
   console.log(`   Hittade ${events.length} event\n`)
   const eventById = new Map(events.map((e) => [e.id, e]))
+  const recentlyFeatured = await getRecentlyFeatured(supabase)
 
-  const emptyProposal = (extra: Partial<InstagramProposal> = {}): InstagramProposal => ({
-    version: 1,
+  const proposalBase = {
+    version: 2 as const,
     generatedAt: new Date().toISOString(),
     postDate,
-    candidates: [],
-    primaryCandidateIds: [],
-    alsoTodayIds: [],
-    eventsWithoutImage: events
-      .filter((e) => !e.image_url)
-      .map((e) => ({ eventId: e.id, name: e.name, timeLabel: eventTimeLabel(e) })),
-    suggestion: null,
-    ...extra,
-  })
-
-  const recentlyFeatured = await getRecentlyFeatured(supabase)
+  }
 
   if (events.length === 0) {
     return {
       events,
       eventById,
       primaryCandidateIds: [],
-      alsoTodayIds: [],
-      recentlyFeatured,
-      plan: null,
-      caption: null,
-      alsoEvents: [],
-      proposal: emptyProposal(),
+      proposal: { ...proposalBase, events: [], primaryCandidateIds: [], alsoTodayIds: [], suggestion: null },
     }
   }
 
@@ -222,267 +254,182 @@ export async function analyzeDay(
   console.log(
     `   ${recentlyFeatured.recentPrimaryIds.size} nyligen primära, ${recentlyFeatured.recentMentionIds.size} nyligen nämnda\n`
   )
-
-  console.log('🤖 Steg 1/3: AI rankar dagens event...')
+  console.log('🤖 Steg 1/4: AI rankar dagens event...')
   const ranking = await rankEvents(events, recentlyFeatured)
-  console.log(`   Primärkandidater: ${ranking.primaryCandidates.map((id) => eventById.get(id)?.name).join(' | ')}`)
-  console.log(`   Också idag: ${ranking.alsoToday.length} event\n`)
+  console.log(`   Huvudkandidater: ${ranking.primaryCandidates.map((id) => eventById.get(id)?.name).join(' | ')}`)
+  console.log(`   Lista: ${ranking.alsoToday.length} event\n`)
 
-  // 3. Bildkvalitet per format + vision-rankning -> välj format och 1-5 slides
-  console.log('🖼️  Steg 2/3: Kvalitetsbedömer och granskar bilder...')
+  // 3. Bildbedömning (alla event med bild - listans frimärken behöver också
+  // en nåbar bild) + vision-rankning av de som räcker till vykort
+  console.log('🖼️  Steg 2/4: Bedömer och granskar bilder...')
+  const photos = new Map<number, PhotoAssessment>()
+  await Promise.all(
+    events
+      .filter((e) => e.image_url)
+      .map(async (e) => photos.set(e.id, await assessPhoto(originalImageUrl(e.image_url!))))
+  )
+  for (const e of events) {
+    const p = photos.get(e.id)
+    if (!p) continue
+    console.log(`   ${p.unreachable ? '✗' : p.usable ? '✓' : '~'} ${e.name}${p.unreachable ? ' (kunde inte läsas)' : ` (${p.width}x${p.height})`}`)
+  }
 
-  // Kandidatpool i prioritetsordning: primärkandidater, "också"-listan,
-  // och därefter dagens övriga event med bild - rankingens listor är
-  // optimerade för captionen, inte bildkvalitet, så bra bilder utanför
-  // dem ska ändå kunna bli slides. Dedupe på normaliserat namn
-  // (återkommande event får nya id:n varje dag av scrapern).
-  // imageUrl = originalbilden, utan ImageKits banner-transformation.
-  const rankedPoolIds = new Set([...ranking.primaryCandidates, ...ranking.alsoToday])
-  const extraIds = events.filter((e) => !rankedPoolIds.has(e.id)).map((e) => e.id)
-  const pool: { event: Event; imageUrl: string }[] = []
+  // Vision-pool i prioritetsordning: huvudkandidater, listan, övriga.
+  // Dedupe på normaliserat namn (återkommande event får nya id:n varje dag).
+  const priorityIds = [...new Set([...ranking.primaryCandidates, ...ranking.alsoToday, ...events.map((e) => e.id)])]
+  const visionPool: Event[] = []
   const poolNames = new Set<string>()
-  for (const id of [...rankedPoolIds, ...extraIds]) {
-    const event = eventById.get(id)
-    if (!event?.image_url) continue
-    const name = normalizeEventName(event.name)
+  for (const id of priorityIds) {
+    const e = eventById.get(id)
+    if (!e || !photos.get(id)?.usable) continue
+    const name = normalizeEventName(e.name)
     if (poolNames.has(name)) continue
     poolNames.add(name)
-    pool.push({ event, imageUrl: originalImageUrl(event.image_url) })
+    visionPool.push(e)
   }
 
-  // Programmatisk gate per format: upplösning + hur mycket croppen äter.
-  // Parallellt - poolen är liten och varje bild hämtas bara en gång.
-  const assessed: Candidate[] = await Promise.all(
-    pool.map(async (c) => ({ ...c, quality: await assessImageQuality(c.imageUrl) }))
-  )
-  for (const c of assessed) {
-    const q = c.quality
-    if (q.unreachable) {
-      console.log(`   ✗ ${c.event.name} (bilden kunde inte läsas)`)
-      continue
-    }
-    const perFormat = INSTAGRAM_FORMATS.map(
-      (f) => `${f.label} ${q.fits[f.key].ok ? '✓' : q.fits[f.key].relaxedOk ? '~' : '✗'}`
-    ).join('  ')
-    console.log(`   ${q.ok ? '✓' : q.relaxedOk ? '~' : '✗'} ${c.event.name} (${q.width}x${q.height}) → ${perFormat}`)
-  }
-
-  const primaryCandidateIds = new Set(ranking.primaryCandidates)
-  // Vision-ordning per event (0 = bäst) från det format som till slut valdes
-  const visionRankById = new Map<number, number>()
-
-  // Vision-rankning (ett anrop per prövat format). Kraschar den används
-  // programmatisk poolordning i stället för att avbryta posten.
-  async function rankByVision(candidates: Candidate[]): Promise<number[]> {
-    if (candidates.length <= 1) return candidates.map((c) => c.event.id)
+  let rankedIds = visionPool.map((e) => e.id)
+  let standoutIds: number[] = []
+  if (visionPool.length > 1) {
     try {
       const review = await reviewImages(
-        candidates.slice(0, MAX_VISION_CANDIDATES).map((c) => ({ event: c.event, imageUrl: c.imageUrl }))
+        visionPool.slice(0, MAX_VISION_CANDIDATES).map((e) => ({ event: e, imageUrl: originalImageUrl(e.image_url!) }))
       )
       const unusable = new Set(review.unusableEventIds)
-      const ranked = review.rankedEventIds.filter((id) => !unusable.has(id))
-      for (const c of candidates) {
-        if (!ranked.includes(c.event.id) && !unusable.has(c.event.id)) ranked.push(c.event.id)
-      }
-      return ranked
+      rankedIds = [...review.rankedEventIds, ...rankedIds.filter((id) => !review.rankedEventIds.includes(id))].filter(
+        (id) => !unusable.has(id)
+      )
+      standoutIds = review.standoutEventIds
     } catch (error) {
       console.warn(
         '   ⚠️ Vision-granskningen misslyckades - använder programmatisk ordning:',
         error instanceof Error ? error.message : error
       )
-      return candidates.map((c) => c.event.id)
     }
   }
+  const visionRankById = new Map(rankedIds.map((id, i) => [id, i]))
+  const primaryCandidateSet = new Set(ranking.primaryCandidates)
 
-  /**
-   * Bygg en post i ett givet format, eller null om formatet inte fungerar
-   * idag. Alla slides måste klara samma format (karusellkrav i Graph API).
-   */
-  async function planForFormat(format: InstagramFormat): Promise<SlidePlan | null> {
-    const passers = assessed.filter((c) => c.quality.fits[format.key].ok)
-    if (passers.length === 0) return null
-    const rankedIds = await rankByVision(passers)
-    const byId = new Map(passers.map((c) => [c.event.id, c]))
-    const ranked = rankedIds.map((id) => byId.get(id)).filter((c): c is Candidate => !!c)
-
-    // Slide 1: tvingat event om angivet (formatet måste passa just det),
-    // annars bäst rankade primärkandidat, annars valfritt event som inte
-    // är blockerat av huvudevent-reglerna (isPrimaryRepeatBlocked).
-    let primaryEntry: Candidate | null = null
-    if (forcedPrimaryId != null) {
-      primaryEntry = ranked.find((c) => c.event.id === forcedPrimaryId) ?? null
-      if (!primaryEntry) return null
-    } else {
-      primaryEntry = ranked.find((c) => primaryCandidateIds.has(c.event.id)) ?? null
-    }
-    if (!primaryEntry) {
-      primaryEntry = ranked.find((c) => !isPrimaryRepeatBlocked(c.event, recentlyFeatured)) ?? null
-      if (primaryEntry) {
-        console.log(`   ⚠️ Ingen toppkandidat med användbar ${format.label}-bild - väljer ${primaryEntry.event.name}`)
-      }
-    }
-    if (!primaryEntry) return null
-
-    visionRankById.clear()
-    rankedIds.forEach((id, i) => visionRankById.set(id, i))
-
-    // Slides 2-N: resterande godkända event i kvalitetsordning, minus
-    // namn-dubbletter av slide 1 och event som synts för nyligen/för ofta.
-    const primaryName = normalizeEventName(primaryEntry.event.name)
-    const slides = [{ event: primaryEntry.event, imageUrl: primaryEntry.imageUrl }]
-    for (const c of ranked) {
-      if (slides.length >= MAX_SLIDES) break
-      if (c.event.id === primaryEntry.event.id) continue
-      if (normalizeEventName(c.event.name) === primaryName) continue
-      if (isSlideRepeatBlocked(c.event, recentlyFeatured)) {
-        console.log(
-          `   ↩️  Slide "${c.event.name}" hoppas över (visad ${lastAppearance(c.event, recentlyFeatured)}, ${appearanceCount(c.event, recentlyFeatured)} ggr senaste veckan)`
-        )
-        continue
-      }
-      slides.push({ event: c.event, imageUrl: c.imageUrl })
-    }
-    return { format, relaxed: false, slides }
-  }
-
+  // 4. Huvudevent: tvingat, annars bäst rankade huvudkandidat med vykortsbild,
+  // annars bästa bild som inte är spärrad, annars bästa bild över huvud taget
+  // (en repris är bättre än ingen post).
+  let primary: Event | null = null
   if (forcedPrimaryId != null) {
-    const forced = assessed.find((c) => c.event.id === forcedPrimaryId)
-    if (!forced) {
-      throw new Error(
-        `Event ${forcedPrimaryId} finns inte bland dagens publicerade event med bild (eller är namn-dubblett av ett annat)`
-      )
+    primary = eventById.get(forcedPrimaryId) ?? null
+    if (!primary) throw new Error(`Event ${forcedPrimaryId} finns inte bland dagens publicerade event`)
+    if (!photos.get(forcedPrimaryId)?.usable) {
+      throw new Error(`Bilden för "${primary.name}" (id ${forcedPrimaryId}) räcker inte till ett vykort`)
     }
-    if (forced.quality.unreachable || !INSTAGRAM_FORMATS.some((f) => forced.quality.fits[f.key].ok)) {
-      throw new Error(`Bilden för "${forced.event.name}" (id ${forcedPrimaryId}) klarar inget Instagram-format`)
-    }
+  } else {
+    const ranked = rankedIds.map((id) => eventById.get(id)).filter((e): e is Event => !!e)
+    primary =
+      ranked.find((e) => primaryCandidateSet.has(e.id)) ??
+      ranked.find((e) => !isPrimaryRepeatBlocked(e, recentlyFeatured)) ??
+      ranked[0] ??
+      null
   }
 
-  // Formatval: kvadrat först, sedan stående, sedan liggande. Ett format
-  // används så snart det ger ett användbart huvudevent - en bra kvadratisk
-  // bild vinner alltid, medan bannrar räddar dagar där inget event har en
-  // kvadratisk bild (tidigare skippades posten helt de dagarna).
-  let plan: SlidePlan | null = null
-  for (const format of INSTAGRAM_FORMATS) {
-    plan = await planForFormat(format)
-    if (plan) break
-  }
+  const proposalEvents = events.map((e) =>
+    toProposalEvent(e, photos.get(e.id), recentlyFeatured, {
+      isPrimaryCandidate: primaryCandidateSet.has(e.id),
+      visionRank: visionRankById.get(e.id) ?? null,
+      standout: standoutIds.includes(e.id),
+    })
+  )
 
-  // Sista utväg före skip: relaxed-kvalitet duger för en enbildspost
-  // (attention-croppen hittar oftast motivet ändå). Poolordning =
-  // prioritetsordning; event som varit primära nyligen tas bara om inget
-  // annat finns - en repris är ändå bättre än ingen post.
-  if (!plan) {
-    const relaxedIn = (format: InstagramFormat) => assessed.filter((c) => c.quality.fits[format.key].relaxedOk)
-    outer: for (const preferFresh of [true, false]) {
-      for (const format of INSTAGRAM_FORMATS) {
-        const entry = relaxedIn(format).find((c) => !preferFresh || !isPrimaryRepeatBlocked(c.event, recentlyFeatured))
-        if (entry) {
-          console.warn(
-            `   ⚠️ Ingen bild klarade strikta gaten - enbildspost i ${format.label} med relaxed-kvalitet: ${entry.event.name}`
-          )
-          plan = { format, relaxed: true, slides: [{ event: entry.event, imageUrl: entry.imageUrl }] }
-          break outer
-        }
-      }
-    }
-  }
-
-  // Kandidatlista till förslaget (alla bedömda event med läsbar bild)
-  const candidates: ProposalCandidate[] = assessed
-    .filter((c) => !c.quality.unreachable)
-    .map((c) => ({
-      eventId: c.event.id,
-      name: c.event.name,
-      venueName: c.event.venue_name || c.event.location || null,
-      timeLabel: eventTimeLabel(c.event),
-      imageUrl: c.imageUrl,
-      width: c.quality.width,
-      height: c.quality.height,
-      fits: {
-        square: { ok: c.quality.fits.square.ok, relaxedOk: c.quality.fits.square.relaxedOk },
-        portrait: { ok: c.quality.fits.portrait.ok, relaxedOk: c.quality.fits.portrait.relaxedOk },
-        landscape: { ok: c.quality.fits.landscape.ok, relaxedOk: c.quality.fits.landscape.relaxedOk },
+  if (!primary) {
+    return {
+      events,
+      eventById,
+      primaryCandidateIds: ranking.primaryCandidates,
+      proposal: {
+        ...proposalBase,
+        events: proposalEvents,
+        primaryCandidateIds: ranking.primaryCandidates,
+        alsoTodayIds: ranking.alsoToday,
+        suggestion: null,
       },
-      isPrimaryCandidate: primaryCandidateIds.has(c.event.id),
-      visionRank: visionRankById.get(c.event.id) ?? null,
-      primaryRepeatBlocked: isPrimaryRepeatBlocked(c.event, recentlyFeatured),
-      slideRepeatBlocked: isSlideRepeatBlocked(c.event, recentlyFeatured),
-      lastShown: appearanceCount(c.event, recentlyFeatured) > 0 ? lastAppearance(c.event, recentlyFeatured) : null,
-      timesShownThisWeek: appearanceCount(c.event, recentlyFeatured),
-    }))
-
-  let caption: string | null = null
-  let alsoEvents: Event[] = []
-
-  if (plan) {
-    const primary = plan.slides[0].event
-    console.log(
-      `   🏆 Primärt event: ${primary.name} (${plan.format.label}${plan.relaxed ? ', relaxed' : ''}, ${plan.slides.length} slide${plan.slides.length > 1 ? 's' : ''})\n`
-    )
-
-    // 4. Caption (med öppningshistorik för variation). Event som fått en
-    // slide ska alltid nämnas i captionen - därefter fylls listan på med
-    // rankingens "också"-val upp till taket.
-    console.log('✍️  Steg 3/3: Genererar caption...')
-    alsoEvents = buildAlsoEvents(
-      primary,
-      plan.slides.slice(1).map((s) => s.event),
-      ranking.alsoToday.map((id) => eventById.get(id)).filter((e): e is Event => !!e)
-    )
-    const recentOpenings = await getRecentCaptionOpenings(supabase)
-    caption = await generateCaption(primary, alsoEvents, recentOpenings)
+    }
   }
+  console.log(`   🏆 Huvudevent: ${primary.name}`)
 
-  const proposal: InstagramProposal = emptyProposal({
-    candidates,
-    primaryCandidateIds: ranking.primaryCandidates,
-    alsoTodayIds: ranking.alsoToday,
-    suggestion:
-      plan && caption
-        ? {
-            primaryEventId: plan.slides[0].event.id,
-            slideEventIds: plan.slides.slice(1).map((s) => s.event.id),
-            format: plan.format.key,
-            caption,
-            relaxed: plan.relaxed,
-          }
-        : null,
-  })
+  // Extra vykort: bara riktigt snygga foton som inte synts nyligen
+  const primaryName = normalizeEventName(primary.name)
+  const extras = standoutIds
+    .map((id) => eventById.get(id))
+    .filter((e): e is Event => !!e && e.id !== primary!.id && normalizeEventName(e.name) !== primaryName)
+    .filter((e) => !isSlideRepeatBlocked(e, recentlyFeatured))
+    .slice(0, PROPOSAL_MAX_EXTRA_SLIDES)
+  if (extras.length > 0) console.log(`   ✨ Extra vykort: ${extras.map((e) => e.name).join(' | ')}`)
+
+  const listEvents = buildListEvents(
+    primary,
+    extras,
+    ranking.primaryCandidates.map((id) => eventById.get(id)).filter((e): e is Event => !!e),
+    ranking.alsoToday.map((id) => eventById.get(id)).filter((e): e is Event => !!e),
+    events,
+    recentlyFeatured
+  )
+  console.log(`   📋 Lista (${listEvents.length}): ${listEvents.map((e) => e.name).join(' | ') || '(tom)'}\n`)
+
+  // 5. Rubrik + caption
+  console.log('✍️  Steg 3/4: Skriver rubrik...')
+  const headline = await generateHeadline(primary)
+  console.log(`   "${headline}"\n`)
+  console.log('✍️  Steg 4/4: Skriver caption...')
+  const recentOpenings = await getRecentCaptionOpenings(supabase)
+  const caption = await generateCaption(primary, listEvents, recentOpenings)
 
   return {
     events,
     eventById,
     primaryCandidateIds: ranking.primaryCandidates,
-    alsoTodayIds: ranking.alsoToday,
-    recentlyFeatured,
-    plan,
-    caption,
-    alsoEvents,
-    proposal,
+    proposal: {
+      ...proposalBase,
+      events: proposalEvents,
+      primaryCandidateIds: ranking.primaryCandidates,
+      alsoTodayIds: ranking.alsoToday,
+      suggestion: {
+        primaryEventId: primary.id,
+        headline,
+        listEventIds: listEvents.map((e) => e.id),
+        extraSlideEventIds: extras.map((e) => e.id),
+        caption,
+      },
+    },
   }
 }
 
-/** "Det händer också"-listan: slide-event först, sedan rankingens val, dedupe på namn, max MAX_ALSO_COUNT */
-export function buildAlsoEvents(primary: Event, slideEvents: Event[], rankedAlso: Event[]): Event[] {
-  const seen = new Set<string>([normalizeEventName(primary.name)])
-  const result: Event[] = []
-  for (const e of [...slideEvents, ...rankedAlso]) {
-    if (result.length >= MAX_ALSO_COUNT) break
-    if (e.id === primary.id) continue
-    const name = normalizeEventName(e.name)
-    if (seen.has(name)) continue
-    seen.add(name)
-    result.push(e)
-  }
-  return result
-}
-
-/** Hämta event per id (behåller angiven ordning) */
+/** Hämta event per id */
 export async function getEventsByIds(supabase: SupabaseClient, ids: number[]): Promise<Map<number, Event>> {
   if (ids.length === 0) return new Map()
   const { data, error } = await supabase.from('events').select('*').in('id', ids)
   if (error) throw new Error(`Kunde inte hämta event: ${error.message}`)
   return new Map(((data || []) as Event[]).map((e) => [e.id, e]))
+}
+
+/** Rita alla slides för ett validerat val */
+export async function renderSelectionSlides(
+  proposal: InstagramProposal,
+  selection: InstagramSelection,
+  options: { width?: number; quality?: number; requireCaption?: boolean } = {}
+): Promise<Buffer[]> {
+  const validation = validateSelection(proposal, selection, { requireCaption: options.requireCaption })
+  if (!validation.ok) throw new Error(validation.error)
+  const specs = slideSpecsFor(proposal.postDate, validation.primary, selection.headline, validation.list, validation.extras)
+  const requiredCount = validation.list.length > 0 ? 2 : 1 // vykort + ev. lista måste lyckas
+  const rendered = await Promise.all(
+    specs.map(async (spec, i) => {
+      try {
+        return await renderSlide(spec, { width: options.width, quality: options.quality })
+      } catch (error) {
+        if (i < requiredCount) throw error
+        console.warn(`  ⚠️ Extra vykort ${i + 1} kunde inte ritas - hoppar över:`, error instanceof Error ? error.message : error)
+        return null
+      }
+    })
+  )
+  return rendered.filter((b): b is Buffer => !!b)
 }
 
 // ---------------------------------------------------------------------------
@@ -494,14 +441,12 @@ export interface PublishOptions {
   source: InstagramApprovalSource
   /** Hoppa över Make-anropet och databasskrivningen (bilderna laddas ändå upp för granskning) */
   dryRun?: boolean
-  /** Redan hämtade event (slipper en extra query) */
-  preloaded?: Map<number, Event>
   /** Antal huvudkandidater från rankingen, för statistik */
   candidatesCount?: number
 }
 
 /**
- * Validerar valet mot förslaget, croppar och laddar upp slides, skickar till
+ * Validerar valet mot förslaget, ritar och laddar upp slides, skickar till
  * Make och uppdaterar instagram_posts. Kastar vid fel (raden markeras
  * 'failed' om Make-anropet misslyckas).
  */
@@ -514,55 +459,34 @@ export async function publishSelection(
 ): Promise<InstagramRunResult> {
   const validation = validateSelection(proposal, selection)
   if (!validation.ok) throw new Error(validation.error)
-
-  const format = INSTAGRAM_FORMATS.find((f) => f.key === selection.format)!
-  const orderedIds = [validation.primary.eventId, ...validation.slides.map((s) => s.eventId)]
-  const neededIds = [...new Set([...orderedIds, ...proposal.alsoTodayIds])]
-  const eventMap = options.preloaded ?? (await getEventsByIds(supabase, neededIds))
-  const missing = orderedIds.filter((id) => !eventMap.has(id))
-  if (missing.length > 0) {
-    const fetched = await getEventsByIds(supabase, neededIds)
-    for (const [id, e] of fetched) eventMap.set(id, e)
-    const stillMissing = orderedIds.filter((id) => !eventMap.has(id))
-    if (stillMissing.length > 0) throw new Error(`Event saknas i databasen: ${stillMissing.join(', ')}`)
-  }
-
-  const primary = eventMap.get(validation.primary.eventId)!
-  const slides = [validation.primary, ...validation.slides].map((c) => ({
-    event: eventMap.get(c.eventId)!,
-    imageUrl: c.imageUrl,
-  }))
-  const alsoEvents = buildAlsoEvents(
-    primary,
-    slides.slice(1).map((s) => s.event),
-    proposal.alsoTodayIds.map((id) => eventMap.get(id)).filter((e): e is Event => !!e)
-  )
+  const { primary, list, extras } = validation
   const caption = selection.caption.trim()
+  const headline = selection.headline.trim()
+  const finalSelection: InstagramSelection = { ...selection, caption, headline }
 
-  console.log(`🖼️  Konverterar till ${format.label} (${format.width}x${format.height}) och laddar upp till Supabase Storage...`)
-  const uploadedSlides = await uploadInstagramSlides(supabase, slides, postDate, format)
-  const slideImageUrls = uploadedSlides.map((s) => s.url)
-  const slideEventIds = uploadedSlides.map((s) => s.event.id)
+  console.log('🖼️  Ritar slides och laddar upp till Supabase Storage...')
+  const slides = await renderSelectionSlides(proposal, finalSelection)
+  const slideImageUrls = await uploadSlideImages(supabase, slides, postDate)
 
   console.log('\n' + '='.repeat(60))
   console.log('📋 POST-INNEHÅLL')
   console.log('='.repeat(60))
-  console.log(`Primärt event: ${primary.name} (id ${primary.id})`)
-  console.log(`Slides (${uploadedSlides.length}):`)
-  uploadedSlides.forEach((s, i) => console.log(`  ${i + 1}. ${s.event.name} → ${s.url}`))
-  console.log(`Också idag: ${alsoEvents.map((e) => e.name).join(' | ') || '(inga)'}`)
+  console.log(`Vykort: ${primary.name} (id ${primary.eventId}) - "${headline}"`)
+  console.log(`Lista (${list.length}): ${list.map((e) => e.name).join(' | ') || '(ingen listslide)'}`)
+  if (extras.length) console.log(`Extra vykort: ${extras.map((e) => e.name).join(' | ')}`)
+  slideImageUrls.forEach((url, i) => console.log(`  ${i + 1}. ${url}`))
   console.log('-'.repeat(60))
   console.log(caption)
   console.log('='.repeat(60) + '\n')
 
   const resultBase = {
     postDate,
-    eventId: primary.id,
+    eventId: primary.eventId,
     eventName: primary.name,
     caption,
+    headline,
     imageUrl: slideImageUrls[0],
     imageUrls: slideImageUrls,
-    format: format.key,
   }
 
   if (options.dryRun) {
@@ -572,15 +496,19 @@ export async function publishSelection(
 
   const rowBase = {
     post_date: postDate,
-    event_id: primary.id,
-    also_event_ids: alsoEvents.map((e) => e.id),
+    event_id: primary.eventId,
+    // Listans event räknas som omnämnda i variationsreglerna
+    also_event_ids: list.map((e) => e.eventId),
     caption,
-    image_url: primary.image_url,
+    image_url: primary.imageUrl,
     proxied_image_url: slideImageUrls[0],
-    slide_event_ids: slideEventIds,
+    // Event med eget vykort (huvudevent + extra) - slide_image_urls har
+    // dessutom listsliden, så längderna skiljer sig när listan finns
+    slide_event_ids: [primary.eventId, ...extras.map((e) => e.eventId)],
     slide_image_urls: slideImageUrls,
     candidates_count: options.candidatesCount ?? proposal.primaryCandidateIds.length,
     approval_source: options.source,
+    proposal: { ...proposal, published: finalSelection },
   }
 
   console.log('🚀 Skickar till Make.com-webhook...')
@@ -614,12 +542,13 @@ export async function publishSelection(
     event: 'instagram_post_published',
     properties: {
       post_date: postDate,
-      event_id: primary.id,
+      event_id: primary.eventId,
       event_name: primary.name,
+      headline,
       candidates_count: rowBase.candidates_count,
-      also_count: alsoEvents.length,
+      list_count: list.length,
+      extra_count: extras.length,
       slide_count: slideImageUrls.length,
-      format: format.key,
       caption_length: caption.length,
       approval_source: options.source,
     },
@@ -633,19 +562,22 @@ export async function publishSelection(
 // ntfy-notiser
 // ---------------------------------------------------------------------------
 
-async function notifyProposal(postDate: string, proposal: InstagramProposal, token: string): Promise<boolean> {
+async function notifyProposal(
+  postDate: string,
+  proposal: InstagramProposal,
+  token: string,
+  previewUrl: string | null
+): Promise<boolean> {
   const url = approvalUrlFor(token)
   const apiUrl = `${(process.env.ADMIN_BASE_URL || 'https://admin.ivarberg.nu').replace(/\/$/, '')}/api/instagram/approve/${token}`
   const s = proposal.suggestion!
-  const byId = new Map(proposal.candidates.map((c) => [c.eventId, c]))
+  const byId = new Map(proposal.events.map((e) => [e.eventId, e]))
   const primary = byId.get(s.primaryEventId)
-  const others = s.slideEventIds.map((id) => byId.get(id)?.name).filter(Boolean)
+  const top = s.listEventIds.slice(0, 3).map((id) => byId.get(id)?.name).filter(Boolean)
 
-  const lines = [
-    `AI-förslag: ${primary?.name ?? '?'} kl ${primary?.timeLabel ?? '?'} (${formatLabel(s.format)}, ${1 + s.slideEventIds.length} slide${s.slideEventIds.length ? 's' : ''})`,
-  ]
-  if (others.length) lines.push(`Övriga slides: ${others.join(', ')}`)
-  lines.push(`${proposal.candidates.length} event med bild att välja bland.`)
+  const lines = [`Vykort: "${s.headline}" (${primary?.name ?? '?'} kl ${primary?.timeLabel ?? '?'})`]
+  if (s.listEventIds.length) lines.push(`Lista: ${s.listEventIds.length} tips, topp tre ${top.join(', ')}`)
+  if (s.extraSlideEventIds.length) lines.push(`+ ${s.extraSlideEventIds.length} extra vykort`)
   lines.push(
     autoPublishEnabled()
       ? `Publiceras automatiskt från kl ${AUTO_PUBLISH_HOUR} om du inte gör något.`
@@ -654,10 +586,10 @@ async function notifyProposal(postDate: string, proposal: InstagramProposal, tok
 
   const jsonHeaders = { 'Content-Type': 'application/json' }
   return sendNtfy({
-    title: `Instagram ${postDate}: ${primary?.name ?? 'förslag klart'}`,
+    title: `Instagram ${postDate}: ${s.headline}`,
     message: lines.join('\n'),
     click: url,
-    attach: primary?.imageUrl,
+    attach: previewUrl ?? primary?.imageUrl ?? undefined,
     priority: 4,
     tags: ['camera'],
     actions: [
@@ -682,6 +614,22 @@ async function notifyProposal(postDate: string, proposal: InstagramProposal, tok
       },
     ],
   })
+}
+
+/** Rita vykortet och lägg upp det som förhandsbild till notisen (null om något går fel) */
+async function uploadProposalPreview(supabase: SupabaseClient, proposal: InstagramProposal): Promise<string | null> {
+  const selection = selectionFromSuggestion(proposal)
+  if (!selection) return null
+  try {
+    const validation = validateSelection(proposal, selection, { requireCaption: false })
+    if (!validation.ok) return null
+    const [spec] = slideSpecsFor(proposal.postDate, validation.primary, selection.headline, [], [])
+    const jpeg = await renderSlide(spec, { width: 720, quality: 82 })
+    return await uploadPreviewImage(supabase, jpeg, proposal.postDate)
+  } catch (error) {
+    console.warn('  ⚠️ Kunde inte rita förhandsbild till notisen:', error instanceof Error ? error.message : error)
+    return null
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -748,7 +696,7 @@ export async function runDailyInstagramPost(options: InstagramRunOptions = {}): 
       }
 
       if (existing?.status === 'pending') {
-        const proposal = existing.proposal as InstagramProposal | null
+        const proposal = normalizeProposal(existing.proposal)
         const selection = proposal ? selectionFromSuggestion(proposal) : null
         if (!proposal || !selection) {
           await recordSkip('Förslaget saknar användbar rekommendation', existing.candidates_count ?? 0)
@@ -771,7 +719,7 @@ export async function runDailyInstagramPost(options: InstagramRunOptions = {}): 
         const result = await publishSelection(supabase, postDate, proposal, selection, { source: 'auto' })
         await sendNtfy({
           title: `Instagram ${postDate}: publicerad automatiskt`,
-          message: `${result.eventName} publicerades kl ${hour} eftersom ingen svarade på förslaget.`,
+          message: `"${result.headline}" (${result.eventName}) publicerades kl ${hour} eftersom ingen svarade på förslaget.`,
           click: approvalUrlFor(existing.approval_token!),
           priority: 3,
           tags: ['white_check_mark'],
@@ -795,7 +743,7 @@ export async function runDailyInstagramPost(options: InstagramRunOptions = {}): 
         await recordSkip('Inga event med användbar bild', analysis.primaryCandidateIds.length)
         await sendNtfy({
           title: `Instagram ${postDate}: ingen post`,
-          message: `Inga av dagens ${analysis.events.length} event hade en användbar bild.`,
+          message: `Inga av dagens ${analysis.events.length} event hade en bild som räcker till ett vykort.`,
           priority: 3,
           tags: ['warning'],
         })
@@ -809,9 +757,10 @@ export async function runDailyInstagramPost(options: InstagramRunOptions = {}): 
       if (dryRun) {
         console.log('🧪 DRY RUN - förslaget sparas inte och ingen notis skickas.')
         console.log(JSON.stringify(analysis.proposal.suggestion, null, 2))
-        return { ok: true, status: 'dry-run', postDate, eventId: s.primaryEventId, eventName: primaryName, caption: s.caption, format: s.format }
+        return { ok: true, status: 'dry-run', postDate, eventId: s.primaryEventId, eventName: primaryName, caption: s.caption, headline: s.headline }
       }
 
+      const previewUrl = await uploadProposalPreview(supabase, analysis.proposal)
       const { error: insertError } = await supabase.from('instagram_posts').upsert(
         {
           post_date: postDate,
@@ -821,6 +770,7 @@ export async function runDailyInstagramPost(options: InstagramRunOptions = {}): 
           event_id: s.primaryEventId,
           caption: s.caption,
           image_url: analysis.eventById.get(s.primaryEventId)?.image_url ?? null,
+          proxied_image_url: previewUrl,
           candidates_count: analysis.primaryCandidateIds.length,
           error: null,
           notified_at: new Date().toISOString(),
@@ -829,7 +779,7 @@ export async function runDailyInstagramPost(options: InstagramRunOptions = {}): 
       )
       if (insertError) throw new Error(`Kunde inte spara förslaget: ${insertError.message}`)
 
-      const notified = await notifyProposal(postDate, analysis.proposal, token)
+      const notified = await notifyProposal(postDate, analysis.proposal, token, previewUrl)
       if (!notified) {
         await alertService.alert({
           severity: 'warning',
@@ -847,9 +797,9 @@ export async function runDailyInstagramPost(options: InstagramRunOptions = {}): 
         properties: {
           post_date: postDate,
           event_id: s.primaryEventId,
-          slide_count: 1 + s.slideEventIds.length,
-          format: s.format,
-          candidates: analysis.proposal.candidates.length,
+          list_count: s.listEventIds.length,
+          extra_count: s.extraSlideEventIds.length,
+          events: analysis.proposal.events.length,
           notified,
         },
       })
@@ -862,7 +812,7 @@ export async function runDailyInstagramPost(options: InstagramRunOptions = {}): 
         eventId: s.primaryEventId,
         eventName: primaryName,
         caption: s.caption,
-        format: s.format,
+        headline: s.headline,
         approvalUrl: approvalUrlFor(token),
       }
     }
@@ -913,7 +863,7 @@ export async function runDailyInstagramPost(options: InstagramRunOptions = {}): 
         severity: 'warning',
         category: 'api',
         title: '⚠️ Instagram-post skippades',
-        message: `Inga av dagens ${analysis.events.length} event hade en användbar bild i något Instagram-format. Ingen post publicerades ${postDate}.`,
+        message: `Inga av dagens ${analysis.events.length} event hade en bild som räcker till ett vykort. Ingen post publicerades ${postDate}.`,
         details: { post_date: postDate, events_count: analysis.events.length },
         source: 'instagram-post-runner',
       })
@@ -923,7 +873,6 @@ export async function runDailyInstagramPost(options: InstagramRunOptions = {}): 
     return await publishSelection(supabase, postDate, analysis.proposal, selection, {
       source: 'direct',
       dryRun,
-      preloaded: analysis.eventById,
       candidatesCount: analysis.primaryCandidateIds.length,
     })
   } catch (error) {

@@ -1,43 +1,40 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   ArrowDown,
   ArrowUp,
   CheckCircle2,
   Loader2,
+  Plus,
   RefreshCw,
   Send,
   SkipForward,
   Sparkles,
   Star,
   TriangleAlert,
+  X,
   XCircle,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import type { ApprovalView } from '@/lib/services/instagram-approval'
 import {
   CAPTION_MAX_LENGTH,
-  InstagramFormatKey,
-  PROPOSAL_FORMATS,
-  PROPOSAL_MAX_SLIDES,
-  ProposalCandidate,
-  bestCommonFormat,
-  candidateFits,
-  commonFormats,
-  formatLabel,
+  HEADLINE_MAX_LENGTH,
+  PROPOSAL_LIST_MAX,
+  PROPOSAL_LIST_TOP,
+  PROPOSAL_MAX_EXTRA_SLIDES,
+  ProposalEvent,
   validateSelection,
 } from '@/lib/services/instagram-proposal'
-
-const ASPECT: Record<InstagramFormatKey, string> = {
-  square: '1 / 1',
-  portrait: '4 / 5',
-  landscape: '1.91 / 1',
-}
 
 function formatDate(iso: string): string {
   const d = new Date(`${iso}T12:00:00`)
   return d.toLocaleDateString('sv-SE', { weekday: 'long', day: 'numeric', month: 'long' })
+}
+
+function timeText(e: ProposalEvent): string {
+  return e.timeLabel === 'Heldag' ? 'Hela dagen' : e.timeLabel
 }
 
 export default function ApprovalClient({ token, initial }: { token: string; initial: ApprovalView }) {
@@ -45,22 +42,15 @@ export default function ApprovalClient({ token, initial }: { token: string; init
   const proposal = view.proposal
   const suggestion = proposal?.suggestion ?? null
 
-  const candidatesById = useMemo(
-    () => new Map((proposal?.candidates ?? []).map((c) => [c.eventId, c])),
-    [proposal]
-  )
+  const eventsById = useMemo(() => new Map((proposal?.events ?? []).map((e) => [e.eventId, e])), [proposal])
 
-  // Kandidater i visningsordning: AI-förslaget först, sedan vision-rank
-  const orderedCandidates = useMemo(() => {
-    const list = [...(proposal?.candidates ?? [])]
-    const suggestedOrder = new Map<number, number>()
-    if (suggestion) {
-      suggestedOrder.set(suggestion.primaryEventId, 0)
-      suggestion.slideEventIds.forEach((id, i) => suggestedOrder.set(id, i + 1))
-    }
+  // Möjliga huvudevent: bild som räcker till vykort. AI-förslaget först,
+  // sedan vision-rank och huvudkandidater.
+  const primaryOptions = useMemo(() => {
+    const list = (proposal?.events ?? []).filter((e) => e.imageUsable && e.imageUrl)
     return list.sort((a, b) => {
-      const sa = suggestedOrder.get(a.eventId) ?? 99
-      const sb = suggestedOrder.get(b.eventId) ?? 99
+      const sa = a.eventId === suggestion?.primaryEventId ? 0 : 1
+      const sb = b.eventId === suggestion?.primaryEventId ? 0 : 1
       if (sa !== sb) return sa - sb
       const va = a.visionRank ?? 99
       const vb = b.visionRank ?? 99
@@ -69,72 +59,79 @@ export default function ApprovalClient({ token, initial }: { token: string; init
     })
   }, [proposal, suggestion])
 
-  const [primaryId, setPrimaryId] = useState<number | null>(suggestion?.primaryEventId ?? orderedCandidates[0]?.eventId ?? null)
-  // Formatet räknas ut från de valda bilderna (alla slides i en karusell
-  // måste dela format). formatOverride = användarens val bland de möjliga.
-  const [formatOverride, setFormatOverride] = useState<InstagramFormatKey | null>(suggestion?.format ?? null)
-  const [slideIds, setSlideIds] = useState<number[]>(suggestion?.slideEventIds ?? [])
+  const [primaryId, setPrimaryId] = useState<number | null>(suggestion?.primaryEventId ?? primaryOptions[0]?.eventId ?? null)
+  const [headline, setHeadline] = useState<string>(suggestion?.headline ?? '')
+  const [listIds, setListIds] = useState<number[]>(suggestion?.listEventIds ?? [])
+  const [extraIds, setExtraIds] = useState<number[]>(suggestion?.extraSlideEventIds ?? [])
   const [caption, setCaption] = useState<string>(suggestion?.caption ?? '')
-  const [busy, setBusy] = useState<'publish' | 'skip' | 'caption' | null>(null)
+  const [busy, setBusy] = useState<'publish' | 'skip' | 'caption' | 'headline' | null>(null)
   const [message, setMessage] = useState<{ kind: 'error' | 'info'; text: string } | null>(null)
+  const [previews, setPreviews] = useState<string[]>([])
+  const [previewState, setPreviewState] = useState<'idle' | 'loading' | 'error'>('idle')
+  const [previewError, setPreviewError] = useState<string | null>(null)
+  const previewRequest = useRef(0)
 
-  const primary = primaryId != null ? candidatesById.get(primaryId) ?? null : null
-  const chosenCandidates = useMemo(
-    () => slideIds.map((id) => candidatesById.get(id)).filter((c): c is ProposalCandidate => !!c),
-    [slideIds, candidatesById]
+  const primary = primaryId != null ? eventsById.get(primaryId) ?? null : null
+  const listEvents = useMemo(
+    () => listIds.map((id) => eventsById.get(id)).filter((e): e is ProposalEvent => !!e),
+    [listIds, eventsById]
   )
-  const selectionCandidates = useMemo(
-    () => (primary ? [primary, ...chosenCandidates] : chosenCandidates),
-    [primary, chosenCandidates]
-  )
-  // Format som hela urvalet klarar, i preferensordning
-  const availableFormats = useMemo(() => commonFormats(selectionCandidates), [selectionCandidates])
-  const format: InstagramFormatKey =
-    formatOverride && availableFormats.includes(formatOverride)
-      ? formatOverride
-      : bestCommonFormat(selectionCandidates) ?? formatOverride ?? 'square'
 
-  /** Går kandidaten att lägga till utan att urvalet tappar alla gemensamma format? */
-  const canAddSlide = (c: ProposalCandidate) =>
-    c.eventId !== primaryId &&
-    slideIds.length < PROPOSAL_MAX_SLIDES - 1 &&
-    commonFormats([...selectionCandidates, c]).length > 0
+  const validation = useMemo(() => {
+    if (!proposal || primaryId == null) return { ok: false as const, error: 'Välj ett huvudevent' }
+    return validateSelection(proposal, { primaryEventId: primaryId, headline, listEventIds: listIds, extraSlideEventIds: extraIds, caption })
+  }, [proposal, primaryId, headline, listIds, extraIds, caption])
 
-  /** Behåll bara slides som fortfarande delar ett format med det nya huvudeventet */
-  function reconcileSlides(newPrimary: ProposalCandidate, ids: number[]): number[] {
-    const kept: ProposalCandidate[] = [newPrimary]
-    const result: number[] = []
-    for (const id of ids) {
-      const c = candidatesById.get(id)
-      if (!c || c.eventId === newPrimary.eventId) continue
-      if (commonFormats([...kept, c]).length === 0) continue
-      kept.push(c)
-      result.push(id)
-    }
-    return result
-  }
+  // Rita om förhandsvisningen när slidesens innehåll ändras (inte captionen)
+  const editable = view.status !== 'published' && !!proposal && !!suggestion
+  useEffect(() => {
+    if (!editable || primaryId == null || !headline.trim()) return
+    const id = ++previewRequest.current
+    const timer = setTimeout(async () => {
+      setPreviewState('loading')
+      try {
+        const res = await fetch(`/api/instagram/approve/${token}/preview`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ primaryEventId: primaryId, headline, listEventIds: listIds, extraSlideEventIds: extraIds }),
+        })
+        const data = await res.json().catch(() => ({}))
+        if (id !== previewRequest.current) return
+        if (!res.ok) throw new Error(data.error || `Fel ${res.status}`)
+        setPreviews(data.slides ?? [])
+        setPreviewState('idle')
+        setPreviewError(null)
+      } catch (error) {
+        if (id !== previewRequest.current) return
+        setPreviewState('error')
+        setPreviewError(error instanceof Error ? error.message : String(error))
+      }
+    }, 600)
+    return () => clearTimeout(timer)
+  }, [editable, token, primaryId, headline, listIds, extraIds])
 
-  function choosePrimary(c: ProposalCandidate) {
-    setPrimaryId(c.eventId)
-    setSlideIds((prev) => reconcileSlides(c, prev))
+  function choosePrimary(e: ProposalEvent) {
+    setPrimaryId(e.eventId)
+    setListIds((prev) => prev.filter((id) => id !== e.eventId))
+    setExtraIds((prev) => prev.filter((id) => id !== e.eventId))
     setMessage(
-      c.eventId === suggestion?.primaryEventId
+      e.eventId === suggestion?.primaryEventId
         ? null
-        : { kind: 'info', text: 'Huvudeventet är ändrat - generera gärna en ny caption så att texten stämmer.' }
+        : { kind: 'info', text: 'Huvudeventet är ändrat - skriv en ny rubrik och caption (eller låt AI:n göra det) så att texterna stämmer.' }
     )
   }
 
-  function toggleSlide(id: number) {
-    setSlideIds((prev) => {
-      if (prev.includes(id)) return prev.filter((x) => x !== id)
-      const c = candidatesById.get(id)
-      if (!c || !canAddSlide(c)) return prev
-      return [...prev, id]
-    })
+  function addToList(id: number) {
+    setListIds((prev) => (prev.includes(id) || prev.length >= PROPOSAL_LIST_MAX ? prev : [...prev, id]))
+    setExtraIds((prev) => prev.filter((x) => x !== id))
   }
 
-  function moveSlide(id: number, dir: -1 | 1) {
-    setSlideIds((prev) => {
+  function removeFromList(id: number) {
+    setListIds((prev) => prev.filter((x) => x !== id))
+  }
+
+  function moveInList(id: number, dir: -1 | 1) {
+    setListIds((prev) => {
       const i = prev.indexOf(id)
       const j = i + dir
       if (i < 0 || j < 0 || j >= prev.length) return prev
@@ -144,10 +141,14 @@ export default function ApprovalClient({ token, initial }: { token: string; init
     })
   }
 
-  const validation = useMemo(() => {
-    if (!proposal || primaryId == null) return { ok: false as const, error: 'Välj ett huvudevent' }
-    return validateSelection(proposal, { primaryEventId: primaryId, slideEventIds: slideIds, format, caption })
-  }, [proposal, primaryId, slideIds, format, caption])
+  function toggleExtra(id: number) {
+    setExtraIds((prev) => {
+      if (prev.includes(id)) return prev.filter((x) => x !== id)
+      if (prev.length >= PROPOSAL_MAX_EXTRA_SLIDES) return prev
+      return [...prev, id]
+    })
+    setListIds((prev) => prev.filter((x) => x !== id))
+  }
 
   async function call(path: string, body: unknown) {
     const res = await fetch(path, {
@@ -165,8 +166,8 @@ export default function ApprovalClient({ token, initial }: { token: string; init
 
   async function publish() {
     if (!validation.ok || primaryId == null) return
-    const slidesCount = 1 + slideIds.length
-    if (!window.confirm(`Publicera ${slidesCount} slide${slidesCount > 1 ? 's' : ''} på Instagram nu?`)) return
+    const count = 1 + (listIds.length > 0 ? 1 : 0) + extraIds.length
+    if (!window.confirm(`Publicera ${count} slide${count > 1 ? 's' : ''} på Instagram nu?`)) return
     setBusy('publish')
     setMessage(null)
     try {
@@ -174,8 +175,9 @@ export default function ApprovalClient({ token, initial }: { token: string; init
         action: 'publish',
         source: 'manual',
         primaryEventId: primaryId,
-        slideEventIds: slideIds,
-        format,
+        headline,
+        listEventIds: listIds,
+        extraSlideEventIds: extraIds,
         caption,
       })
       if (data.view) setView(data.view)
@@ -200,12 +202,29 @@ export default function ApprovalClient({ token, initial }: { token: string; init
     }
   }
 
+  async function regenerateHeadline() {
+    if (primaryId == null) return
+    setBusy('headline')
+    setMessage(null)
+    try {
+      const data = await call(`/api/instagram/approve/${token}/headline`, {
+        primaryEventId: primaryId,
+        avoid: headline.trim() ? [headline.trim()] : [],
+      })
+      setHeadline(data.headline)
+    } catch (error) {
+      setMessage({ kind: 'error', text: error instanceof Error ? error.message : String(error) })
+    } finally {
+      setBusy(null)
+    }
+  }
+
   async function regenerateCaption() {
     if (primaryId == null) return
     setBusy('caption')
     setMessage(null)
     try {
-      const data = await call(`/api/instagram/approve/${token}/caption`, { primaryEventId: primaryId, slideEventIds: slideIds })
+      const data = await call(`/api/instagram/approve/${token}/caption`, { primaryEventId: primaryId, listEventIds: listIds })
       setCaption(data.caption)
     } catch (error) {
       setMessage({ kind: 'error', text: error instanceof Error ? error.message : String(error) })
@@ -240,7 +259,7 @@ export default function ApprovalClient({ token, initial }: { token: string; init
           <div className="flex gap-2 overflow-x-auto py-2">
             {view.publishedSlideUrls.map((url, i) => (
               // eslint-disable-next-line @next/next/no-img-element
-              <img key={url} src={url} alt={`Slide ${i + 1}`} className="h-40 rounded-lg border object-cover shrink-0" />
+              <img key={url} src={url} alt={`Slide ${i + 1}`} className="h-64 aspect-[4/5] rounded-lg border object-cover shrink-0" />
             ))}
           </div>
         )}
@@ -261,12 +280,8 @@ export default function ApprovalClient({ token, initial }: { token: string; init
             {view.error && <p className="text-gray-600">{view.error}</p>}
           </div>
         </div>
-        {suggestion && (
-          <p className="text-sm text-gray-600">
-            Ångrade du dig? Du kan fortfarande publicera nedan.
-          </p>
-        )}
-        {suggestion && <Editor />}
+        {suggestion && <p className="text-sm text-gray-600">Ångrade du dig? Du kan fortfarande publicera nedan.</p>}
+        {suggestion && renderEditor()}
       </Shell>
     )
   }
@@ -277,7 +292,7 @@ export default function ApprovalClient({ token, initial }: { token: string; init
         <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 flex gap-3 items-start">
           <TriangleAlert className="text-amber-600 mt-0.5 shrink-0" />
           <p className="text-sm text-amber-900">
-            {view.error || 'AI:n hittade ingen användbar bild bland dagens event, så det finns inget att godkänna.'}
+            {view.error || 'AI:n hittade ingen bild som räcker till ett vykort bland dagens event, så det finns inget att godkänna.'}
           </p>
         </div>
       </Shell>
@@ -295,82 +310,84 @@ export default function ApprovalClient({ token, initial }: { token: string; init
           <p className="text-sm text-red-900">{view.error}</p>
         </div>
       )}
-      <Editor />
+      {renderEditor()}
     </Shell>
   )
 
   // ------------------------------------------------------------------
-  // Redigeraren (delas av pending/failed/skipped)
+  // Redigeraren (delas av pending/failed/skipped). Anropas som funktion,
+  // inte som komponent, så att fälten inte monteras om vid varje tangent.
   // ------------------------------------------------------------------
-  function Editor() {
+  function renderEditor() {
     if (!proposal) return null
-    const slideCandidates = orderedCandidates.filter((c) => c.eventId !== primaryId)
-    const chosen = chosenCandidates
-    const previewSlides = selectionCandidates
+    const addable = proposal.events.filter((e) => e.eventId !== primaryId && !listIds.includes(e.eventId))
+    const extraOptions = primaryOptions.filter((e) => e.eventId !== primaryId)
+    const slideLabels = ['Vykort', ...(listIds.length ? ['Mer i dag'] : []), ...extraIds.map(() => 'Extra vykort')]
 
     return (
       <div className="space-y-8">
         {/* Förhandsvisning */}
         <section className="space-y-2">
-          <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">Förhandsvisning · {formatLabel(format)}</h2>
-          <div className="flex gap-2 overflow-x-auto py-1 -mx-4 px-4">
-            {previewSlides.map((c, i) => (
-              <div key={c.eventId} className="shrink-0 w-40 space-y-1">
-                <div className="relative rounded-lg overflow-hidden border bg-gray-100" style={{ aspectRatio: ASPECT[format] }}>
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={c.imageUrl} alt={c.name} className="absolute inset-0 w-full h-full object-cover" />
-                  <span className="absolute top-1 left-1 text-[10px] font-semibold bg-black/60 text-white rounded px-1.5 py-0.5">
-                    {i === 0 ? 'Featured' : `Slide ${i + 1}`}
-                  </span>
-                  {!c.fits[format].ok && (
-                    <span className="absolute bottom-1 left-1 text-[10px] font-semibold bg-amber-500 text-white rounded px-1.5 py-0.5">
-                      hård crop
-                    </span>
-                  )}
-                </div>
-                <p className="text-xs text-gray-700 truncate">{c.name}</p>
+          <div className="flex items-center gap-2">
+            <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">Förhandsvisning</h2>
+            {previewState === 'loading' && <Loader2 className="size-4 animate-spin text-gray-400" />}
+          </div>
+          <div className="flex gap-3 overflow-x-auto py-1 -mx-4 px-4 snap-x">
+            {previews.length === 0 && previewState !== 'error' && (
+              <div className="shrink-0 w-56 aspect-[4/5] rounded-lg border bg-gray-100 flex items-center justify-center text-xs text-gray-500">
+                Ritar slides…
+              </div>
+            )}
+            {previews.map((src, i) => (
+              <div key={i} className="shrink-0 w-56 space-y-1 snap-start">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={src} alt={slideLabels[i] ?? `Slide ${i + 1}`} className={`w-full aspect-[4/5] rounded-lg border object-cover ${previewState === 'loading' ? 'opacity-60' : ''}`} />
+                <p className="text-xs text-gray-600">
+                  {i + 1}. {slideLabels[i] ?? 'Slide'}
+                </p>
               </div>
             ))}
           </div>
-          <p className="text-xs text-gray-500">
-            Alla bilder i en karusell måste ha samma format. Formatet väljs automatiskt utifrån bilderna du väljer
-            {availableFormats.length > 1 ? ' - du kan byta bland de som passar:' : '.'}
+          {previewState === 'error' && previewError && <p className="text-xs text-red-700">Förhandsvisningen misslyckades: {previewError}</p>}
+        </section>
+
+        {/* Rubrik */}
+        <section className="space-y-2">
+          <div className="flex items-center justify-between">
+            <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">Rubrik på vykortet</h2>
+            <Button type="button" variant="outline" size="sm" onClick={regenerateHeadline} disabled={busy !== null || primaryId == null}>
+              {busy === 'headline' ? <Loader2 className="animate-spin" /> : <RefreshCw />} Ny rubrik med AI
+            </Button>
+          </div>
+          <input
+            id="headline"
+            value={headline}
+            onChange={(e) => setHeadline(e.target.value)}
+            maxLength={HEADLINE_MAX_LENGTH + 10}
+            className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2.5 text-base font-medium focus:outline-none focus:ring-2 focus:ring-pink-500"
+          />
+          <p className={`text-xs ${headline.length > HEADLINE_MAX_LENGTH ? 'text-red-600' : 'text-gray-500'}`}>
+            {headline.length} / {HEADLINE_MAX_LENGTH} tecken · 2-5 ord brukar bli bäst. Datum, tid och plats står redan på vykortet.
           </p>
-          {availableFormats.length > 1 && (
-            <div className="flex gap-2 flex-wrap">
-              {PROPOSAL_FORMATS.filter((f) => availableFormats.includes(f.key)).map((f) => (
-                <button
-                  key={f.key}
-                  type="button"
-                  onClick={() => setFormatOverride(f.key)}
-                  className={`text-xs rounded-full px-3 py-1 border ${format === f.key ? 'bg-gray-900 text-white border-gray-900' : 'bg-white text-gray-700 border-gray-300'}`}
-                >
-                  {f.label}
-                </button>
-              ))}
-            </div>
-          )}
         </section>
 
         {/* Huvudevent */}
         <section className="space-y-2">
-          <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">Huvudevent (featured)</h2>
+          <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">Huvudevent (vykortet)</h2>
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-            {orderedCandidates.map((c) => {
-              const selected = c.eventId === primaryId
-              const usable = PROPOSAL_FORMATS.some((f) => c.fits[f.key].ok || c.fits[f.key].relaxedOk)
-              const isSuggested = c.eventId === suggestion?.primaryEventId
+            {primaryOptions.map((e) => {
+              const selected = e.eventId === primaryId
+              const isSuggested = e.eventId === suggestion?.primaryEventId
               return (
                 <button
-                  key={c.eventId}
+                  key={e.eventId}
                   type="button"
-                  disabled={!usable}
-                  onClick={() => choosePrimary(c)}
-                  className={`text-left rounded-xl border overflow-hidden bg-white transition disabled:opacity-40 ${selected ? 'ring-2 ring-pink-500 border-pink-500' : 'border-gray-200'}`}
+                  onClick={() => choosePrimary(e)}
+                  className={`text-left rounded-xl border overflow-hidden bg-white transition ${selected ? 'ring-2 ring-pink-500 border-pink-500' : 'border-gray-200'}`}
                 >
                   <div className="relative aspect-square bg-gray-100">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={c.imageUrl} alt={c.name} className="absolute inset-0 w-full h-full object-cover" />
+                    <img src={e.imageUrl!} alt={e.name} className="absolute inset-0 w-full h-full object-contain" />
                     {isSuggested && (
                       <span className="absolute top-1 left-1 inline-flex items-center gap-1 text-[10px] font-semibold bg-pink-600 text-white rounded px-1.5 py-0.5">
                         <Sparkles className="size-3" /> AI-förslag
@@ -379,16 +396,13 @@ export default function ApprovalClient({ token, initial }: { token: string; init
                     {selected && <Star className="absolute top-1 right-1 size-5 text-white fill-pink-500 drop-shadow" />}
                   </div>
                   <div className="p-2 space-y-0.5">
-                    <p className="text-sm font-medium text-gray-900 leading-tight line-clamp-2">{c.name}</p>
+                    <p className="text-sm font-medium text-gray-900 leading-tight line-clamp-2">{e.name}</p>
                     <p className="text-xs text-gray-500 truncate">
-                      {c.timeLabel}
-                      {c.venueName ? ` · ${c.venueName}` : ''}
+                      {timeText(e)}
+                      {e.venueName ? ` · ${e.venueName}` : ''}
                     </p>
-                    <p className="text-[10px] text-gray-500">
-                      {PROPOSAL_FORMATS.map((f) => `${f.label} ${c.fits[f.key].ok ? '✓' : c.fits[f.key].relaxedOk ? '~' : '✗'}`).join('  ')}
-                    </p>
-                    {c.timesShownThisWeek > 0 && (
-                      <p className="text-[10px] text-amber-700">Visad {c.lastShown} ({c.timesShownThisWeek} ggr senaste veckan)</p>
+                    {e.timesShownThisWeek > 0 && (
+                      <p className="text-[10px] text-amber-700">Visad {e.lastShown} ({e.timesShownThisWeek} ggr senaste veckan)</p>
                     )}
                   </div>
                 </button>
@@ -397,48 +411,114 @@ export default function ApprovalClient({ token, initial }: { token: string; init
           </div>
         </section>
 
-        {/* Övriga slides */}
+        {/* Listan */}
         <section className="space-y-2">
           <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">
-            Övriga slides ({slideIds.length}/{PROPOSAL_MAX_SLIDES - 1})
+            Mer i dag ({listIds.length}/{PROPOSAL_LIST_MAX})
           </h2>
           <p className="text-xs text-gray-500">
-            Bocka i de event som ska vara med och ordna dem med pilarna. Gråade bilder går inte att kombinera med det du redan valt
-            (inget gemensamt format) - ta bort något annat för att få plats med dem.
+            De {PROPOSAL_LIST_TOP} första visas stort med bild som dagens topp tre, resten som korta rader. Event utan bild får tiden i frimärket.
+            Tom lista = ingen listslide.
           </p>
           <ul className="divide-y rounded-xl border bg-white">
-            {chosen.map((c, i) => (
-              <SlideRow key={c.eventId} c={c} index={i} total={chosen.length} onToggle={() => toggleSlide(c.eventId)} onMove={(d) => moveSlide(c.eventId, d)} checked />
+            {listEvents.map((e, i) => (
+              <li key={e.eventId} className="flex items-center gap-3 p-2">
+                <span className={`w-6 text-center text-xs font-semibold ${i < PROPOSAL_LIST_TOP ? 'text-pink-600' : 'text-gray-400'}`}>{i + 1}</span>
+                <Thumb e={e} />
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-gray-900 truncate">{e.name}</p>
+                  <p className="text-xs text-gray-500 truncate">
+                    {timeText(e)}
+                    {e.venueName ? ` · ${e.venueName}` : ''}
+                    {i < PROPOSAL_LIST_TOP ? ' · topp tre' : ''}
+                  </p>
+                </div>
+                <div className="flex items-center">
+                  <button type="button" onClick={() => moveInList(e.eventId, -1)} disabled={i === 0} className="p-1 text-gray-500 disabled:opacity-30" aria-label="Flytta upp">
+                    <ArrowUp className="size-4" />
+                  </button>
+                  <button type="button" onClick={() => moveInList(e.eventId, 1)} disabled={i === listEvents.length - 1} className="p-1 text-gray-500 disabled:opacity-30" aria-label="Flytta ner">
+                    <ArrowDown className="size-4" />
+                  </button>
+                  <button type="button" onClick={() => removeFromList(e.eventId)} className="p-1 text-gray-500 hover:text-red-600" aria-label="Ta bort ur listan">
+                    <X className="size-4" />
+                  </button>
+                </div>
+              </li>
             ))}
-            {slideCandidates
-              .filter((c) => !slideIds.includes(c.eventId))
-              .map((c) => (
-                <SlideRow
-                  key={c.eventId}
-                  c={c}
-                  checked={false}
-                  disabled={!canAddSlide(c)}
-                  reason={
-                    !canAddSlide(c)
-                      ? slideIds.length >= PROPOSAL_MAX_SLIDES - 1
-                        ? 'Max antal slides valda'
-                        : 'Inget gemensamt format med valda bilder'
-                      : !candidateFits(c, format, false)
-                        ? `Hård crop i ${formatLabel(format)}`
-                        : c.slideRepeatBlocked
-                          ? 'Visad nyligen'
-                          : undefined
-                  }
-                  onToggle={() => toggleSlide(c.eventId)}
-                />
-              ))}
+            {listEvents.length === 0 && <li className="p-3 text-sm text-gray-500">Ingen listslide - lägg till event nedan.</li>}
           </ul>
-          {proposal.eventsWithoutImage.length > 0 && (
-            <p className="text-xs text-gray-500">
-              Utan bild (nämns bara i captionen): {proposal.eventsWithoutImage.map((e) => e.name).join(', ')}
-            </p>
+          {addable.length > 0 && (
+            <details className="rounded-xl border bg-white">
+              <summary className="cursor-pointer select-none p-3 text-sm font-medium text-gray-700">Lägg till fler av dagens event ({addable.length})</summary>
+              <ul className="divide-y border-t">
+                {addable.map((e) => {
+                  const full = listIds.length >= PROPOSAL_LIST_MAX
+                  return (
+                    <li key={e.eventId} className={`flex items-center gap-3 p-2 ${full ? 'opacity-50' : ''}`}>
+                      <Thumb e={e} />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm text-gray-900 truncate">{e.name}</p>
+                        <p className="text-xs text-gray-500 truncate">
+                          {timeText(e)}
+                          {e.venueName ? ` · ${e.venueName}` : ''}
+                          {extraIds.includes(e.eventId) ? ' · extra vykort' : ''}
+                          {e.timesShownThisWeek > 0 ? ` · visad ${e.timesShownThisWeek} ggr i veckan` : ''}
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => addToList(e.eventId)}
+                        disabled={full}
+                        className="p-1.5 rounded-md border text-gray-600 disabled:opacity-40"
+                        aria-label="Lägg till i listan"
+                      >
+                        <Plus className="size-4" />
+                      </button>
+                    </li>
+                  )
+                })}
+              </ul>
+            </details>
           )}
         </section>
+
+        {/* Extra vykort */}
+        {extraOptions.length > 0 && (
+          <section className="space-y-2">
+            <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">
+              Extra vykort ({extraIds.length}/{PROPOSAL_MAX_EXTRA_SLIDES})
+            </h2>
+            <p className="text-xs text-gray-500">Läggs efter listan. Bara för riktigt snygga foton - eventet tas då bort ur listan.</p>
+            <ul className="divide-y rounded-xl border bg-white">
+              {extraOptions.map((e) => {
+                const checked = extraIds.includes(e.eventId)
+                const disabled = !checked && extraIds.length >= PROPOSAL_MAX_EXTRA_SLIDES
+                return (
+                  <li key={e.eventId} className={`flex items-center gap-3 p-2 ${disabled ? 'opacity-50' : ''}`}>
+                    <input
+                      id={`extra-${e.eventId}`}
+                      type="checkbox"
+                      checked={checked}
+                      disabled={disabled}
+                      onChange={() => toggleExtra(e.eventId)}
+                      className="size-4 accent-pink-600"
+                    />
+                    <Thumb e={e} />
+                    <label htmlFor={`extra-${e.eventId}`} className="flex-1 min-w-0">
+                      <p className="text-sm text-gray-900 truncate">{e.name}</p>
+                      <p className="text-xs text-gray-500 truncate">
+                        {timeText(e)}
+                        {e.standout ? ' · AI: snyggt foto' : ''}
+                        {e.slideRepeatBlocked ? ' · visad nyligen' : ''}
+                      </p>
+                    </label>
+                  </li>
+                )
+              })}
+            </ul>
+          </section>
+        )}
 
         {/* Caption */}
         <section className="space-y-2">
@@ -449,9 +529,10 @@ export default function ApprovalClient({ token, initial }: { token: string; init
             </Button>
           </div>
           <textarea
+            id="caption"
             value={caption}
             onChange={(e) => setCaption(e.target.value)}
-            rows={12}
+            rows={10}
             className="w-full rounded-xl border border-gray-300 bg-white p-3 text-sm leading-relaxed focus:outline-none focus:ring-2 focus:ring-pink-500"
           />
           <p className={`text-xs ${caption.length > CAPTION_MAX_LENGTH ? 'text-red-600' : 'text-gray-500'}`}>
@@ -469,7 +550,7 @@ export default function ApprovalClient({ token, initial }: { token: string; init
         {!validation.ok && <p className="text-sm text-amber-700">{validation.error}</p>}
 
         <div className="sticky bottom-0 -mx-4 px-4 py-3 bg-gray-50/95 backdrop-blur border-t flex gap-2">
-          <Button type="button" className="flex-1 bg-pink-600 hover:bg-pink-700" onClick={publish} disabled={!validation.ok || busy !== null}>
+          <Button type="button" className="flex-1 bg-pink-600 hover:bg-pink-700" onClick={publish} disabled={!validation.ok || busy !== null || !primary}>
             {busy === 'publish' ? <Loader2 className="animate-spin" /> : <Send />} Publicera på Instagram
           </Button>
           <Button type="button" variant="outline" onClick={skip} disabled={busy !== null}>
@@ -481,52 +562,16 @@ export default function ApprovalClient({ token, initial }: { token: string; init
   }
 }
 
-function SlideRow({
-  c,
-  checked,
-  disabled,
-  reason,
-  index,
-  total,
-  onToggle,
-  onMove,
-}: {
-  c: ProposalCandidate
-  checked: boolean
-  disabled?: boolean
-  reason?: string
-  index?: number
-  total?: number
-  onToggle: () => void
-  onMove?: (dir: -1 | 1) => void
-}) {
+/** Liten bild, eller tiden i ett "frimärke" för event utan bild (som på listsliden) */
+function Thumb({ e }: { e: ProposalEvent }) {
+  if (e.imageUrl) {
+    // eslint-disable-next-line @next/next/no-img-element
+    return <img src={e.imageUrl} alt="" className="size-12 rounded-md object-cover bg-gray-100 shrink-0" />
+  }
   return (
-    <li className={`flex items-center gap-3 p-2 ${disabled ? 'opacity-50' : ''}`}>
-      <input type="checkbox" checked={checked} disabled={disabled} onChange={onToggle} className="size-4 accent-pink-600" />
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src={c.imageUrl} alt="" className="size-12 rounded-md object-cover bg-gray-100 shrink-0" />
-      <div className="flex-1 min-w-0">
-        <p className="text-sm font-medium text-gray-900 truncate">
-          {checked && index != null ? `${index + 2}. ` : ''}
-          {c.name}
-        </p>
-        <p className="text-xs text-gray-500 truncate">
-          {c.timeLabel}
-          {c.venueName ? ` · ${c.venueName}` : ''}
-          {reason ? ` · ${reason}` : ''}
-        </p>
-      </div>
-      {checked && onMove && (
-        <div className="flex flex-col">
-          <button type="button" onClick={() => onMove(-1)} disabled={index === 0} className="p-1 text-gray-500 disabled:opacity-30" aria-label="Flytta upp">
-            <ArrowUp className="size-4" />
-          </button>
-          <button type="button" onClick={() => onMove(1)} disabled={index === (total ?? 0) - 1} className="p-1 text-gray-500 disabled:opacity-30" aria-label="Flytta ner">
-            <ArrowDown className="size-4" />
-          </button>
-        </div>
-      )}
-    </li>
+    <div className="size-12 rounded-md border border-dashed border-gray-300 bg-white shrink-0 flex items-center justify-center text-[11px] font-semibold text-gray-600 text-center leading-tight">
+      {e.timeLabel === 'Heldag' ? 'Hela dagen' : e.timeLabel}
+    </div>
   )
 }
 
