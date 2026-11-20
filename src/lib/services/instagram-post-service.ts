@@ -12,7 +12,7 @@
  * på vykortet, så bildgaten (assessPhoto) handlar bara om upplösning.
  *
  * VIKTIG INNEHÅLLSREGEL: captions får ALDRIG hänvisa till arrangörens egen
- * webbplats eller biljettsida. Enda CTA är iVarberg ("länk i bio").
+ * webbplats eller biljettsida. Enda CTA är ivarberg.nu ("länk i bio").
  * Därför skickas booking_url/event_website/organizer_event_url aldrig med
  * i prompterna, och sanitizeCaption() stryker rader med URL:er/domäner.
  */
@@ -693,14 +693,14 @@ Svara ENDAST med JSON:
 // ============ Steg 3: Caption ============
 
 /**
- * Stryk rader som innehåller URL:er eller domännamn (utom ivarberg).
+ * Stryk rader som innehåller URL:er eller domännamn (utom ivarberg.nu/.se).
  * Skyddsnät för innehållsregeln: aldrig hänvisa till arrangörers egna sidor.
  */
 export function sanitizeCaption(caption: string): { caption: string; hadViolations: boolean } {
   const urlPattern = /(https?:\/\/|www\.|\b[a-zA-ZåäöÅÄÖ0-9-]+\.(se|com|nu|net|org|io)\b)/i
   let hadViolations = false
   const lines = caption.split('\n').filter((line) => {
-    const withoutIvarberg = line.replace(/ivarberg(\.se)?/gi, '')
+    const withoutIvarberg = line.replace(/ivarberg(\.(se|nu))?/gi, '')
     if (urlPattern.test(withoutIvarberg)) {
       hadViolations = true
       console.warn(`  ⚠️ Strök rad med extern hänvisning ur caption: "${line.trim()}"`)
@@ -738,7 +738,7 @@ Svara ENDAST med JSON: { "headline": "..." }`
       getOpenAIClient().chat.completions.create({
         model: MODEL,
         messages: [
-          { role: 'system', content: 'Du är social media-redaktör för iVarberg och skriver korta, träffsäkra svenska rubriker. Svara endast med JSON.' },
+          { role: 'system', content: 'Du är social media-redaktör för ivarberg.nu och skriver korta, träffsäkra svenska rubriker. Svara endast med JSON.' },
           { role: 'user', content: prompt },
         ],
         temperature: 0.9,
@@ -800,7 +800,7 @@ Struktur (följ exakt):
 1. Öppningsrad: kort och catchig, budskapet "det här händer i Varberg idag" - men VARIERA formuleringen. Låt gärna huvudeventet färga tonen och välj emoji som matchar eventets karaktär (konsert 🎸🎶, teater/show 🎭, konst 🎨, mat 🍴, marknad 🛍️, sport ⚽, utomhus/sommar ☀️🌊, kvällsevent ✨🌙 osv). Använd INTE 🎉 som slentrianval.
 2. 1-2 entusiastiska meningar om huvudeventet (namn, plats, tid) - variera även här, börja inte alltid med eventnamnet
 3. ${listText ? 'En mening som lockar att svepa till listan, gärna med en av de övriga eventen som smakprov (t.ex. "Svep för fler tips - från julmarknad till innebandy 👉")' : 'Hoppa över denna punkt'}
-4. Avslutning: "Allt som händer idag hittar du på iVarberg 👉 länk i bio"
+4. Avslutning: "Allt som händer idag hittar du på ivarberg.nu 👉 länk i bio"
 5. 3-5 relevanta svenska hashtags (t.ex. #varberg #ivarberg + eventrelevanta)
 
 ABSOLUTA REGLER:
@@ -809,8 +809,8 @@ ABSOLUTA REGLER:
 - Ingen punktlista över eventen - den står redan på bilden
 - Utelämna klockslag för event utan angiven tid (skriv inte "kl 00:00")
 - Nämn ALDRIG arrangörens webbplats, biljettsida eller några URL:er/länkar
-- Enda hänvisningen är iVarberg ("länk i bio")
-- Uppmana INTE till att köpa biljetter någonstans - iVarberg är enda vägen
+- Enda hänvisningen är ivarberg.nu ("länk i bio"). Skriv alltid tjänstens namn som "ivarberg.nu", aldrig "iVarberg"
+- Uppmana INTE till att köpa biljetter någonstans - ivarberg.nu är enda vägen
 - Max 900 tecken
 
 Svara ENDAST med captionen, ingen annan text.`
@@ -823,7 +823,7 @@ Svara ENDAST med captionen, ingen annan text.`
           {
             role: 'system',
             content:
-              'Du är social media-redaktör för iVarberg, en lokal eventguide för Varberg. Du skriver engagerande svenska Instagram-captions. Du hänvisar aldrig till externa webbplatser - all trafik ska till iVarberg (länk i bio).',
+              'Du är social media-redaktör för ivarberg.nu, en lokal eventguide för Varberg. Du skriver engagerande svenska Instagram-captions. Du hänvisar aldrig till externa webbplatser - all trafik ska till ivarberg.nu (länk i bio).',
           },
           { role: 'user', content: prompt },
         ],
