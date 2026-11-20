@@ -7,22 +7,17 @@
  * Supabase Storage.
  *
  * Konvertering och uppladdning återanvänder Instagram-flödets
- * uploadInstagramImage() och dess bucket. Filerna läggs under
+ * uploadCroppedImage() och dess bucket. Filerna läggs under
  * `newsletter/<torsdag>/` så att de aldrig krockar med Instagram-bilderna
  * (som ligger i bucketens rot och rensas per datum).
  */
 import { createHash } from 'crypto'
 import { SupabaseClient } from '@supabase/supabase-js'
-import { InstagramFormat, originalImageUrl, uploadInstagramImage } from '../services/instagram-post-service'
+import { originalImageUrl, uploadCroppedImage } from '../services/instagram-post-service'
 import { NewsletterCandidate, NewsletterProposal } from './proposal'
 
-const EMAIL_IMAGE_FORMAT: InstagramFormat = {
-  key: 'landscape',
-  label: '16:9',
-  width: 1200,
-  height: 675,
-  aspect: 1200 / 675,
-}
+const EMAIL_IMAGE_WIDTH = 1200
+const EMAIL_IMAGE_HEIGHT = 675
 
 /**
  * Skapar mejlbilden för en kandidat och returnerar den publika URL:en, eller
@@ -41,12 +36,14 @@ export async function createEmailImage(
   // i stället för att en cachad gammal version visas
   const hash = createHash('sha1').update(source).digest('hex').slice(0, 8)
   try {
-    return await uploadInstagramImage(
+    // Samma sökväg som tidigare versioner (…-1.jpg) så att redan skapade
+    // mejlbilder fortsätter att träffas
+    return await uploadCroppedImage(
       supabase,
       source,
-      `newsletter/${issueDate}/${candidate.eventId}-${hash}`,
-      1,
-      EMAIL_IMAGE_FORMAT
+      `newsletter/${issueDate}/${candidate.eventId}-${hash}-1.jpg`,
+      EMAIL_IMAGE_WIDTH,
+      EMAIL_IMAGE_HEIGHT
     )
   } catch (error) {
     console.warn(

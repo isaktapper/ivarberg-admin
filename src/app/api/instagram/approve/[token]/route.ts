@@ -5,7 +5,7 @@
  * GET  -> aktuell vy (status, förslag, ev. publicerat resultat)
  * POST { action: 'skip' }                       -> markera dagen som överhoppad
  * POST { action: 'publish' }                    -> publicera AI-förslaget som det är
- * POST { action: 'publish', primaryEventId, slideEventIds, format, caption }
+ * POST { action: 'publish', primaryEventId, headline, listEventIds, extraSlideEventIds, caption }
  *                                               -> publicera eget val
  * Valfritt fält source: 'ntfy' | 'manual' (default 'manual').
  */
@@ -13,18 +13,19 @@ import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { approvalServiceClient, loadPostByToken, toApprovalView } from '@/lib/services/instagram-approval'
 import { publishSelection } from '@/lib/services/instagram-post-runner'
-import { selectionFromSuggestion, InstagramProposal } from '@/lib/services/instagram-proposal'
+import { normalizeProposal, selectionFromSuggestion } from '@/lib/services/instagram-proposal'
 import { shutdownAITelemetry } from '@/lib/services/openai-client'
 
 export const dynamic = 'force-dynamic'
-export const maxDuration = 300 // bildcroppning + uppladdning + Make
+export const maxDuration = 300 // rendering av slides + uppladdning + Make
 
 const bodySchema = z.object({
   action: z.enum(['publish', 'skip']),
   source: z.enum(['ntfy', 'manual']).optional(),
   primaryEventId: z.number().int().optional(),
-  slideEventIds: z.array(z.number().int()).max(4).optional(),
-  format: z.enum(['square', 'portrait', 'landscape']).optional(),
+  headline: z.string().max(200).optional(),
+  listEventIds: z.array(z.number().int()).max(20).optional(),
+  extraSlideEventIds: z.array(z.number().int()).max(10).optional(),
   caption: z.string().max(5000).optional(),
 })
 
@@ -86,7 +87,7 @@ export async function POST(request: NextRequest, { params }: Params) {
       // Tillåt att ångra en överhoppning genom att publicera ändå
       console.log(`ℹ️  ${row.post_date} var överhoppad - publicerar ändå på begäran.`)
     }
-    const proposal = row.proposal as InstagramProposal | null
+    const proposal = normalizeProposal(row.proposal)
     if (!proposal) return NextResponse.json({ error: 'Raden saknar förslag' }, { status: 400 })
 
     const usingSuggestion = body.primaryEventId == null
@@ -94,8 +95,9 @@ export async function POST(request: NextRequest, { params }: Params) {
       ? selectionFromSuggestion(proposal)
       : {
           primaryEventId: body.primaryEventId!,
-          slideEventIds: body.slideEventIds ?? [],
-          format: body.format ?? 'square',
+          headline: body.headline ?? proposal.suggestion?.headline ?? '',
+          listEventIds: body.listEventIds ?? [],
+          extraSlideEventIds: body.extraSlideEventIds ?? [],
           caption: body.caption ?? proposal.suggestion?.caption ?? '',
         }
     if (!selection) return NextResponse.json({ error: 'Förslaget saknar rekommendation att publicera' }, { status: 400 })
